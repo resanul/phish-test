@@ -1,1 +1,381 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Apex Rewards</title><style>body{font-family:Arial;background:#f3f4f6;padding:40px}.box{max-width:520px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px #0001}input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 14px}button{padding:12px 20px;background:#111;color:#fff;border:0;border-radius:6px}.notice{background:#111;color:#fff;padding:10px;margin:-30px -30px 25px}</style></head><body><div class="box"><div class="notice">SECURITY AWARENESS SIMULATION</div><h1 style='color:#d71920'>Apex Rewards</h1><h2>Check Your Reward</h2><p>No password, OTP, PIN, CVV or card information is requested.</p><form method="post" action="/submit"><input type="hidden" name="template" value="1.html"><label>Name</label><input name="name" required><label>Email</label><input type="email" name="email" required><label>Mobile</label><input name="mobile" required><button>Continue</button></form></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Rewards — Security Awareness Simulation</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --red:#e51b2b;
+    --dark:#171b20;
+    --muted:#66707a;
+    --line:#dfe3e7;
+    --bg:#f7f7f7;
+  }
+  body{
+    font-family:Arial,Helvetica,sans-serif;
+    color:var(--dark);
+    background:#fff;
+  }
+  .topbar{
+    height:78px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 5.5%;
+    background:#fff;
+    border-bottom:1px solid #eee;
+    position:relative;
+    z-index:5;
+  }
+  .logo{
+    font-size:42px;
+    font-weight:900;
+    letter-spacing:-3px;
+    color:var(--red);
+    font-style:italic;
+    line-height:1;
+  }
+  .logo:before{
+    content:"";
+    display:inline-block;
+    width:20px;height:31px;
+    margin-right:-8px;
+    background:linear-gradient(145deg,#18a957 0 42%,transparent 43%),
+               linear-gradient(25deg,#f3c52b 0 45%,transparent 46%);
+    transform:skew(-12deg);
+    vertical-align:middle;
+  }
+  nav{display:flex;gap:34px;align-items:center}
+  nav a{
+    text-decoration:none;color:#20252b;font-size:15px;font-weight:600;
+  }
+  .icons{display:flex;gap:22px;font-size:25px;align-items:center}
+  .cart{position:relative}
+  .badge{
+    position:absolute;top:-9px;right:-10px;
+    width:18px;height:18px;border-radius:50%;
+    background:var(--red);color:#fff;font-size:10px;
+    display:grid;place-items:center;font-weight:bold;
+  }
+
+  .hero{
+    min-height:660px;
+    padding:42px 6%;
+    display:grid;
+    grid-template-columns:1.05fr .8fr;
+    gap:50px;
+    align-items:center;
+    background:
+      radial-gradient(circle at 15% 20%,rgba(255,255,255,.95),rgba(255,255,255,.55) 30%,transparent 50%),
+      linear-gradient(115deg,#f5ece7 0%,#fff 47%,#f6e7dc 100%);
+    position:relative;
+    overflow:hidden;
+  }
+  .hero:after{
+    content:"";
+    position:absolute;left:48%;top:0;bottom:0;width:32%;
+    background:linear-gradient(90deg,transparent,#ed1c2d 50%,#ff5148);
+    opacity:.95;
+    clip-path:polygon(25% 0,100% 0,100% 100%,0 100%);
+  }
+  .copy,.offer{position:relative;z-index:2}
+  .eyebrow{font-size:27px;margin-bottom:8px;font-weight:700}
+  h1{
+    font-size:72px;line-height:.88;letter-spacing:-4px;
+    text-transform:uppercase;margin-bottom:30px;
+  }
+  h1 span:first-child{color:var(--red);display:block}
+  h1 span:last-child{display:block}
+  .intro{font-size:21px;line-height:1.45;max-width:590px;margin-bottom:35px}
+  .benefits{display:flex;gap:32px;flex-wrap:wrap}
+  .benefit{display:flex;align-items:center;gap:12px;font-weight:700;font-size:15px}
+  .benefit-icon{
+    width:48px;height:48px;border-radius:50%;
+    background:var(--red);color:#fff;display:grid;place-items:center;
+    font-size:22px;
+  }
+  .products{
+    margin-top:45px;
+    display:flex;align-items:end;gap:14px;height:160px;
+  }
+  .shoe,.bag{
+    border-radius:10px;
+    box-shadow:0 16px 28px rgba(0,0,0,.15);
+    background:#fff;
+  }
+  .shoe{width:180px;height:72px;transform:skew(-12deg) rotate(-3deg)}
+  .shoe.dark{background:#6b391f;width:190px;height:67px}
+  .bag{width:140px;height:120px;background:#d8b6a0;border-radius:12px 12px 20px 20px}
+  .offer{
+    background:#fff;
+    border-radius:18px;
+    padding:32px 38px 30px;
+    box-shadow:0 20px 55px rgba(0,0,0,.18);
+    max-width:520px;
+    justify-self:end;
+    width:100%;
+  }
+  .gift{
+    width:62px;height:62px;border-radius:50%;background:#fff0f1;
+    display:grid;place-items:center;margin:0 auto 12px;
+    color:var(--red);font-size:34px;
+  }
+  .offer h2{text-align:center;font-size:29px;margin-bottom:4px}
+  .offer h3{text-align:center;color:var(--red);font-size:25px;margin-bottom:12px}
+  .offer p{text-align:center;color:#30363b;font-size:16px;line-height:1.4;margin-bottom:22px}
+  form{display:grid;gap:12px}
+  .field{
+    height:54px;border:1px solid #cfd5da;border-radius:8px;
+    display:flex;align-items:center;padding:0 15px;background:#fff;
+  }
+  .field span{font-size:21px;margin-right:12px;color:#59636d}
+  .field input,.field select{
+    border:0;outline:0;width:100%;font-size:15px;color:#31373d;background:transparent;
+  }
+  .cta{
+    height:60px;border:0;border-radius:8px;background:var(--red);color:#fff;
+    font-size:20px;font-weight:800;cursor:pointer;margin-top:6px;
+  }
+  .cta:hover{background:#c91423}
+  .secure{
+    display:flex;align-items:center;gap:10px;margin-top:16px;
+    font-size:12px;color:#555d64;line-height:1.35;
+  }
+  .secure b{font-size:24px;color:var(--red)}
+  .services{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    border-bottom:1px solid #ddd;background:#fff;
+    padding:25px 7%;gap:25px;
+  }
+  .service{
+    display:flex;gap:14px;align-items:center;
+    justify-content:center;border-right:1px solid #ddd;
+  }
+  .service:last-child{border:0}
+  .service .ico{font-size:28px}
+  .service strong{display:block;font-size:15px}
+  .service small{font-size:13px;color:#555}
+  footer{
+    background:#171b20;color:#fff;padding:25px 6%;
+    display:flex;justify-content:space-between;align-items:center;gap:20px;
+  }
+  .footer-logo{font-size:30px;font-weight:900;font-style:italic}
+  footer nav a{color:#eee;font-size:13px}
+  .social{display:flex;gap:12px}
+  .social span{
+    width:31px;height:31px;border:1px solid #777;border-radius:50%;
+    display:grid;place-items:center;font-size:12px;
+  }
+  .simulation-banner{
+    position:fixed;bottom:15px;left:50%;transform:translateX(-50%);
+    background:#16191d;color:#fff;padding:11px 18px;border-radius:30px;
+    font-size:12px;z-index:20;box-shadow:0 8px 30px rgba(0,0,0,.25);
+    opacity:.94;
+  }
+  .modal{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+    z-index:50;align-items:center;justify-content:center;padding:20px;
+  }
+  .modal.show{display:flex}
+  .modal-box{
+    background:#fff;border-radius:16px;padding:35px;max-width:480px;text-align:center;
+    box-shadow:0 25px 70px rgba(0,0,0,.3)
+  }
+  .modal-box .check{font-size:55px;margin-bottom:10px}
+  .modal-box h2{margin-bottom:10px}
+  .modal-box p{color:#555;line-height:1.5}
+  .close{margin-top:20px;background:var(--red);color:#fff;border:0;padding:12px 28px;border-radius:7px;font-weight:bold}
+  @media(max-width:1000px){
+    nav{display:none}.hero{grid-template-columns:1fr;padding:45px 5%}
+    .hero:after{display:none}.offer{justify-self:center}.copy{text-align:center}
+    .intro{margin-left:auto;margin-right:auto}.benefits{justify-content:center}
+    .products{justify-content:center}
+    .services{grid-template-columns:1fr 1fr}
+    .service:nth-child(2){border:0}
+  }
+  @media(max-width:600px){
+    .topbar{height:65px;padding:0 20px}.logo{font-size:32px}.icons{gap:12px}
+    .hero{padding:35px 18px;min-height:auto}
+    h1{font-size:48px;letter-spacing:-2px}.eyebrow{font-size:21px}.intro{font-size:17px}
+    .offer{padding:25px 20px}.offer h2{font-size:23px}.offer h3{font-size:20px}
+    .services{grid-template-columns:1fr;padding:20px}.service{border:0!important;justify-content:flex-start}
+    footer{flex-direction:column;text-align:center}
+  }
+
+.field-error {
+  display: none;
+  margin: 6px 0 10px;
+  padding-left: 4px;
+  color: #c62828;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.field.invalid input {
+  border-color: #c62828 !important;
+  outline: none;
+}
+.field.valid input {
+  border-color: #2e7d32 !important;
+}
+
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">Apex</div>
+  <nav>
+    <a href="#">Men</a><a href="#">Women</a><a href="#">Kids</a>
+    <a href="#">New Arrivals</a><a href="#">Offers</a>
+    <a href="#">Apex Rewards</a><a href="#">Apex EMI</a>
+  </nav>
+  <div class="icons"><span>⌕</span><span>♙</span><span class="cart">🛒<i class="badge">0</i></span></div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="copy">
+    <div class="eyebrow">Apex Rewards</div>
+    <h1><span>Exclusive</span><span>Benefits</span></h1>
+    <p class="intro">As a valued Trust Bank employee, you may be eligible for an exclusive Apex reward with up to 55% cashback.</p>
+
+    <div class="benefits">
+      <div class="benefit"><div class="benefit-icon">🎁</div><span>Special<br>Discount</span></div>
+      <div class="benefit"><div class="benefit-icon">%</div><span>Selected<br>Products</span></div>
+      <div class="benefit"><div class="benefit-icon">★</div><span>Limited<br>Time Offer</span></div>
+    </div>
+
+    <div class="products">
+      <div class="shoe"></div>
+      <div class="shoe dark"></div>
+      <div class="bag"></div>
+    </div>
+  </div>
+
+  <div class="offer">
+    <div class="gift">🎁</div>
+    <h2>Claim Your Apex Rewards</h2>
+    <h3>UP TO 55% CASHBACK</h3>
+    <p>Use your information below to check your eligibility for the exclusive Trust Bank employee offer.</p>
+
+    <form id="simulationForm" method="post" action="/submit">
+      <input type="hidden" name="template" value="1.html">
+      <label class="field" id="nameField"><span>♙</span><input type="text" name="name" placeholder="Full Name" autocomplete="name" required></label>
+      <label class="field" id="emailField"><span>✉</span><input type="text" name="email" placeholder="Email Address" autocomplete="email" required></label>
+      <div class="field-error" id="emailError">Please enter a valid email address.</div>
+      <label class="field" id="mobileField"><span>☎</span><input type="tel" name="mobile" placeholder="Mobile Number" autocomplete="tel" inputmode="tel" required></label>
+      <div class="field-error" id="mobileError">Please enter a valid Bangladesh mobile number.</div>
+      <button class="cta" type="submit">Check My Reward &nbsp; →</button>
+    </form>
+
+    <div class="secure"><b>✓</b><span>Only your Name, Trust Bank email and Mobile Number are requested for this authorised security-awareness simulation. Never enter a password, OTP, PIN, CVV or card number.</span></div>
+  </div>
+</section>
+
+<section class="services">
+  <div class="service"><div class="ico">🚚</div><div><strong>Fast & Reliable</strong><small>Delivery</small></div></div>
+  <div class="service"><div class="ico">▣</div><div><strong>Multiple</strong><small>Payment Options</small></div></div>
+  <div class="service"><div class="ico">↻</div><div><strong>Easy</strong><small>Returns</small></div></div>
+  <div class="service"><div class="ico">♢</div><div><strong>100% Original</strong><small>Products</small></div></div>
+</section>
+</main>
+
+<footer>
+  <div class="footer-logo">Apex</div>
+  <nav><a href="#">About Us</a> &nbsp;|&nbsp; <a href="#">Stores</a> &nbsp;|&nbsp; <a href="#">Contact Us</a> &nbsp;|&nbsp; <a href="#">Customer Care</a> &nbsp;|&nbsp; <a href="#">Privacy Policy</a></nav>
+  <div class="social"><span>f</span><span>◎</span><span>▶</span><span>in</span></div>
+</footer>
+
+<div class="simulation-banner">Authorised Security Awareness Simulation</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="check">🛡️</div>
+    <h2>This was a phishing simulation</h2>
+    <p>You interacted with a simulated promotional page. This authorised campaign records only the simulation event and the requested Name, Trust Bank email and Mobile Number. Never enter passwords, OTPs, PINs, CVVs or card numbers into promotional links.</p>
+    <button class="close" onclick="document.getElementById('modal').classList.remove('show')">Close</button>
+  </div>
+</div>
+
+<script>
+const form = document.getElementById('simulationForm');
+const emailInput = form.querySelector('input[name="email"]');
+const mobileInput = form.querySelector('input[name="mobile"]');
+const emailField = document.getElementById('emailField');
+const mobileField = document.getElementById('mobileField');
+const emailError = document.getElementById('emailError');
+const mobileError = document.getElementById('mobileError');
+
+function validateEmail(value) {
+  return /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(value);
+}
+
+function validateBDMobile(value) {
+  return /^(?:01\d{9}|\+8801\d{9}|8801\d{9})$/.test(value);
+}
+
+function setValidation(field, errorElement, valid, message) {
+  field.classList.toggle('invalid', !valid);
+  field.classList.toggle('valid', valid);
+  errorElement.textContent = message;
+  errorElement.style.display = valid ? 'none' : 'block';
+}
+
+function validateEmailField() {
+  const value = emailInput.value.trim();
+  const valid = validateEmail(value);
+  setValidation(emailField, emailError, valid,
+    value ? 'Please enter a valid email address.' : 'Email address is required.');
+  return valid;
+}
+
+function validateMobileField() {
+  const value = mobileInput.value.trim();
+  const valid = validateBDMobile(value);
+  setValidation(mobileField, mobileError, valid,
+    value ? 'Use 01XXXXXXXXX, +8801XXXXXXXXX, or 8801XXXXXXXXX.'
+          : 'Bangladesh mobile number is required.');
+  return valid;
+}
+
+emailInput.addEventListener('blur', validateEmailField);
+mobileInput.addEventListener('blur', validateMobileField);
+
+emailInput.addEventListener('input', () => {
+  if (emailField.classList.contains('invalid')) validateEmailField();
+});
+mobileInput.addEventListener('input', () => {
+  if (mobileField.classList.contains('invalid')) validateMobileField();
+});
+
+form.addEventListener('submit', async function(event) {
+  event.preventDefault();
+
+  const emailValid = validateEmailField();
+  const mobileValid = validateMobileField();
+
+  if (!emailValid || !mobileValid) {
+    (!emailValid ? emailInput : mobileInput).focus();
+    return;
+  }
+
+  const formData = new URLSearchParams(new FormData(form));
+
+  try {
+    const response = await fetch('/submit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: formData.toString()
+    });
+
+    if (!response.ok) throw new Error('Submission failed');
+    document.getElementById('modal').classList.add('show');
+  } catch (error) {
+    document.getElementById('modal').classList.add('show');
+  }
+});
+</script>
+</body>
+</html>
