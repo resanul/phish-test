@@ -1,5 +1,7 @@
-data/*.db
-logs/*.log
-__pycache__/
+data/
+logs/
 *.pyc
-.env
+__pycache__/
+.deploy-state
+.deploy-backups/
+*.backup.*
