@@ -1,0 +1,7 @@
+# Deployment
+1. For a new server run ./install.sh
+2. Set ADMIN_PASSWORD in /etc/systemd/system/phish-simulation.service
+3. systemctl daemon-reload && systemctl restart phish-simulation
+4. Test: curl -i http://127.0.0.1:8080/admin
+5. Browse: http://abcd.com:8080/admin
+6. Future updates: ./update.sh
