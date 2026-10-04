@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from http import cookies
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 BASE="/opt/phish-simulation"; TEMPLATES=BASE+"/templates"; DATA=BASE+"/data"; LOGS=BASE+"/logs"
 DB=DATA+"/phish.db"; LOG=LOGS+"/access.log"; PORT=int(os.environ.get("PORT","8080"))
 ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME"); SESSIONS=set()
@@ -14,6 +15,9 @@ def db():
  c.commit(); return c
 def record(ip,t,event,name="",email="",mobile="",ua=""):
  c=db(); c.execute("INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent) VALUES(?,?,?,?,?,?,?,?)",(datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua)); c.commit(); c.close()
+def format_datetime(ts):
+ dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(ZoneInfo("Asia/Dhaka"))
+ return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
 def access(ip,path,code):
  with open(LOG,"a",encoding="utf-8") as f:f.write(f"{datetime.now(timezone.utc).isoformat()} ip={ip} path={path} code={code}\n")
 def page(title,body):
@@ -33,8 +37,8 @@ class Handler(BaseHTTPRequestHandler):
   if path=="/admin":
    if not self.auth():return self.sendbody(200,page("Admin Login",'<div class="card"><h1>Phishing Simulation Admin</h1><form method="post" action="/admin/login"><input type="password" name="password" placeholder="Admin password" required style="padding:10px;width:280px"><br><br><button>Login</button></form></div>'))
    c=db(); rows=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 500").fetchall(); clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]; c.close()
-   trs="".join(f"<tr><td>{html.escape(r['ts'])}</td><td>{html.escape(r['event'])}</td><td>{html.escape(r['template'])}</td><td>{html.escape(r['ip'])}</td><td>{html.escape(r['name'] or '')}</td><td>{html.escape(r['email'] or '')}</td><td>{html.escape(r['mobile'] or '')}</td></tr>" for r in rows)
-   body=f"""<h1>Phishing Simulation Admin</h1><div class="card"><a href="/admin.csv">Export CSV</a></div><div class="stats"><div class="stat">Clicks<div class="num">{clicks}</div></div><div class="stat">Submissions<div class="num">{subs}</div></div><div class="stat">Unique IPs<div class="num">{ips}</div></div><div class="stat">Records<div class="num">{len(rows)}</div></div></div><div class="card"><h2>Activity</h2><table><tr><th>Time</th><th>Event</th><th>Template</th><th>Local IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr>{trs or '<tr><td colspan="7">No activity</td></tr>'}</table></div>"""
+   trs="".join((lambda d,t: f"<tr><td>{html.escape(d)}</td><td>{html.escape(t)}</td><td>{html.escape(r['event'])}</td><td>{html.escape(r['template'])}</td><td>{html.escape(r['ip'])}</td><td>{html.escape(r['name'] or '')}</td><td>{html.escape(r['email'] or '')}</td><td>{html.escape(r['mobile'] or '')}</td></tr>")(*format_datetime(r['ts'])) for r in rows)
+   body=f"""<h1>Phishing Simulation Admin</h1><div class="card"><a href="/admin.csv">Export CSV</a></div><div class="stats"><div class="stat">Clicks<div class="num">{clicks}</div></div><div class="stat">Submissions<div class="num">{subs}</div></div><div class="stat">Unique IPs<div class="num">{ips}</div></div><div class="stat">Records<div class="num">{len(rows)}</div></div></div><div class="card"><h2>Activity</h2><table><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Local IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr>{trs or '<tr><td colspan="8">No activity</td></tr>'}</table></div>"""
    return self.sendbody(200,page("Admin Dashboard",body))
   if path=="/admin.csv":
    if not self.auth():return self.sendbody(403,"Forbidden","text/plain")
