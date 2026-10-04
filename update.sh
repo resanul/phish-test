@@ -2,9 +2,9 @@
 set -euo pipefail
 
 APP="/opt/phish-simulation"
-BRANCH="\${BRANCH:-main}"
+BRANCH="${BRANCH:-main}"
 SERVICE="phish-simulation"
-PORT="\${PORT:-8080}"
+PORT="${PORT:-8080}"
 STATE="$APP/.deploy-state"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -50,7 +50,7 @@ mkdir -p "$APP/.deploy-backups"
 printf 'previous=%s\ncurrent=%s\ndeployed_at=%s\n' "$CURRENT" "$TARGET" "$STAMP" > "$STATE"
 
 health_check() {
-  local url="http://127.0.0.1:\${PORT}/1.html"
+  local url="http://127.0.0.1:${PORT}/1.html"
 
   echo "Waiting for $SERVICE to become healthy..."
 
