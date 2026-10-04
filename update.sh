@@ -2,9 +2,9 @@
 set -euo pipefail
 
 APP="/opt/phish-simulation"
-BRANCH="${BRANCH:-main}"
+BRANCH="\${BRANCH:-main}"
 SERVICE="phish-simulation"
-PORT="${PORT:-8080}"
+PORT="\${PORT:-8080}"
 STATE="$APP/.deploy-state"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -26,7 +26,7 @@ if ! git remote get-url origin >/dev/null 2>&1; then
 fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "ERROR: Local Git changes detected. Commit/stash them or use FORCE=1."
+  echo "ERROR: Local Git changes detected. Commit/stash them before updating."
   git status --short
   exit 1
 fi
@@ -45,34 +45,73 @@ if [ "$CURRENT" = "$TARGET" ]; then
   exit 0
 fi
 
-if [ "${FORCE:-0}" != "1" ]; then
-  if ! git diff --quiet "$CURRENT" "$TARGET"; then
-    :
-  fi
-fi
-
 STAMP="$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$APP/.deploy-backups"
 printf 'previous=%s\ncurrent=%s\ndeployed_at=%s\n' "$CURRENT" "$TARGET" "$STAMP" > "$STATE"
+
+health_check() {
+  local url="http://127.0.0.1:\${PORT}/1.html"
+
+  echo "Waiting for $SERVICE to become healthy..."
+
+  for i in {1..15}; do
+    if systemctl is-active --quiet "$SERVICE" && \
+       curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+      echo "Health check passed."
+      return 0
+    fi
+
+    echo "Waiting for service... ($i/15)"
+    sleep 1
+  done
+
+  echo "Health check failed after 15 seconds."
+  return 1
+}
+
+rollback() {
+  echo "Rolling back to $CURRENT..."
+  git reset --hard "$CURRENT"
+
+  echo "Validating rollback..."
+  python3 -m py_compile "$APP/server.py"
+
+  echo "Restarting $SERVICE after rollback..."
+  systemctl daemon-reload
+  systemctl restart "$SERVICE"
+
+  if health_check; then
+    echo "Rollback completed successfully: $CURRENT"
+  else
+    echo "CRITICAL: Rollback service health check failed."
+    echo "Check: systemctl status $SERVICE --no-pager"
+    echo "Check: journalctl -u $SERVICE -n 100 --no-pager"
+    return 1
+  fi
+}
 
 echo "Updating to $TARGET..."
 git reset --hard "$TARGET"
 
 echo "Validating Python..."
-python3 -m py_compile "$APP/server.py"
+if ! python3 -m py_compile "$APP/server.py"; then
+  echo "ERROR: Python validation failed."
+  rollback
+  exit 1
+fi
 
 echo "Restarting $SERVICE..."
 systemctl daemon-reload
 systemctl restart "$SERVICE"
 
 echo "Health check..."
-if ! curl -fsS --max-time 10 "http://127.0.0.1:$PORT/1.html" >/dev/null; then
-  echo "ERROR: Health check failed. Rolling back to $CURRENT..."
-  git reset --hard "$CURRENT"
-  python3 -m py_compile "$APP/server.py"
-  systemctl restart "$SERVICE"
-  echo "Rollback completed: $CURRENT"
-  exit 1
+if ! health_check; then
+  echo "ERROR: Deployment health check failed."
+  if rollback; then
+    exit 1
+  else
+    exit 2
+  fi
 fi
 
 printf 'previous=%s\ncurrent=%s\ndeployed_at=%s\n' "$CURRENT" "$TARGET" "$STAMP" > "$STATE"
