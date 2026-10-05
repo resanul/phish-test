@@ -77,6 +77,10 @@ def db():
         updated_at TEXT
     );
     """)
+    cols_campaign={row[1] for row in c.execute("PRAGMA table_info(campaigns)").fetchall()}
+    for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT")):
+        if col not in cols_campaign:
+            c.execute("ALTER TABLE campaigns ADD COLUMN %s %s"%(col,definition))
     if not c.execute("SELECT 1 FROM admins WHERE username=?",(ADMIN_USERNAME,)).fetchone():
         c.execute("INSERT INTO admins(username,created_at) VALUES(?,?)",(ADMIN_USERNAME,datetime.now(timezone.utc).isoformat()))
     for i in range(1,11):
@@ -265,7 +269,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         return self.admin_shell("Overview",dashboard_main,"Overview")
 
     def admin_shell(self,title,content,active):
-        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
+        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Recipients","/admin/recipients"),("Groups & Departments","/admin/groups"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
         links="".join('<a href="%s" class="%s">%s</a>'%(u,"active" if n==active else "",n) for n,u in nav)
         css=DASH_CSS+".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
         body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
@@ -290,6 +294,14 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             table="".join('<tr><td>%s</td><td>%s</td><td>%s:%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/smtp?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"Enabled" if r["enabled"] else "Disabled",r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
             note='<div style="margin:12px 0;padding:12px;background:#edf8f4;border-radius:9px;font-size:12px;color:#2b6554">SMTP passwords are encrypted at rest with a server-local 0600 key. They are never displayed, exported or committed to Git.</div>'
             return self.admin_shell("SMTP Providers",'<h1>SMTP Providers</h1><p>Enterprise mail-delivery profiles for simulation campaigns and test messages.</p>'+note+'<p><a class="btn primary" href="/admin/smtp/new">+ Add SMTP Provider</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Server</th><th>Security</th><th>From</th><th>Status</th><th></th></tr>'+table+'</table></div>',"SMTP Providers")
+        if path=="/admin/recipients":
+            rows=c.execute("SELECT id,email,name,employee_id,department,group_name,status,created_at FROM recipients ORDER BY id DESC LIMIT 1000").fetchall(); total=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]; c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["group_name"]),esc(r["status"])) for r in rows) or '<tr><td colspan="7">No recipients imported.</td></tr>'
+            return self.admin_shell("Recipients",'<h1>Recipients</h1><p>Import simulation recipients from CSV. Expected columns: email,name,employee_id,department,group_name.</p><p><a class="btn primary" href="/admin/recipients/import">+ Import CSV</a></p><div class="card"><b>%s recipients</b><div class="table-wrap"><table class="table"><tr><th>ID</th><th>Email</th><th>Name</th><th>Employee ID</th><th>Department</th><th>Group</th><th>Status</th></tr>%s</table></div></div>'%(total,table),"Recipients")
+        if path=="/admin/groups":
+            rows=c.execute("SELECT g.id,g.name,g.department,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.id ORDER BY g.id DESC").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["name"]),esc(r["department"]),r["members"]) for r in rows) or '<tr><td colspan="4">No groups yet.</td></tr>'
+            return self.admin_shell("Groups",'<h1>Groups & Departments</h1><p>Reusable recipient groups for campaign targeting.</p><p><a class="btn primary" href="/admin/groups/new">+ New Group</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Group</th><th>Department</th><th>Members</th></tr>'+table+'</table></div>',"Groups & Departments")
         if path=="/admin/users":
             rows=c.execute("SELECT email,MAX(name) name,MAX(employee_id) employee_id,COUNT(*) events,SUM(event='click') clicks,SUM(event='submitted') submissions FROM events WHERE email!='' GROUP BY email ORDER BY events DESC").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),r["events"],r["clicks"] or 0,r["submissions"] or 0) for r in rows) or '<tr><td colspan="6">No users recorded yet.</td></tr>'
@@ -308,6 +320,12 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/settings":
             c.close(); return self.admin_shell("Settings",'<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div>',"Settings")
         c.close(); return None
+
+    def recipient_import_form(self):
+        return self.admin_shell("Import Recipients",'<h1>Import Recipients</h1><div class="card"><form class="form" method="post" action="/admin/recipients/import"><label>CSV data<textarea name="csv_data" rows="14" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px" placeholder="email,name,employee_id,department,group_name"></textarea></label><button class="btn primary">Import Recipients</button></form><p style="font-size:12px;color:#71817b">Only identity and targeting metadata. Do not place passwords, OTPs, PINs, CVVs or card data here.</p></div>',"Recipients")
+
+    def group_form(self):
+        return self.admin_shell("New Group",'<h1>New Group</h1><div class="card"><form class="form" method="post" action="/admin/groups/save"><label>Group Name<input name="name" required maxlength="100"></label><label>Department<input name="department" maxlength="100"></label><button class="btn primary">Save Group</button></form></div>',"Groups & Departments")
 
     def smtp_form(self,sid=None):
         c=db(); r=c.execute("SELECT * FROM smtp_profiles WHERE id=?",(sid,)).fetchone() if sid else None; c.close()
@@ -344,7 +362,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
@@ -354,6 +372,12 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
+        if path=="/admin/recipients/import":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            return self.sendbody(200,self.recipient_import_form())
+        if path=="/admin/groups/new":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            return self.sendbody(200,self.group_form())
         if path=="/admin/campaigns/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.campaign_form())
@@ -408,6 +432,29 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             except Exception as e:
                 audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
                 return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
+        if p.path=="/admin/recipients/import":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            raw=form.get("csv_data",[""])[0]
+            reader=csv.DictReader(io.StringIO(raw))
+            c=db(); count=0
+            for row in reader:
+                email=(row.get("email") or "").strip().lower()
+                if not email or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): continue
+                vals=((row.get("name") or "").strip()[:150],(row.get("employee_id") or "").strip()[:100],(row.get("department") or "").strip()[:100],(row.get("group_name") or "").strip()[:100])
+                existing=c.execute("SELECT id FROM recipients WHERE email=?",(email,)).fetchone()
+                if existing:
+                    c.execute("UPDATE recipients SET name=?,employee_id=?,department=?,group_name=? WHERE id=?",(vals[0],vals[1],vals[2],vals[3],existing["id"]))
+                else:
+                    c.execute("INSERT INTO recipients(email,name,employee_id,department,group_name,status,created_at) VALUES(?,?,?,?,?,'Pending',?)",(email,*vals,now()))
+                count+=1
+            c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_IMPORT","imported=%s"%count,ip)
+            return self.sendbody(200,page("Recipients Imported","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px'><h2>Recipients imported</h2><p>%s valid recipient records processed.</p><p><a href='/admin/recipients'>Back</a></p></div>"%count))
+        if p.path=="/admin/groups/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            name=form.get("name",[""])[0][:100]; department=form.get("department",[""])[0][:100]
+            if not name: return self.sendbody(400,"Group name required","text/plain")
+            c=db(); c.execute("INSERT OR IGNORE INTO groups_tbl(name,department,created_at) VALUES(?,?,?)",(name,department,now())); c.commit(); c.close(); audit(ADMIN_USERNAME,"GROUP_CREATE",name,ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/groups"})
         if p.path=="/admin/campaigns/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:150]; template=form.get("template",["1"])[0]; status=form.get("status",["Draft"])[0]
