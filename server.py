@@ -18,6 +18,9 @@ ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
 SESSIONS=set()
 TZ=ZoneInfo("Asia/Dhaka")
 
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
 os.makedirs(TEMPLATES,exist_ok=True)
 os.makedirs(DATA,exist_ok=True)
 os.makedirs(LOGS,exist_ok=True)
@@ -177,12 +180,13 @@ class Handler(BaseHTTPRequestHandler):
 <script>
 function filterRows(){{const q=document.getElementById('q').value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
 </script>"""
-        return page("Dashboard",body,DASH_CSS)
+        dashboard_main=body[body.index("<main"):body.rindex("</main>")+7]
+        return self.admin_shell("Overview",dashboard_main,"Overview")
 
     def admin_shell(self,title,content,active):
         nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
         links="".join('<a href="%s" class="%s">%s</a>'%(u,"active" if n==active else "",n) for n,u in nav)
-        css=".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
+        css=DASH_CSS+".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
         body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
         return page(title,body,css)
 
@@ -247,10 +251,12 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
             return self.sendbody(200,self.feature_page(path))
         if path=="/admin/campaigns/new":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.campaign_form())
         if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
             t=path[1:]; fn=os.path.join(TEMPLATES,t)
@@ -272,6 +278,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
             return self.sendbody(401,self.login_page("Invalid username or password"))
         if p.path=="/admin/campaigns/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:150]; template=form.get("template",["1"])[0]; status=form.get("status",["Draft"])[0]
             c=db()
             if cid:
