@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 from http import cookies
 from datetime import datetime, timezone, timedelta
 from email.message import EmailMessage
@@ -15,6 +15,8 @@ LOGS=BASE+"/logs"
 DB=DATA+"/phish.db"
 LOG=LOGS+"/access.log"
 PORT=int(os.environ.get("PORT","8080"))
+PUBLIC_BASE_URL=os.environ.get("PUBLIC_BASE_URL","").rstrip("/")
+SEND_DELAY=float(os.environ.get("SEND_DELAY_SECONDS","0.2"))
 ADMIN_USERNAME=os.environ.get("ADMIN_USERNAME","admin")
 ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
 SESSIONS=set()
@@ -47,7 +49,7 @@ def db():
         event TEXT NOT NULL, name TEXT, email TEXT, mobile TEXT,
         user_agent TEXT, employee_id TEXT, card_type TEXT)""")
     cols={row[1] for row in c.execute("PRAGMA table_info(events)").fetchall()}
-    for col in ("employee_id","card_type"):
+    for col in ("employee_id","card_type","campaign_id","recipient_id"):
         if col not in cols:
             c.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
     c.executescript("""
@@ -60,6 +62,7 @@ def db():
     CREATE TABLE IF NOT EXISTS training_records(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,completion REAL DEFAULT 0,course TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,admin TEXT,action TEXT,details TEXT,ip TEXT);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
+    CREATE TABLE IF NOT EXISTS campaign_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,recipient_id INTEGER,status TEXT,attempted_at TEXT,sent_at TEXT,error TEXT);
     CREATE TABLE IF NOT EXISTS smtp_profiles(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
@@ -78,7 +81,7 @@ def db():
     );
     """)
     cols_campaign={row[1] for row in c.execute("PRAGMA table_info(campaigns)").fetchall()}
-    for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT")):
+    for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT"),("group_name","TEXT")):
         if col not in cols_campaign:
             c.execute("ALTER TABLE campaigns ADD COLUMN %s %s"%(col,definition))
     if not c.execute("SELECT 1 FROM admins WHERE username=?",(ADMIN_USERNAME,)).fetchone():
@@ -88,11 +91,11 @@ def db():
     c.commit()
     return c
 
-def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=""):
+def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id=""):
     c=db()
     c.execute(
-        "INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type) VALUES(?,?,?,?,?,?,?,?,?,?)",
-        (datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type))
+        "INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type,campaign_id,recipient_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        (datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type,campaign_id,recipient_id))
     c.commit()
     if email:
         row=c.execute("SELECT * FROM risk_scores WHERE email=?",(email,)).fetchone()
