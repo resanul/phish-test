@@ -377,12 +377,31 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             rows=c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
             return self.admin_shell("Audit",'<h1>Audit Log</h1><p>Administrative actions and exports.</p><div class="card"><table class="table"><tr><th>Date</th><th>Time</th><th>Action</th><th>Details</th></tr>'+table+'</table></div>',"Audit Log")
-        if path in ("/admin/reports","/admin/exports"):
+        if path=="/admin/reports":
+            total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]; clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]
+            campaigns=c.execute("""SELECT c.id,c.name,c.status,c.targeted,COALESCE(SUM(d.status='Sent'),0) sent,COALESCE(SUM(d.status='Failed'),0) failed,COALESCE(SUM(e.event='click'),0) clicks,COALESCE(SUM(e.event='submitted'),0) submissions FROM campaigns c LEFT JOIN campaign_deliveries d ON d.campaign_id=c.id LEFT JOIN events e ON e.campaign_id=c.id GROUP BY c.id ORDER BY c.id DESC""").fetchall(); c.close()
+            rate=subs/clicks*100 if clicks else 0
+            rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><a class="btn" href="/admin/reports?campaign_id=%s">Details</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),r["targeted"],r["sent"],r["failed"],r["clicks"],r["id"]) for r in campaigns) or '<tr><td colspan="8">No campaign telemetry yet.</td></tr>'
+            return self.admin_shell("Reports",'<h1>Campaign Reports</h1><p>Measured delivery and simulation telemetry.</p><div class="card"><h3>Overall</h3><p>Total events: %s · Clicks: %s · Simulation actions: %s · Action rate: %.1f%%</p></div><div class="card"><table class="table"><tr><th>ID</th><th>Campaign</th><th>Status</th><th>Targeted</th><th>Sent</th><th>Failed</th><th>Clicks</th><th></th></tr>%s</table></div>'%(total,clicks,subs,rate,rows),"Reports")
+        if path=="/admin/exports":
             total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]; clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; c.close(); rate=subs/clicks*100 if clicks else 0
-            title="Reports" if path.endswith("reports") else "Exports"; return self.admin_shell(title,'<h1>'+title+'</h1><p>Measured telemetry only; no fabricated phishing/report rates.</p><div class="card"><h3>Total events: %s</h3><p>Clicks: %s · Submissions: %s · Action rate: %.1f%%</p><a class="btn primary" href="/admin.csv">Export CSV</a></div>'%(total,clicks,subs,rate),title)
+            return self.admin_shell("Exports",'<h1>Exports</h1><p>Download measured simulation telemetry. SMTP passwords and encrypted secrets are excluded.</p><div class="card"><h3>Events</h3><p>Total: %s · Clicks: %s · Actions: %s · Action rate: %.1f%%</p><a class="btn primary" href="/admin.csv">Export Event CSV</a></div>'%(total,clicks,subs,rate),"Exports")
         if path=="/admin/settings":
             c.close(); return self.admin_shell("Settings",'<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div>',"Settings")
         c.close(); return None
+
+    def campaign_report(self,cid):
+        c=db()
+        camp=c.execute("SELECT c.*,s.name smtp_name,l.name landing_name FROM campaigns c LEFT JOIN smtp_profiles s ON s.id=c.smtp_profile_id LEFT JOIN landing_pages l ON l.id=c.landing_page_id WHERE c.id=?",(cid,)).fetchone()
+        deliveries=c.execute("SELECT d.status,d.sent_at,r.email,r.name,r.department FROM campaign_deliveries d JOIN recipients r ON r.id=d.recipient_id WHERE d.campaign_id=? ORDER BY d.id DESC",(cid,)).fetchall()
+        events=c.execute("SELECT event,COUNT(*) n FROM events WHERE campaign_id=? GROUP BY event",(cid,)).fetchall()
+        c.close()
+        if not camp: return self.sendbody(404,"Campaign not found","text/plain")
+        counts={x["event"]:x["n"] for x in events}
+        sent=sum(1 for x in deliveries if x["status"]=="Sent"); failed=sum(1 for x in deliveries if x["status"]=="Failed")
+        rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(x["email"]),esc(x["name"]),esc(x["department"]),esc(x["status"]),esc(x["sent_at"] or "")) for x in deliveries) or '<tr><td colspan="5">No delivery records.</td></tr>'
+        body='<h1>%s</h1><p>SMTP: %s · Landing Page: %s · Targeted: %s</p><div class="card"><b>Sent</b> %s &nbsp; <b>Failed</b> %s &nbsp; <b>Clicks</b> %s &nbsp; <b>Actions</b> %s</div><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Delivery</th><th>Sent At</th></tr>%s</table></div><p><a class="btn" href="/admin/reports">Back to Reports</a></p>'%(esc(camp["name"]),esc(camp["smtp_name"] or "Not set"),esc(camp["landing_name"] or "Not set"),camp["targeted"],sent,failed,counts.get("click",0),counts.get("submitted",0),rows)
+        return self.admin_shell("Campaign Report",body,"Reports")
 
     def recipient_import_form(self):
         return self.admin_shell("Import Recipients",'<h1>Import Recipients</h1><div class="card"><form class="form" method="post" action="/admin/recipients/import"><label>CSV data<textarea name="csv_data" rows="14" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px" placeholder="email,name,employee_id,department,group_name"></textarea></label><button class="btn primary">Import Recipients</button></form><p style="font-size:12px;color:#71817b">Only identity and targeting metadata. Do not place passwords, OTPs, PINs, CVVs or card data here.</p></div>',"Recipients")
@@ -447,6 +466,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
+            if path=="/admin/reports" and parse_qs(p.query).get("campaign_id",[None])[0]:
+                return self.sendbody(200,self.campaign_report(parse_qs(p.query).get("campaign_id",[None])[0]))
             if path=="/admin/smtp" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.smtp_form(parse_qs(p.query).get("id",[None])[0]))
             return self.sendbody(200,self.feature_page(path))
