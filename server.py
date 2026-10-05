@@ -53,6 +53,24 @@ def db():
         if col not in cols:
             c.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
     c.executescript("""
+    CREATE TABLE IF NOT EXISTS tracking_tokens(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT UNIQUE NOT NULL,
+        campaign_id INTEGER NOT NULL,
+        recipient_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS event_dedup(
+        token TEXT NOT NULL,
+        event TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL,
+        PRIMARY KEY(token,event)
+    );
+    CREATE INDEX IF NOT EXISTS idx_events_campaign_event ON events(campaign_id,event);
+    CREATE INDEX IF NOT EXISTS idx_events_recipient_event ON events(recipient_id,event);
+    """)
+    c.executescript("""
     CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, created_at TEXT);
     CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);
@@ -159,20 +177,46 @@ def db():
     c.commit()
     return c
 
-def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id=""):
+EVENT_TAXONOMY={"delivered","open","click","form_action","report","QR_scan","training_assigned","training_completed","bot_detected"}
+BOT_UA_RE=re.compile(r"(bot|crawler|spider|scanner|proofpoint|mimecast|barracuda|safelinks|urlscan|security|linkcheck|headless|phantom|selenium|playwright)",re.I)
+
+def is_bot_user_agent(ua):
+    return bool(BOT_UA_RE.search(ua or ""))
+
+def create_tracking_token(campaign_id,recipient_id):
+    token=secrets.token_urlsafe(32)
     c=db()
+    c.execute("INSERT INTO tracking_tokens(token,campaign_id,recipient_id,created_at) VALUES(?,?,?,?)",(token,campaign_id,recipient_id,now()))
+    c.commit(); c.close()
+    return token
+
+def resolve_tracking_token(token):
+    if not token: return None
+    c=db(); row=c.execute("SELECT * FROM tracking_tokens WHERE token=?",(token,)).fetchone(); c.close()
+    return row
+
+def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id="",token=""):
+    if event not in EVENT_TAXONOMY:
+        raise ValueError("Unsupported event taxonomy: %s" % event)
+    c=db()
+    if token and event in ("click","form_action","report","QR_scan","open"):
+        try:
+            c.execute("INSERT INTO event_dedup(token,event,first_seen_at) VALUES(?,?,?)",(token,event,now()))
+        except sqlite3.IntegrityError:
+            c.close(); return False
     c.execute(
         "INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type,campaign_id,recipient_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         (datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type,campaign_id,recipient_id))
     c.commit()
     if email:
         row=c.execute("SELECT * FROM risk_scores WHERE email=?",(email,)).fetchone()
-        failures=(row["failures"] if row else 0)+(1 if event in ("click","submitted") else 0)
+        failures=(row["failures"] if row else 0)+(1 if event in ("click","form_action") else 0)
         score=min(100,failures*20); level="High" if score>=70 else ("Medium" if score>=40 else "Low")
         c.execute("""INSERT INTO risk_scores(email,score,level,failures,last_event,updated_at) VALUES(?,?,?,?,?,?)
         ON CONFLICT(email) DO UPDATE SET score=excluded.score,level=excluded.level,failures=excluded.failures,last_event=excluded.last_event,updated_at=excluded.updated_at""",(email,score,level,failures,event,now()))
         c.commit()
     c.close()
+    return True
 
 def ensure_smtp_key():
     os.makedirs(DATA,exist_ok=True)
@@ -264,13 +308,14 @@ def send_campaign(campaign_id):
             delivery_id=c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
             c.commit(); c.close()
             try:
-                link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"campaign_id":campaign_id,"recipient_id":rec["id"]})
+                token=create_tracking_token(campaign_id,rec["id"])
+                link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"t":token})
                 msg=EmailMessage()
                 msg["From"]=formataddr((campaign["from_name"] or "Trust PhishGuard",campaign["from_email"]))
                 if campaign["reply_to"]: msg["Reply-To"]=campaign["reply_to"]
                 msg["To"]=rec["email"]
                 msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
-                msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link))
+                msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,link.replace(".html?","report?t="),link.replace(".html?","qr?t=")))
                 smtp.send_message(msg)
                 c=db(); c.execute("UPDATE campaign_deliveries SET status='Sent',sent_at=? WHERE id=?",(now(),delivery_id)); c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec["id"],)); c.commit(); c.close()
                 sent+=1
@@ -656,14 +701,29 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/campaigns/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.campaign_form())
+        if path in ("/report","/qr"):
+            token=parse_qs(p.query).get("t",[""])[0]
+            tr=resolve_tracking_token(token)
+            if not tr: return self.sendbody(404,"Invalid tracking token","text/plain")
+            event="report" if path=="/report" else "QR_scan"
+            c=db(); recrow=c.execute("SELECT * FROM recipients WHERE id=?",(tr["recipient_id"],)).fetchone(); c.close()
+            record(ip,str(tr["campaign_id"]),event,recrow["name"] if recrow else "",recrow["email"] if recrow else "", "",ua,recrow["employee_id"] if recrow else "", "",str(tr["campaign_id"]),str(tr["recipient_id"]),token)
+            return self.sendbody(200,page("PhishGuard","<div style='max-width:700px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Thank you</h1><p>Your report has been recorded as part of the authorized security-awareness simulation.</p></div>"))
         if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
             t=path[1:]; fn=os.path.join(TEMPLATES,t)
             if os.path.isfile(fn):
-                q=parse_qs(p.query); campaign_id=q.get("campaign_id",[""])[0]; recipient_id=q.get("recipient_id",[""])[0]
-                record(ip,t,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id); access(ip,path,200)
+                q=parse_qs(p.query); token=q.get("t",[""])[0]; tr=resolve_tracking_token(token)
+                campaign_id=str(tr["campaign_id"]) if tr else ""; recipient_id=str(tr["recipient_id"]) if tr else ""
+                if tr:
+                    c=db(); recrow=c.execute("SELECT * FROM recipients WHERE id=?",(recipient_id,)).fetchone(); c.close()
+                    if is_bot_user_agent(ua):
+                        record(ip,t,"bot_detected",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                    else:
+                        record(ip,t,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                access(ip,path,200)
                 with open(fn,"rb") as f: body=f.read().decode("utf-8","replace")
-                if campaign_id and recipient_id:
-                    action="/submit?"+urlencode({"campaign_id":campaign_id,"recipient_id":recipient_id})
+                if token:
+                    action="/submit?"+urlencode({"t":token})
                     body=body.replace('action="/submit"','action="'+action+'"').replace("action='/submit'","action='"+action+"'")
                 return self.sendbody(200,body)
         access(ip,path,404); return self.sendbody(404,"404 File not found","text/plain")
@@ -857,8 +917,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
             email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]
             card_type=form.get("card_type",[""])[0][:100]
-            qs=parse_qs(p.query); campaign_id=qs.get("campaign_id",[""])[0]; recipient_id=qs.get("recipient_id",[""])[0]
-            record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type,campaign_id,recipient_id)
+            qs=parse_qs(p.query); token=qs.get("t",[""])[0]; tr=resolve_tracking_token(token)
+            campaign_id=str(tr["campaign_id"]) if tr else ""; recipient_id=str(tr["recipient_id"]) if tr else ""
+            record(ip,t,"form_action",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type,campaign_id,recipient_id,token)
             access(ip,p.path,200)
             return self.sendbody(200,page("Simulation Complete","<div style='max-width:760px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
         return self.sendbody(404,"Not found","text/plain")
