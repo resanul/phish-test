@@ -118,6 +118,20 @@ def db():
         updated_at TEXT
     );
     """)
+    cols_recipient={row[1] for row in c.execute("PRAGMA table_info(recipients)").fetchall()}
+    for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'")):
+        if col not in cols_recipient:
+            c.execute("ALTER TABLE recipients ADD COLUMN %s %s"%(col,definition))
+    c.execute("""CREATE TABLE IF NOT EXISTS recipient_import_history(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_name TEXT,
+        processed INTEGER DEFAULT 0,
+        created INTEGER DEFAULT 0,
+        updated INTEGER DEFAULT 0,
+        skipped INTEGER DEFAULT 0,
+        errors TEXT,
+        created_at TEXT
+    )""")
     cols_campaign={row[1] for row in c.execute("PRAGMA table_info(campaigns)").fetchall()}
     for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT"),("group_name","TEXT")):
         if col not in cols_campaign:
@@ -428,9 +442,15 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             body=('<h1>Training</h1><p>Assign security-awareness courses after simulations and track completion without collecting credentials.</p><div class="stats" style="margin:16px 0"><div class="stat"><div class="stat-label">ASSIGNMENTS</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">COMPLETED</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">OVERDUE</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">COMPLETION</div><div class="num">%.1f%%</div></div></div><p><a class="btn primary" href="/admin/training/new">+ Create Assignment</a> <a class="btn" href="/admin/training/course/new">+ New Course</a></p><div class="card"><h3>Course Catalog</h3><table class="table"><tr><th>ID</th><th>Course</th><th>Duration</th><th>Pass Score</th><th>Status</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>Assignments</h3><div class="table-wrap"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Course</th><th>Completion</th><th>Status</th><th>Due</th></tr>%s</table></div></div>'%(total,completed,overdue,(completed/total*100 if total else 0),course_rows,assignment_rows))
             return self.admin_shell("Training",body,"Training")
         if path=="/admin/recipients":
-            rows=c.execute("SELECT id,email,name,employee_id,department,group_name,status,created_at FROM recipients ORDER BY id DESC LIMIT 1000").fetchall(); total=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]; c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["group_name"]),esc(r["status"])) for r in rows) or '<tr><td colspan="7">No recipients imported.</td></tr>'
-            return self.admin_shell("Recipients",'<h1>Recipients</h1><p>Import simulation recipients from CSV. Expected columns: email,name,employee_id,department,group_name.</p><p><a class="btn primary" href="/admin/recipients/import">+ Import CSV</a></p><div class="card"><b>%s recipients</b><div class="table-wrap"><table class="table"><tr><th>ID</th><th>Email</th><th>Name</th><th>Employee ID</th><th>Department</th><th>Group</th><th>Status</th></tr>%s</table></div></div>'%(total,table),"Recipients")
+            rows=c.execute("SELECT id,email,name,employee_id,department,designation,location,manager,language,timezone,group_name,status,created_at FROM recipients ORDER BY id DESC LIMIT 1000").fetchall()
+            total=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
+            suppressed=c.execute("SELECT COUNT(*) n FROM recipients WHERE status='Suppressed'").fetchone()["n"]
+            imports=c.execute("SELECT id,source_name,processed,created,updated,skipped,errors,created_at FROM recipient_import_history ORDER BY id DESC LIMIT 20").fetchall()
+            c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/recipients?id=%s">Profile</a></td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["designation"]),esc(r["location"]),esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="9">No recipients imported.</td></tr>'
+            ih="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["source_name"] or "Manual/CSV"),r["processed"],r["created"],r["updated"],r["skipped"],esc(r["errors"] or ""),esc(r["created_at"])) for r in imports) or '<tr><td colspan="8">No import history.</td></tr>'
+            body='<h1>Recipients</h1><p>Enterprise recipient profiles for authorized simulation targeting. Suppressed recipients are excluded from campaign delivery.</p><div class="stats" style="margin:16px 0"><div class="stat"><div class="stat-label">RECIPIENTS</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">SUPPRESSED</div><div class="num">%s</div></div></div><p><a class="btn primary" href="/admin/recipients/import">+ Import CSV</a></p><div class="card"><div class="table-wrap"><table class="table"><tr><th>ID</th><th>Email</th><th>Name</th><th>Employee ID</th><th>Department</th><th>Designation</th><th>Location</th><th>Status</th><th></th></tr>%s</table></div></div><div class="card" style="margin-top:15px"><h3>Import History</h3><div class="table-wrap"><table class="table"><tr><th>ID</th><th>Source</th><th>Processed</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Errors</th><th>Time</th></tr>%s</table></div></div>'%(total,suppressed,table,ih)
+            return self.admin_shell("Recipients",body,"Recipients")
         if path=="/admin/groups":
             rows=c.execute("SELECT g.id,g.name,g.department,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.id ORDER BY g.id DESC").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["name"]),esc(r["department"]),r["members"]) for r in rows) or '<tr><td colspan="4">No groups yet.</td></tr>'
@@ -473,8 +493,19 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         body='<h1>%s</h1><p>SMTP: %s · Landing Page: %s · Targeted: %s</p><div class="card"><b>Sent</b> %s &nbsp; <b>Failed</b> %s &nbsp; <b>Clicks</b> %s &nbsp; <b>Actions</b> %s</div><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Delivery</th><th>Sent At</th></tr>%s</table></div><p><a class="btn" href="/admin/reports">Back to Reports</a></p>'%(esc(camp["name"]),esc(camp["smtp_name"] or "Not set"),esc(camp["landing_name"] or "Not set"),camp["targeted"],sent,failed,counts.get("click",0),counts.get("submitted",0),rows)
         return self.admin_shell("Campaign Report",body,"Reports")
 
+    def recipient_profile_form(self,rid):
+        c=db(); r=c.execute("SELECT * FROM recipients WHERE id=?",(rid,)).fetchone(); c.close()
+        if not r:
+            return self.admin_shell("Recipient Profile","<h1>Recipient not found</h1><p><a class='btn' href='/admin/recipients'>Back</a></p>","Recipients")
+        def v(k): return esc(r[k] or "")
+        langs=["English","Bangla","Bengali-English","Arabic","Hindi"]
+        langopts="".join('<option value="%s" %s>%s</option>'%(esc(x),"selected" if r["language"]==x else "",esc(x)) for x in langs)
+        statusopts="".join('<option value="%s" %s>%s</option>'%(x,"selected" if r["status"]==x else "",x) for x in ("Active","Suppressed"))
+        body='<h1>Recipient Profile</h1><p>Edit identity, organizational and targeting metadata. No credential fields are supported.</p><div class="card"><form class="form" method="post" action="/admin/recipients/save"><input type="hidden" name="id" value="%s"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label>Email<input type="email" name="email" value="%s" required maxlength="255"></label><label>Employee ID<input name="employee_id" value="%s" maxlength="100"></label><label>Name<input name="name" value="%s" maxlength="150"></label><label>Designation<input name="designation" value="%s" maxlength="150"></label><label>Department<input name="department" value="%s" maxlength="100"></label><label>Location<input name="location" value="%s" maxlength="150"></label><label>Manager<input name="manager" value="%s" maxlength="150"></label><label>Group<input name="group_name" value="%s" maxlength="100"></label><label>Language<select name="language">%s</select></label><label>Timezone<input name="timezone" value="%s" maxlength="80" placeholder="Asia/Dhaka"></label><label>Status<select name="status">%s</select></label></div><button class="btn primary">Save Profile</button> <a class="btn" href="/admin/recipients">Cancel</a></form></div>'%(r["id"],v("email"),v("employee_id"),v("name"),v("designation"),v("department"),v("location"),v("manager"),v("group_name"),langopts,v("timezone"),statusopts)
+        return self.admin_shell("Recipient Profile",body,"Recipients")
+
     def recipient_import_form(self):
-        return self.admin_shell("Import Recipients",'<h1>Import Recipients</h1><div class="card"><form class="form" method="post" action="/admin/recipients/import"><label>CSV data<textarea name="csv_data" rows="14" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px" placeholder="email,name,employee_id,department,group_name"></textarea></label><button class="btn primary">Import Recipients</button></form><p style="font-size:12px;color:#71817b">Only identity and targeting metadata. Do not place passwords, OTPs, PINs, CVVs or card data here.</p></div>',"Recipients")
+        return self.admin_shell("Import Recipients",'<h1>Import Recipients</h1><div class="card"><form class="form" method="post" action="/admin/recipients/import"><label>Source Name<input name="source_name" maxlength="150" placeholder="HR recipient export - October 2026"></label><label>CSV data<textarea name="csv_data" rows="16" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px" placeholder="email,name,employee_id,department,designation,location,manager,language,timezone,group_name"></textarea></label><button class="btn primary">Validate & Import</button></form><p style="font-size:12px;color:#71817b">Supported metadata: email, name, employee_id, department, designation, location, manager, language, timezone, group_name. Duplicate emails are updated; conflicting employee IDs are skipped. Never place passwords, OTPs, PINs, CVVs or card data here.</p></div>',"Recipients")
 
     def group_form(self):
         return self.admin_shell("New Group",'<h1>New Group</h1><div class="card"><form class="form" method="post" action="/admin/groups/save"><label>Group Name<input name="name" required maxlength="100"></label><label>Department<input name="department" maxlength="100"></label><button class="btn primary">Save Group</button></form></div>',"Groups & Departments")
@@ -604,6 +635,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             body='<h1>New Training Course</h1><div class="card"><form class="form" method="post" action="/admin/training/course/save"><label>Course Name<input name="name" required maxlength="150"></label><label>Description<textarea name="description" rows="5" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px"></textarea></label><label>Duration (minutes)<input type="number" name="duration_minutes" value="15" min="1" max="480"></label><label>Passing Score %<input type="number" name="passing_score" value="80" min="0" max="100"></label><button class="btn primary">Save Course</button></form></div>'
             return self.sendbody(200,self.admin_shell("New Training Course",body,"Training"))
+        if path=="/admin/recipients" and parse_qs(p.query).get("id",[None])[0]:
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            return self.sendbody(200,self.recipient_profile_form(parse_qs(p.query).get("id",[None])[0]))
         if path=="/admin/recipients/import":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.recipient_import_form())
@@ -730,23 +764,43 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 c.close(); return self.sendbody(409,"Training is already assigned to this recipient","text/plain")
             c.close(); audit(ADMIN_USERNAME,"TRAINING_ASSIGN",f"course={course_id} recipient={recipient_id}",ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/training"})
+        if p.path=="/admin/recipients/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            rid=form.get("id",[""])[0]; email=form.get("email",[""])[0].strip().lower()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): return self.sendbody(400,"Invalid email address","text/plain")
+            c=db()
+            existing=c.execute("SELECT id FROM recipients WHERE email=? AND id!=?",(email,rid)).fetchone()
+            employee=form.get("employee_id",[""])[0].strip()[:100]
+            employee_conflict=c.execute("SELECT id FROM recipients WHERE employee_id=? AND id!=? AND employee_id!=''",(employee,rid)).fetchone() if employee else None
+            if existing: c.close(); return self.sendbody(409,"A recipient with this email already exists","text/plain")
+            if employee_conflict: c.close(); return self.sendbody(409,"Employee ID is already assigned to another recipient","text/plain")
+            c.execute("UPDATE recipients SET email=?,name=?,employee_id=?,department=?,designation=?,location=?,manager=?,language=?,timezone=?,group_name=?,status=? WHERE id=?",(email,form.get("name",[""])[0][:150],employee,form.get("department",[""])[0][:100],form.get("designation",[""])[0][:150],form.get("location",[""])[0][:150],form.get("manager",[""])[0][:150],form.get("language",["English"])[0][:50],form.get("timezone",["Asia/Dhaka"])[0][:80],form.get("group_name",[""])[0][:100],form.get("status",["Active"])[0] if form.get("status",["Active"])[0] in ("Active","Suppressed") else "Active",rid)
+            c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_PROFILE_UPDATE","recipient=%s email=%s"%(rid,email),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/recipients"})
         if p.path=="/admin/recipients/import":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            raw=form.get("csv_data",[""])[0]
-            reader=csv.DictReader(io.StringIO(raw))
-            c=db(); count=0
-            for row in reader:
-                email=(row.get("email") or "").strip().lower()
-                if not email or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): continue
-                vals=((row.get("name") or "").strip()[:150],(row.get("employee_id") or "").strip()[:100],(row.get("department") or "").strip()[:100],(row.get("group_name") or "").strip()[:100])
+            raw=form.get("csv_data",[""])[0]; source=form.get("source_name",["CSV import"])[0][:150]
+            reader=csv.DictReader(io.StringIO(raw)); c=db(); processed=created=updated=skipped=0; errors=[]; seen_emails=set(); seen_employees=set()
+            for rownum,row in enumerate(reader,start=2):
+                processed+=1; email=(row.get("email") or "").strip().lower()
+                if not email or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): skipped+=1; errors.append("row %s: invalid email"%rownum); continue
+                if email in seen_emails: skipped+=1; errors.append("row %s: duplicate email in file"%rownum); continue
+                seen_emails.add(email); employee=(row.get("employee_id") or "").strip()[:100]
+                if employee:
+                    if employee in seen_employees: skipped+=1; errors.append("row %s: duplicate employee_id in file"%rownum); continue
+                    seen_employees.add(employee)
+                    conflict=c.execute("SELECT id,email FROM recipients WHERE employee_id=? AND employee_id!='' AND email!=?",(employee,email)).fetchone()
+                    if conflict: skipped+=1; errors.append("row %s: employee_id already belongs to another email"%rownum); continue
+                vals=((row.get("name") or "").strip()[:150],employee,(row.get("department") or "").strip()[:100],(row.get("designation") or "").strip()[:150],(row.get("location") or "").strip()[:150],(row.get("manager") or "").strip()[:150],(row.get("language") or "English").strip()[:50],(row.get("timezone") or "Asia/Dhaka").strip()[:80],(row.get("group_name") or "").strip()[:100])
                 existing=c.execute("SELECT id FROM recipients WHERE email=?",(email,)).fetchone()
                 if existing:
-                    c.execute("UPDATE recipients SET name=?,employee_id=?,department=?,group_name=? WHERE id=?",(vals[0],vals[1],vals[2],vals[3],existing["id"]))
+                    c.execute("UPDATE recipients SET name=?,employee_id=?,department=?,designation=?,location=?,manager=?,language=?,timezone=?,group_name=? WHERE id=?",(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5],vals[6],vals[7],vals[8],existing["id"])); updated+=1
                 else:
-                    c.execute("INSERT INTO recipients(email,name,employee_id,department,group_name,status,created_at) VALUES(?,?,?,?,?,'Pending',?)",(email,*vals,now()))
-                count+=1
-            c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_IMPORT","imported=%s"%count,ip)
-            return self.sendbody(200,page("Recipients Imported","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px'><h2>Recipients imported</h2><p>%s valid recipient records processed.</p><p><a href='/admin/recipients'>Back</a></p></div>"%count))
+                    c.execute("INSERT INTO recipients(email,name,employee_id,department,designation,location,manager,language,timezone,group_name,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(email,*vals,"Active",now())); created+=1
+            errtxt="; ".join(errors[:20])
+            c.execute("INSERT INTO recipient_import_history(source_name,processed,created,updated,skipped,errors,created_at) VALUES(?,?,?,?,?,?,?)",(source,processed,created,updated,skipped,errtxt,now()))
+            c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_IMPORT","source=%s processed=%s created=%s updated=%s skipped=%s"%(source,processed,created,updated,skipped),ip)
+            return self.sendbody(200,page("Recipients Imported","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Recipient import complete</h2><p>Processed: <b>%s</b> · Created: <b>%s</b> · Updated: <b>%s</b> · Skipped: <b>%s</b></p><p>%s</p><p><a href='/admin/recipients'>Back to Recipients</a></p></div>"%(processed,created,updated,skipped,esc(errtxt or "No validation errors."))))
         if p.path=="/admin/groups/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             name=form.get("name",[""])[0][:100]; department=form.get("department",[""])[0][:100]
