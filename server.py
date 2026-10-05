@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re
+import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode
 from http import cookies
@@ -627,6 +627,25 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,page("Simulation Complete","<div style='max-width:760px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
         return self.sendbody(404,"Not found","text/plain")
 
+def scheduler_loop():
+    while True:
+        try:
+            c=db()
+            rows=c.execute("SELECT id,launch_at FROM campaigns WHERE status='Scheduled' AND launch_at IS NOT NULL AND launch_at!=''").fetchall()
+            c.close()
+            now_local=datetime.now(TZ)
+            for row in rows:
+                try:
+                    dt=datetime.fromisoformat(row["launch_at"]).replace(tzinfo=TZ)
+                    if dt<=now_local:
+                        send_campaign(row["id"])
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        time.sleep(30)
+
 if __name__=="__main__":
     db().close()
+    threading.Thread(target=scheduler_loop,daemon=True,name="campaign-scheduler").start()
     ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
