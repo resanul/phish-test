@@ -11,10 +11,13 @@ ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME"); SESSIONS=set()
 os.makedirs(TEMPLATES,exist_ok=True); os.makedirs(DATA,exist_ok=True); os.makedirs(LOGS,exist_ok=True)
 def db():
  c=sqlite3.connect(DB); c.row_factory=sqlite3.Row
- c.execute("CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT NOT NULL,ip TEXT NOT NULL,template TEXT NOT NULL,event TEXT NOT NULL,name TEXT,email TEXT,mobile TEXT,user_agent TEXT)")
+ c.execute("CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT NOT NULL,ip TEXT NOT NULL,template TEXT NOT NULL,event TEXT NOT NULL,name TEXT,email TEXT,mobile TEXT,user_agent TEXT,employee_id TEXT,card_type TEXT)")
+ cols={row[1] for row in c.execute("PRAGMA table_info(events)").fetchall()}
+ for col in ("employee_id","card_type"):
+  if col not in cols:c.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
  c.commit(); return c
-def record(ip,t,event,name="",email="",mobile="",ua=""):
- c=db(); c.execute("INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent) VALUES(?,?,?,?,?,?,?,?)",(datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua)); c.commit(); c.close()
+def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=""):
+ c=db(); c.execute("INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type) VALUES(?,?,?,?,?,?,?,?,?,?)",(datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type)); c.commit(); c.close()
 def format_datetime(ts):
  dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(ZoneInfo("Asia/Dhaka"))
  return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
@@ -37,13 +40,13 @@ class Handler(BaseHTTPRequestHandler):
   if path=="/admin":
    if not self.auth():return self.sendbody(200,page("Admin Login",'<div class="card"><h1>Phishing Simulation Admin</h1><form method="post" action="/admin/login"><input type="password" name="password" placeholder="Admin password" required style="padding:10px;width:280px"><br><br><button>Login</button></form></div>'))
    c=db(); rows=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 500").fetchall(); clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]; c.close()
-   trs="".join((lambda d,t: f"<tr><td>{html.escape(d)}</td><td>{html.escape(t)}</td><td>{html.escape(r['event'])}</td><td>{html.escape(r['template'])}</td><td>{html.escape(r['ip'])}</td><td>{html.escape(r['name'] or '')}</td><td>{html.escape(r['email'] or '')}</td><td>{html.escape(r['mobile'] or '')}</td></tr>")(*format_datetime(r['ts'])) for r in rows)
-   body=f"""<h1>Phishing Simulation Admin</h1><div class="card"><a href="/admin.csv">Export CSV</a></div><div class="stats"><div class="stat">Clicks<div class="num">{clicks}</div></div><div class="stat">Submissions<div class="num">{subs}</div></div><div class="stat">Unique IPs<div class="num">{ips}</div></div><div class="stat">Records<div class="num">{len(rows)}</div></div></div><div class="card"><h2>Activity</h2><table><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Local IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr>{trs or '<tr><td colspan="8">No activity</td></tr>'}</table></div>"""
+   trs="".join((lambda d,t: f"<tr><td>{html.escape(d)}</td><td>{html.escape(t)}</td><td>{html.escape(r['event'])}</td><td>{html.escape(r['template'])}</td><td>{html.escape(r['ip'])}</td><td>{html.escape(r['name'] or '')}</td><td>{html.escape(r['employee_id'] or '')}</td><td>{html.escape(r['email'] or '')}</td><td>{html.escape(r['mobile'] or '')}</td><td>{html.escape(r['card_type'] or '')}</td></tr>")(*format_datetime(r['ts'])) for r in rows)
+   body=f"""<h1>Phishing Simulation Admin</h1><div class="card"><a href="/admin.csv">Export CSV</a></div><div class="stats"><div class="stat">Clicks<div class="num">{clicks}</div></div><div class="stat">Submissions<div class="num">{subs}</div></div><div class="stat">Unique IPs<div class="num">{ips}</div></div><div class="stat">Records<div class="num">{len(rows)}</div></div></div><div class="card"><h2>Activity</h2><table><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Local IP</th><th>Name</th><th>Employee ID</th><th>Email</th><th>Mobile</th><th>Card Type</th></tr>{trs or '<tr><td colspan="10">No activity</td></tr>'}</table></div>"""
    return self.sendbody(200,page("Admin Dashboard",body))
   if path=="/admin.csv":
    if not self.auth():return self.sendbody(403,"Forbidden","text/plain")
-   c=db(); rows=c.execute("SELECT ts,event,template,ip,name,email,mobile,user_agent FROM events ORDER BY id DESC").fetchall(); c.close(); out=io.StringIO(); w=csv.writer(out); w.writerow(["timestamp","event","template","local_ip","name","email","mobile","user_agent"])
-   for r in rows:w.writerow([r[k] for k in r.keys()])
+   c=db(); rows=c.execute("SELECT ts,event,template,ip,name,email,mobile,user_agent FROM events ORDER BY id DESC").fetchall(); c.close(); out=io.StringIO(); w=csv.writer(out); w.writerow(["timestamp","event","template","local_ip","name","employee_id","email","mobile","card_type","user_agent"])
+   for r in rows:w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
    return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
   if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
    t=path[1:]; fn=os.path.join(TEMPLATES,t)
@@ -59,8 +62,8 @@ class Handler(BaseHTTPRequestHandler):
     return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
    return self.sendbody(401,"Invalid password","text/plain")
   if p.path=="/submit":
-   t=form.get("template",["unknown"])[0][:50]; name=form.get("name",[""])[0][:150]; email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]
-   record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent","")); access(ip,p.path,200)
+   t=form.get("template",["unknown"])[0][:50]; name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]; email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]; card_type=form.get("card_type",[""])[0][:100]
+   record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type); access(ip,p.path,200)
    return self.sendbody(200,page("Simulation Complete","<div class='card'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
   return self.sendbody(404,"Not found","text/plain")
 if __name__=="__main__":db().close(); ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
