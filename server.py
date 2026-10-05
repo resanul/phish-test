@@ -124,8 +124,6 @@ def db():
             c.execute("ALTER TABLE campaigns ADD COLUMN %s %s"%(col,definition))
     if not c.execute("SELECT 1 FROM admins WHERE username=?",(ADMIN_USERNAME,)).fetchone():
         c.execute("INSERT INTO admins(username,created_at) VALUES(?,?)",(ADMIN_USERNAME,datetime.now(timezone.utc).isoformat()))
-    for i in range(1,11):
-        c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
     c.execute("""INSERT OR IGNORE INTO training_courses(name,description,duration_minutes,passing_score,status,created_at,updated_at)
                  VALUES(?,?,?,?,?,?,?)""",
               ("Security Awareness Fundamentals","Core security-awareness training following a phishing simulation.",15,80,"Active",now(),now()))
