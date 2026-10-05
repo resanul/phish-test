@@ -34,6 +34,21 @@ def db():
     for col in ("employee_id","card_type"):
         if col not in cols:
             c.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
+    c.executescript("""
+    CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);
+    CREATE TABLE IF NOT EXISTS groups_tbl(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,department TEXT,created_at TEXT);
+    CREATE TABLE IF NOT EXISTS landing_pages(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,template TEXT,status TEXT DEFAULT 'Enabled',created_at TEXT);
+    CREATE TABLE IF NOT EXISTS risk_scores(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,score REAL DEFAULT 0,level TEXT DEFAULT 'Low',failures INTEGER DEFAULT 0,last_event TEXT,updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS training_records(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,completion REAL DEFAULT 0,course TEXT,updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,admin TEXT,action TEXT,details TEXT,ip TEXT);
+    CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
+    """)
+    if not c.execute("SELECT 1 FROM admins WHERE username=?",(ADMIN_USERNAME,)).fetchone():
+        c.execute("INSERT INTO admins(username,created_at) VALUES(?,?)",(ADMIN_USERNAME,datetime.now(timezone.utc).isoformat()))
+    for i in range(1,11):
+        c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
     c.commit()
     return c
 
@@ -43,6 +58,13 @@ def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=
         "INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type) VALUES(?,?,?,?,?,?,?,?,?,?)",
         (datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type))
     c.commit()
+    if email:
+        row=c.execute("SELECT * FROM risk_scores WHERE email=?",(email,)).fetchone()
+        failures=(row["failures"] if row else 0)+(1 if event in ("click","submitted") else 0)
+        score=min(100,failures*20); level="High" if score>=70 else ("Medium" if score>=40 else "Low")
+        c.execute("""INSERT INTO risk_scores(email,score,level,failures,last_event,updated_at) VALUES(?,?,?,?,?,?)
+        ON CONFLICT(email) DO UPDATE SET score=excluded.score,level=excluded.level,failures=excluded.failures,last_event=excluded.last_event,updated_at=excluded.updated_at""",(email,score,level,failures,event,now()))
+        c.commit()
     c.close()
 
 def format_datetime(ts):
@@ -153,9 +175,56 @@ class Handler(BaseHTTPRequestHandler):
 <section class="grid"><div class="card"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div><div class="card"><h3>Template Performance</h3><div class="sub">Total events by template</div><div class="bars">{bars}</div></div></section>
 <section class="card activity"><h3>Recent Activity</h3><div class="sub">Latest simulation events · dates and times shown in Bangladesh Standard Time</div><div class="filter"><input id="q" oninput="filterRows()" placeholder="Filter IP, template, email..."><button onclick="document.getElementById('q').value='';filterRows()">Clear</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Source IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr></thead><tbody id="rows">{table}</tbody></table></div></section></main>
 <script>
-function filterRows(){const q=document.getElementById('q').value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}
+function filterRows(){{const q=document.getElementById('q').value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
 </script>"""
         return page("Dashboard",body,DASH_CSS)
+
+    def admin_shell(self,title,content,active):
+        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
+        links="".join('<a href="%s" class="%s">%s</a>'%(u,"active" if n==active else "",n) for n,u in nav)
+        css=".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
+        body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
+        return page(title,body,css)
+
+    def feature_page(self,path):
+        c=db()
+        if path=="/admin/campaigns":
+            rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>Template %s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/campaigns?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["template"]),r["targeted"],esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="6">No campaigns yet.</td></tr>'
+            return self.admin_shell("Campaigns",'<h1>Campaigns</h1><p>Create, pause and complete simulation campaigns.</p><p><a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Template</th><th>Targeted</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Campaigns")
+        if path=="/admin/templates":
+            files=sorted([x for x in os.listdir(TEMPLATES) if x.endswith(".html") and x[:-5].isdigit()],key=lambda x:int(x[:-5])); c.close()
+            table="".join('<tr><td>%s</td><td><span class="pill">Enabled</span></td><td><a class="btn" target="_blank" href="/%s">Preview</a></td></tr>'%(x[:-5],x) for x in files)
+            return self.admin_shell("Templates",'<h1>Templates</h1><p>Existing simulation templates.</p><div class="card"><table class="table"><tr><th>Template</th><th>Status</th><th>Preview</th></tr>'+table+'</table></div>',"Templates")
+        if path=="/admin/landing-pages":
+            rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td><a class="btn" target="_blank" href="/%s.html">Preview</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),esc(r["template"])) for r in rows)
+            return self.admin_shell("Landing Pages",'<h1>Landing Pages</h1><p>Template-to-landing-page mapping.</p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Landing Pages")
+        if path=="/admin/users":
+            rows=c.execute("SELECT email,MAX(name) name,MAX(employee_id) employee_id,COUNT(*) events,SUM(event='click') clicks,SUM(event='submitted') submissions FROM events WHERE email!='' GROUP BY email ORDER BY events DESC").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),r["events"],r["clicks"] or 0,r["submissions"] or 0) for r in rows) or '<tr><td colspan="6">No users recorded yet.</td></tr>'
+            return self.admin_shell("Users",'<h1>Users & Groups</h1><p>Observed simulation users and engagement.</p><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Employee ID</th><th>Events</th><th>Clicks</th><th>Submissions</th></tr>'+table+'</table></div>',"Users & Groups")
+        if path=="/admin/risk":
+            rows=c.execute("SELECT * FROM risk_scores ORDER BY score DESC").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%.0f</td><td><span class="pill">%s</span></td></tr>'%(esc(r["email"]),r["failures"],r["score"],r["level"]) for r in rows) or '<tr><td colspan="4">No risk data yet.</td></tr>'
+            return self.admin_shell("Risk",'<h1>Risk & Trends</h1><p>Heuristic user risk from observed simulation events.</p><div class="card"><table class="table"><tr><th>User</th><th>Failures</th><th>Score</th><th>Risk</th></tr>'+table+'</table></div>',"Risk & Trends")
+        if path=="/admin/audit":
+            rows=c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
+            return self.admin_shell("Audit",'<h1>Audit Log</h1><p>Administrative actions and exports.</p><div class="card"><table class="table"><tr><th>Date</th><th>Time</th><th>Action</th><th>Details</th></tr>'+table+'</table></div>',"Audit Log")
+        if path in ("/admin/reports","/admin/exports"):
+            total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]; clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; c.close(); rate=subs/clicks*100 if clicks else 0
+            title="Reports" if path.endswith("reports") else "Exports"; return self.admin_shell(title,'<h1>'+title+'</h1><p>Measured telemetry only; no fabricated phishing/report rates.</p><div class="card"><h3>Total events: %s</h3><p>Clicks: %s · Submissions: %s · Action rate: %.1f%%</p><a class="btn primary" href="/admin.csv">Export CSV</a></div>'%(total,clicks,subs,rate),title)
+        if path=="/admin/settings":
+            c.close(); return self.admin_shell("Settings",'<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div>',"Settings")
+        c.close(); return None
+
+    def campaign_form(self,cid=None):
+        c=db(); r=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone() if cid else None; c.close()
+        name=esc(r["name"]) if r else ""; template=esc(r["template"]) if r else "1"; status=esc(r["status"]) if r else "Draft"
+        opts="".join('<option value="%s" %s>Template %s</option>'%(i,"selected" if str(i)==template else "",i) for i in range(1,11))
+        stats="".join('<option %s>%s</option>'%("selected" if x==status else "",x) for x in ("Draft","Active","Paused","Completed"))
+        return self.admin_shell("Campaign",'<h1>%s Campaign</h1><div class="card"><form class="form" method="post" action="/admin/campaigns/save"><input type="hidden" name="id" value="%s"><label>Name<input name="name" value="%s" required></label><label>Template<select name="template">%s</select></label><label>Status<select name="status">%s</select></label><button class="btn primary">Save Campaign</button></form></div>'%("Edit" if r else "New",cid or "",name,opts,stats),"Campaigns")
 
     def do_HEAD(self):
         self.do_GET()
@@ -177,6 +246,12 @@ function filterRows(){const q=document.getElementById('q').value.toLowerCase();d
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
+            if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
+                return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
+            return self.sendbody(200,self.feature_page(path))
+        if path=="/admin/campaigns/new":
+            return self.sendbody(200,self.campaign_form())
         if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
             t=path[1:]; fn=os.path.join(TEMPLATES,t)
             if os.path.isfile(fn):
@@ -196,6 +271,15 @@ function filterRows(){const q=document.getElementById('q').value.toLowerCase();d
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
             return self.sendbody(401,self.login_page("Invalid username or password"))
+        if p.path=="/admin/campaigns/save":
+            cid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:150]; template=form.get("template",["1"])[0]; status=form.get("status",["Draft"])[0]
+            c=db()
+            if cid:
+                c.execute("UPDATE campaigns SET name=?,template=?,status=?,updated_at=? WHERE id=?",(name,template,status,now(),cid)); action="CAMPAIGN_UPDATE"
+            else:
+                c.execute("INSERT INTO campaigns(name,template,status,targeted,created_at,updated_at) VALUES(?,?,?,?,?,?)",(name,template,status,0,now(),now())); action="CAMPAIGN_CREATE"
+            c.commit(); c.close(); audit(ADMIN_USERNAME,action,name,ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/campaigns"})
         if p.path=="/submit":
             t=form.get("template",["unknown"])[0][:50]
             name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
