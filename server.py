@@ -403,10 +403,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not profile: return self.sendbody(404,"SMTP profile not found","text/plain")
             try:
                 smtp_send_test(profile,to_email)
-                audit(ADMIN_USERNAME,"SMTP_TEST",f"profile={profile["name"]} recipient={to_email}",ip)
+                audit(ADMIN_USERNAME,"SMTP_TEST",f"profile={profile['name']} recipient={to_email}",ip)
                 return self.sendbody(200,page("SMTP Test","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test sent</h2><p>The test message was accepted by the configured SMTP server.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
             except Exception as e:
-                audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile["name"]}",ip)
+                audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
                 return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
         if p.path=="/admin/campaigns/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
