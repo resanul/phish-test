@@ -79,6 +79,22 @@ def db():
         created_at TEXT,
         updated_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS template_library(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        template TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        subject TEXT,
+        preheader TEXT,
+        category TEXT DEFAULT 'General',
+        difficulty TEXT DEFAULT 'Medium',
+        language TEXT DEFAULT 'English',
+        brand TEXT,
+        industry TEXT,
+        tags TEXT,
+        html_body TEXT,
+        text_body TEXT,
+        updated_at TEXT
+    );
     """)
     cols_campaign={row[1] for row in c.execute("PRAGMA table_info(campaigns)").fetchall()}
     for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT"),("group_name","TEXT")):
@@ -88,6 +104,19 @@ def db():
         c.execute("INSERT INTO admins(username,created_at) VALUES(?,?)",(ADMIN_USERNAME,datetime.now(timezone.utc).isoformat()))
     for i in range(1,11):
         c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
+        fn=os.path.join(TEMPLATES,str(i)+".html")
+        existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()
+        if not existing:
+            body=""
+            try:
+                with open(fn,"r",encoding="utf-8") as tf: body=tf.read()
+            except Exception:
+                pass
+            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (str(i),f"Template {i}","Security Awareness Simulation","Authorized security-awareness simulation",
+                       "General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,
+                       "This is an authorized security-awareness simulation.",now()))
     c.commit()
     return c
 
@@ -345,9 +374,11 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             table="".join('<tr><td>%s</td><td>%s</td><td>Template %s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/campaigns?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["template"]),r["targeted"],esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="6">No campaigns yet.</td></tr>'
             return self.admin_shell("Campaigns",'<h1>Campaigns</h1><p>Create, pause and complete simulation campaigns.</p><p><a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Template</th><th>Targeted</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Campaigns")
         if path=="/admin/templates":
-            files=sorted([x for x in os.listdir(TEMPLATES) if x.endswith(".html") and x[:-5].isdigit()],key=lambda x:int(x[:-5])); c.close()
-            table="".join('<tr><td>%s</td><td><span class="pill">Enabled</span></td><td><a class="btn" target="_blank" href="/%s">Preview</a></td></tr>'%(x[:-5],x) for x in files)
-            return self.admin_shell("Templates",'<h1>Templates</h1><p>Existing simulation templates.</p><div class="card"><table class="table"><tr><th>Template</th><th>Status</th><th>Preview</th></tr>'+table+'</table></div>',"Templates")
+            rows=c.execute("SELECT * FROM template_library ORDER BY CAST(template AS INTEGER)").fetchall()
+            c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/templates?id=%s">Edit</a> <a class="btn" target="_blank" href="/%s.html">Preview</a></td></tr>'%
+                         (esc(r["template"]),esc(r["name"]),esc(r["category"]),esc(r["difficulty"]),esc(r["language"]), "Enabled",esc(r["template"]),esc(r["template"])) for r in rows)
+            return self.admin_shell("Templates",'<h1>Email Templates & Payloads</h1><p>Enterprise-style simulation payload metadata, HTML/plain-text content and preview.</p><p><a class="btn primary" href="/admin/templates?id=1">Open Template Builder</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Category</th><th>Difficulty</th><th>Language</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Templates")
         if path=="/admin/landing-pages":
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td><a class="btn" target="_blank" href="/%s.html">Preview</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),esc(r["template"])) for r in rows)
@@ -417,6 +448,50 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         opts="".join('<option value="%s" %s>%s</option>'%(esc(k),"selected" if k==provider else "",esc(k)) for k in SMTP_PROVIDERS)
         secs="".join('<option value="%s" %s>%s</option>'%(x,"selected" if x==security else "",x) for x in ("STARTTLS","SSL/TLS","NONE"))
         return self.admin_shell("SMTP Provider",'<h1>%s SMTP Provider</h1><div class="card"><form class="form" method="post" action="/admin/smtp/save"><input type="hidden" name="id" value="%s"><label>Profile Name<input name="name" value="%s" required></label><label>Provider<select id="provider" name="provider" onchange="presetProvider()">%s</select></label><label>SMTP Host<input id="host" name="host" value="%s" required></label><label>Port<input id="port" type="number" min="1" max="65535" name="port" value="%s" required></label><label>Security<select id="security" name="security">%s</select></label><label>Username / SMTP account<input name="username" value="%s" autocomplete="username"></label><label>Password<input type="password" name="password" value="" autocomplete="new-password" placeholder="%s"></label><label>From Name<input name="from_name" value="%s"></label><label>From Email<input type="email" name="from_email" value="%s" required></label><label>Reply-To<input type="email" name="reply_to" value="%s"></label><div style="padding:12px;background:#f4f7f6;border-radius:8px;font-size:12px;color:#60716a">Password is write-only. Leave it blank when editing to keep the existing encrypted secret.</div><button class="btn primary">Save Provider</button></form></div><script>const presets=%s;function presetProvider(){const p=presets[document.getElementById("provider").value];if(p){document.getElementById("host").value=p.host;document.getElementById("port").value=p.port;document.getElementById("security").value=p.security}}</script>'%( "Edit" if r else "Add",sid or "",name,opts,host,port,secs,username,"unchanged" if r else "enter SMTP password",from_name,from_email,reply_to,html.escape(str(SMTP_PROVIDERS).replace("'",'"'))),"SMTP Providers")
+    def template_form(self,tid=None):
+        c=db()
+        r=c.execute("SELECT * FROM template_library WHERE template=?",(str(tid),)).fetchone() if tid else None
+        if not r and tid:
+            fn=os.path.join(TEMPLATES,str(tid)+".html")
+            if os.path.isfile(fn):
+                with open(fn,"r",encoding="utf-8") as f: body=f.read()
+                c.execute("""INSERT OR IGNORE INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(str(tid),f"Template {tid}","Security Awareness Simulation","Authorized security-awareness simulation","General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,"This is an authorized security-awareness simulation.",now()))
+                c.commit()
+                r=c.execute("SELECT * FROM template_library WHERE template=?",(str(tid),)).fetchone()
+        c.close()
+        if not r:
+            return self.admin_shell("Template","<h1>Template not found</h1><p><a class='btn' href='/admin/templates'>Back</a></p>","Templates")
+        def val(k): return esc(r[k] or "")
+        cats=["General","Credential Awareness","Malware Awareness","QR Awareness","Finance","HR","IT","Executive","Seasonal"]
+        diffs=["Easy","Medium","Hard"]
+        langs=["English","Bangla","Bengali-English","Arabic","Hindi"]
+        catopts="".join('<option %s>%s</option>'%("selected" if r["category"]==x else "",x) for x in cats)
+        diffopts="".join('<option %s>%s</option>'%("selected" if r["difficulty"]==x else "",x) for x in diffs)
+        langopts="".join('<option %s>%s</option>'%("selected" if r["language"]==x else "",x) for x in langs)
+        body="""<h1>Edit Simulation Template %s</h1>
+<p>Build the message metadata and HTML body used by an authorized awareness campaign. Never add password, OTP, PIN, CVV or full-card-number collection fields.</p>
+<div class="card"><form class="form" method="post" action="/admin/templates/save">
+<input type="hidden" name="template" value="%s">
+<label>Template Name<input name="name" value="%s" required maxlength="150"></label>
+<label>Subject<input name="subject" value="%s" maxlength="250"></label>
+<label>Preheader<input name="preheader" value="%s" maxlength="250"></label>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+<label>Category<select name="category">%s</select></label>
+<label>Difficulty<select name="difficulty">%s</select></label>
+<label>Language<select name="language">%s</select></label>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<label>Brand<input name="brand" value="%s" maxlength="100"></label>
+<label>Industry<input name="industry" value="%s" maxlength="100"></label>
+</div>
+<label>Tags<input name="tags" value="%s" placeholder="finance, employee, urgent" maxlength="500"></label>
+<label>HTML Body<textarea name="html_body" rows="22" style="width:100%%;font-family:Consolas,monospace;padding:12px;border:1px solid #ccd9d4;border-radius:8px" required>%s</textarea></label>
+<label>Plain Text Body<textarea name="text_body" rows="8" style="width:100%%;padding:12px;border:1px solid #ccd9d4;border-radius:8px">%s</textarea></label>
+<div style="display:flex;gap:8px"><button class="btn primary">Save Template</button><a class="btn" target="_blank" href="/%s.html">Preview</a><a class="btn" href="/admin/templates">Cancel</a></div>
+</form></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("html_body"),val("text_body"),val("template"))
+        return self.admin_shell("Template Builder",body,"Templates")
+
     def campaign_form(self,cid=None):
         c=db()
         r=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone() if cid else None
@@ -470,6 +545,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(200,self.campaign_report(parse_qs(p.query).get("campaign_id",[None])[0]))
             if path=="/admin/smtp" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.smtp_form(parse_qs(p.query).get("id",[None])[0]))
+            if path=="/admin/templates" and parse_qs(p.query).get("id",[None])[0]:
+                return self.sendbody(200,self.template_form(parse_qs(p.query).get("id",[None])[0]))
             return self.sendbody(200,self.feature_page(path))
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -516,6 +593,36 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
             return self.sendbody(401,self.login_page("Invalid username or password"))
+        if p.path=="/admin/templates/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            tid=form.get("template",[""])[0][:20]
+            if not re.fullmatch(r"\d{1,3}",tid) or not (1 <= int(tid) <= 999):
+                return self.sendbody(400,"Invalid template id","text/plain")
+            name=form.get("name",[""])[0][:150]
+            subject=form.get("subject",[""])[0][:250]
+            preheader=form.get("preheader",[""])[0][:250]
+            category=form.get("category",["General"])[0][:80]
+            difficulty=form.get("difficulty",["Medium"])[0][:30]
+            language=form.get("language",["English"])[0][:50]
+            brand=form.get("brand",[""])[0][:100]
+            industry=form.get("industry",[""])[0][:100]
+            tags=form.get("tags",[""])[0][:500]
+            html_body=form.get("html_body",[""])[0]
+            text_body=form.get("text_body",[""])[0][:10000]
+            if not name or not html_body:
+                return self.sendbody(400,"Template name and HTML body are required","text/plain")
+            fn=os.path.join(TEMPLATES,tid+".html")
+            with open(fn,"w",encoding="utf-8") as tf: tf.write(html_body)
+            c=db()
+            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                         ON CONFLICT(template) DO UPDATE SET name=excluded.name,subject=excluded.subject,preheader=excluded.preheader,
+                         category=excluded.category,difficulty=excluded.difficulty,language=excluded.language,brand=excluded.brand,
+                         industry=excluded.industry,tags=excluded.tags,html_body=excluded.html_body,text_body=excluded.text_body,updated_at=excluded.updated_at""",
+                      (tid,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,now()))
+            c.commit(); c.close()
+            audit(ADMIN_USERNAME,"TEMPLATE_UPDATE","template=%s name=%s"%(tid,name),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/templates"})
         if p.path=="/admin/smtp/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:100]; provider=form.get("provider",["Custom SMTP"])[0]
