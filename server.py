@@ -158,6 +158,66 @@ def audit(admin,action,details,ip):
     c.execute("INSERT INTO audit_logs(ts,admin,action,details,ip) VALUES(?,?,?,?,?)",(now(),admin,action,details,ip))
     c.commit(); c.close()
 
+def smtp_connect(profile):
+    host=profile["host"]; port=int(profile["port"]); security=profile["security"]
+    if security=="SSL/TLS":
+        smtp=smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=20)
+    else:
+        smtp=smtplib.SMTP(host,port,timeout=20)
+        smtp.ehlo()
+        if security=="STARTTLS":
+            smtp.starttls(context=ssl.create_default_context())
+            smtp.ehlo()
+    if profile["username"]:
+        smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
+    return smtp
+
+def send_campaign(campaign_id):
+    if not PUBLIC_BASE_URL:
+        raise RuntimeError("PUBLIC_BASE_URL is not configured")
+    c=db()
+    campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to
+                          FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id
+                          WHERE c.id=? AND s.enabled=1""",(campaign_id,)).fetchone()
+    if not campaign:
+        c.close(); raise RuntimeError("Campaign or SMTP profile not found")
+    group=campaign["group_name"]
+    if group:
+        recipients=c.execute("SELECT * FROM recipients WHERE status!='Suppressed' AND group_name=? ORDER BY id",(group,)).fetchall()
+    else:
+        recipients=c.execute("SELECT * FROM recipients WHERE status!='Suppressed' ORDER BY id").fetchall()
+    c.execute("UPDATE campaigns SET status='Active',updated_at=? WHERE id=?",(now(),campaign_id)); c.commit(); c.close()
+    sent=0; failed=0
+    smtp=smtp_connect(campaign)
+    try:
+        for rec in recipients:
+            c=db()
+            c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,attempted_at) VALUES(?,?,?,?)",(campaign_id,rec["id"],"Attempted",now()))
+            delivery_id=c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+            c.commit(); c.close()
+            try:
+                link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"campaign_id":campaign_id,"recipient_id":rec["id"]})
+                msg=EmailMessage()
+                msg["From"]=formataddr((campaign["from_name"] or "Trust PhishGuard",campaign["from_email"]))
+                if campaign["reply_to"]: msg["Reply-To"]=campaign["reply_to"]
+                msg["To"]=rec["email"]
+                msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
+                msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link))
+                smtp.send_message(msg)
+                c=db(); c.execute("UPDATE campaign_deliveries SET status='Sent',sent_at=? WHERE id=?",(now(),delivery_id)); c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec["id"],)); c.commit(); c.close()
+                sent+=1
+            except Exception:
+                c=db(); c.execute("UPDATE campaign_deliveries SET status='Failed',error=? WHERE id=?",("delivery failed",delivery_id)); c.commit(); c.close()
+                failed+=1
+            if SEND_DELAY>0:
+                import time; time.sleep(SEND_DELAY)
+    finally:
+        smtp.quit()
+    c=db()
+    c.execute("UPDATE campaigns SET status=?,updated_at=? WHERE id=?",("Completed" if failed==0 else "Active",now(),campaign_id))
+    c.commit(); c.close()
+    return sent,failed,len(recipients)
+
 def format_datetime(ts):
     dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(TZ)
     return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
