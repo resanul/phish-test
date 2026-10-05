@@ -336,11 +336,27 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         secs="".join('<option value="%s" %s>%s</option>'%(x,"selected" if x==security else "",x) for x in ("STARTTLS","SSL/TLS","NONE"))
         return self.admin_shell("SMTP Provider",'<h1>%s SMTP Provider</h1><div class="card"><form class="form" method="post" action="/admin/smtp/save"><input type="hidden" name="id" value="%s"><label>Profile Name<input name="name" value="%s" required></label><label>Provider<select id="provider" name="provider" onchange="presetProvider()">%s</select></label><label>SMTP Host<input id="host" name="host" value="%s" required></label><label>Port<input id="port" type="number" min="1" max="65535" name="port" value="%s" required></label><label>Security<select id="security" name="security">%s</select></label><label>Username / SMTP account<input name="username" value="%s" autocomplete="username"></label><label>Password<input type="password" name="password" value="" autocomplete="new-password" placeholder="%s"></label><label>From Name<input name="from_name" value="%s"></label><label>From Email<input type="email" name="from_email" value="%s" required></label><label>Reply-To<input type="email" name="reply_to" value="%s"></label><div style="padding:12px;background:#f4f7f6;border-radius:8px;font-size:12px;color:#60716a">Password is write-only. Leave it blank when editing to keep the existing encrypted secret.</div><button class="btn primary">Save Provider</button></form></div><script>const presets=%s;function presetProvider(){const p=presets[document.getElementById("provider").value];if(p){document.getElementById("host").value=p.host;document.getElementById("port").value=p.port;document.getElementById("security").value=p.security}}</script>'%( "Edit" if r else "Add",sid or "",name,opts,host,port,secs,username,"unchanged" if r else "enter SMTP password",from_name,from_email,reply_to,html.escape(str(SMTP_PROVIDERS).replace("'",'"'))),"SMTP Providers")
     def campaign_form(self,cid=None):
-        c=db(); r=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone() if cid else None; c.close()
-        name=esc(r["name"]) if r else ""; template=esc(r["template"]) if r else "1"; status=esc(r["status"]) if r else "Draft"
+        c=db()
+        r=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone() if cid else None
+        smtps=c.execute("SELECT id,name,provider,from_email FROM smtp_profiles WHERE enabled=1 ORDER BY name").fetchall()
+        lands=c.execute("SELECT id,name,template FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
+        groups=c.execute("SELECT g.name,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.name ORDER BY g.name").fetchall()
+        c.close()
+        name=esc(r["name"]) if r else ""
+        template=esc(r["template"]) if r else "1"
+        status=esc(r["status"]) if r else "Draft"
+        subject=esc(r["subject"]) if r else "Security Awareness Simulation"
+        smtp_id=str(r["smtp_profile_id"]) if r and r["smtp_profile_id"] else ""
+        landing_id=str(r["landing_page_id"]) if r and r["landing_page_id"] else ""
+        launch=esc(r["launch_at"]) if r else ""
+        send_by=esc(r["send_by"]) if r else ""
         opts="".join('<option value="%s" %s>Template %s</option>'%(i,"selected" if str(i)==template else "",i) for i in range(1,11))
-        stats="".join('<option %s>%s</option>'%("selected" if x==status else "",x) for x in ("Draft","Active","Paused","Completed"))
-        return self.admin_shell("Campaign",'<h1>%s Campaign</h1><div class="card"><form class="form" method="post" action="/admin/campaigns/save"><input type="hidden" name="id" value="%s"><label>Name<input name="name" value="%s" required></label><label>Template<select name="template">%s</select></label><label>Status<select name="status">%s</select></label><button class="btn primary">Save Campaign</button></form></div>'%("Edit" if r else "New",cid or "",name,opts,stats),"Campaigns")
+        smtp_opts='<option value="">-- Select SMTP provider --</option>'+"".join('<option value="%s" %s>%s · %s</option>'%(x["id"],"selected" if str(x["id"])==smtp_id else "",esc(x["name"]),esc(x["from_email"])) for x in smtps)
+        land_opts='<option value="">-- Select landing page --</option>'+"".join('<option value="%s" %s>%s · Template %s</option>'%(x["id"],"selected" if str(x["id"])==landing_id else "",esc(x["name"]),esc(x["template"])) for x in lands)
+        group_opts='<option value="">All imported recipients</option>'+"".join('<option value="%s">%s · %s members</option>'%(esc(x["name"]),esc(x["name"]),x["members"]) for x in groups)
+        stats="".join('<option %s>%s</option>'%("selected" if x==status else "",x) for x in ("Draft","Scheduled","Active","Paused","Completed"))
+        body='<h1>%s Campaign</h1><div class="card"><form class="form" method="post" action="/admin/campaigns/save"><input type="hidden" name="id" value="%s"><label>Name<input name="name" value="%s" required maxlength="150"></label><label>Template<select name="template">%s</select></label><label>SMTP Provider<select name="smtp_profile_id" required>%s</select></label><label>Landing Page<select name="landing_page_id" required>%s</select></label><label>Recipient Group<select name="group_name">%s</select></label><label>Subject<input name="subject" value="%s" maxlength="250" required></label><label>Launch At<input type="datetime-local" name="launch_at" value="%s"></label><label>Send By<input type="datetime-local" name="send_by" value="%s"></label><label>Status<select name="status">%s</select></label><button class="btn primary">Save Campaign</button></form></div>'%("Edit" if r else "New",cid or "",name,opts,smtp_opts,land_opts,group_opts,subject,launch,send_by,stats)
+        return self.admin_shell("Campaign",body,"Campaigns")
 
     def do_HEAD(self):
         self.do_GET()
@@ -457,14 +473,35 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(302,b"",extra={"Location":"/admin/groups"})
         if p.path=="/admin/campaigns/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            cid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:150]; template=form.get("template",["1"])[0]; status=form.get("status",["Draft"])[0]
+            cid=form.get("id",[""])[0]
+            name=form.get("name",[""])[0][:150]
+            template=form.get("template",["1"])[0]
+            status=form.get("status",["Draft"])[0]
+            smtp_id=form.get("smtp_profile_id",[""])[0]
+            landing_id=form.get("landing_page_id",[""])[0]
+            group_name=form.get("group_name",[""])[0][:100]
+            subject=form.get("subject",["Security Awareness Simulation"])[0][:250]
+            launch_at=form.get("launch_at",[""])[0][:40]
+            send_by=form.get("send_by",[""])[0][:40]
             c=db()
-            if cid:
-                c.execute("UPDATE campaigns SET name=?,template=?,status=?,updated_at=? WHERE id=?",(name,template,status,now(),cid)); action="CAMPAIGN_UPDATE"
+            if not smtp_id or not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(smtp_id,)).fetchone():
+                c.close(); return self.sendbody(400,"A valid SMTP provider is required","text/plain")
+            if not landing_id or not c.execute("SELECT 1 FROM landing_pages WHERE id=? AND status='Enabled'",(landing_id,)).fetchone():
+                c.close(); return self.sendbody(400,"A valid landing page is required","text/plain")
+            if group_name:
+                targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE group_name=?",(group_name,)).fetchone()["n"]
             else:
-                c.execute("INSERT INTO campaigns(name,template,status,targeted,created_at,updated_at) VALUES(?,?,?,?,?,?)",(name,template,status,0,now(),now())); action="CAMPAIGN_CREATE"
-            c.commit(); c.close(); audit(ADMIN_USERNAME,action,name,ip)
+                targeted=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
+            if cid:
+                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,now(),cid))
+                action="CAMPAIGN_UPDATE"
+            else:
+                c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,now(),now()))
+                action="CAMPAIGN_CREATE"
+            c.commit(); c.close()
+            audit(ADMIN_USERNAME,action,"%s targeted=%s group=%s"%(name,targeted,group_name or "all"),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/campaigns"})
+
         if p.path=="/submit":
             t=form.get("template",["unknown"])[0][:50]
             name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
