@@ -60,6 +60,28 @@ def db():
     CREATE TABLE IF NOT EXISTS landing_pages(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,template TEXT,status TEXT DEFAULT 'Enabled',created_at TEXT);
     CREATE TABLE IF NOT EXISTS risk_scores(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,score REAL DEFAULT 0,level TEXT DEFAULT 'Low',failures INTEGER DEFAULT 0,last_event TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS training_records(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,completion REAL DEFAULT 0,course TEXT,updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS training_courses(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        description TEXT,
+        duration_minutes INTEGER DEFAULT 15,
+        passing_score REAL DEFAULT 80,
+        status TEXT DEFAULT 'Active',
+        created_at TEXT,
+        updated_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS training_assignments(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_id INTEGER NOT NULL,
+        recipient_id INTEGER NOT NULL,
+        assigned_at TEXT,
+        due_at TEXT,
+        status TEXT DEFAULT 'Assigned',
+        completion REAL DEFAULT 0,
+        score REAL,
+        completed_at TEXT,
+        UNIQUE(course_id,recipient_id)
+    );
     CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,admin TEXT,action TEXT,details TEXT,ip TEXT);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
     CREATE TABLE IF NOT EXISTS campaign_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,recipient_id INTEGER,status TEXT,attempted_at TEXT,sent_at TEXT,error TEXT);
@@ -104,6 +126,9 @@ def db():
         c.execute("INSERT INTO admins(username,created_at) VALUES(?,?)",(ADMIN_USERNAME,datetime.now(timezone.utc).isoformat()))
     for i in range(1,11):
         c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
+    c.execute("""INSERT OR IGNORE INTO training_courses(name,description,duration_minutes,passing_score,status,created_at,updated_at)
+                 VALUES(?,?,?,?,?,?,?)""",
+              ("Security Awareness Fundamentals","Core security-awareness training following a phishing simulation.",15,80,"Active",now(),now()))
         fn=os.path.join(TEMPLATES,str(i)+".html")
         existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()
         if not existing:
@@ -361,7 +386,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         return self.admin_shell("Overview",dashboard_main,"Overview")
 
     def admin_shell(self,title,content,active):
-        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Recipients","/admin/recipients"),("Groups & Departments","/admin/groups"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
+        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Training","/admin/training"),("Recipients","/admin/recipients"),("Groups & Departments","/admin/groups"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
         links="".join('<a href="%s" class="%s">%s</a>'%(u,"active" if n==active else "",n) for n,u in nav)
         css=DASH_CSS+".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
         body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
@@ -388,6 +413,21 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             table="".join('<tr><td>%s</td><td>%s</td><td>%s:%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/smtp?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"Enabled" if r["enabled"] else "Disabled",r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
             note='<div style="margin:12px 0;padding:12px;background:#edf8f4;border-radius:9px;font-size:12px;color:#2b6554">SMTP passwords are encrypted at rest with a server-local 0600 key. They are never displayed, exported or committed to Git.</div>'
             return self.admin_shell("SMTP Providers",'<h1>SMTP Providers</h1><p>Enterprise mail-delivery profiles for simulation campaigns and test messages.</p>'+note+'<p><a class="btn primary" href="/admin/smtp/new">+ Add SMTP Provider</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Server</th><th>Security</th><th>From</th><th>Status</th><th></th></tr>'+table+'</table></div>',"SMTP Providers")
+        if path=="/admin/training":
+            courses=c.execute("SELECT * FROM training_courses ORDER BY id DESC").fetchall()
+            assigned=c.execute("""SELECT a.id,a.status,a.completion,a.score,a.due_at,c.name course,r.email,r.name,r.department
+                                  FROM training_assignments a JOIN training_courses c ON c.id=a.course_id
+                                  JOIN recipients r ON r.id=a.recipient_id ORDER BY a.id DESC LIMIT 1000""").fetchall()
+            total=len(assigned); completed=sum(1 for x in assigned if x["status"]=="Completed")
+            overdue=sum(1 for x in assigned if x["status"] not in ("Completed","Cancelled") and x["due_at"] and x["due_at"] < now())
+            course_rows="".join('<tr><td>%s</td><td>%s</td><td>%s min</td><td>%s%%</td><td><span class="pill">%s</span></td></tr>'%
+                               (x["id"],esc(x["name"]),x["duration_minutes"],x["passing_score"],esc(x["status"])) for x in courses) or '<tr><td colspan="5">No training courses.</td></tr>'
+            assignment_rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.0f%%</td><td>%s</td><td>%s</td></tr>'%
+                                   (esc(x["email"]),esc(x["name"]),esc(x["department"]),esc(x["course"]),x["completion"] or 0,esc(x["status"]),esc(x["due_at"] or "")) for x in assigned) or '<tr><td colspan="7">No assignments yet.</td></tr>'
+            c.close()
+            body='<h1>Training</h1><p>Assign security-awareness courses after simulations and track completion without collecting credentials.</p><div class="stats" style="margin:16px 0"><div class="stat"><div class="stat-label">ASSIGNMENTS</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">COMPLETED</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">OVERDUE</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">COMPLETION</div><div class="num">%.1f%%</div></div></div><p><a class="btn primary" href="/admin/training/new">+ Create Assignment</a> <a class="btn" href="/admin/training/course/new">+ New Course</a></p><div class="card"><h3>Course Catalog</h3><table class="table"><tr><th>ID</th><th>Course</th><th>Duration</th><th>Pass Score</th><th>Status</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>Assignments</h3><div class="table-wrap"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Course</th><th>Completion</th><th>Status</th><th>Due</th></tr>%s</table></div></div>'%
+                 (total,completed,overdue,(completed/total*100 if total else 0),course_rows,assignment_rows)
+            return self.admin_shell("Training",body,"Training")
         if path=="/admin/recipients":
             rows=c.execute("SELECT id,email,name,employee_id,department,group_name,status,created_at FROM recipients ORDER BY id DESC LIMIT 1000").fetchall(); total=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]; c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["group_name"]),esc(r["status"])) for r in rows) or '<tr><td colspan="7">No recipients imported.</td></tr>'
@@ -537,7 +577,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
@@ -551,6 +591,20 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
+        if path=="/admin/training/new":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            c=db()
+            courses=c.execute("SELECT id,name FROM training_courses WHERE status='Active' ORDER BY name").fetchall()
+            recipients=c.execute("SELECT id,email,name,department FROM recipients WHERE status!='Suppressed' ORDER BY email").fetchall()
+            c.close()
+            co="".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in courses)
+            ro="".join('<option value="%s">%s · %s</option>'%(x["id"],esc(x["email"]),esc(x["department"] or "")) for x in recipients)
+            body='<h1>Assign Training</h1><div class="card"><form class="form" method="post" action="/admin/training/assign"><label>Course<select name="course_id" required>%s</select></label><label>Recipient<select name="recipient_id" required>%s</select></label><label>Due Date<input type="datetime-local" name="due_at" required></label><button class="btn primary">Assign Training</button></form></div>'%(co,ro)
+            return self.sendbody(200,self.admin_shell("Assign Training",body,"Training"))
+        if path=="/admin/training/course/new":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            body='<h1>New Training Course</h1><div class="card"><form class="form" method="post" action="/admin/training/course/save"><label>Course Name<input name="name" required maxlength="150"></label><label>Description<textarea name="description" rows="5" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px"></textarea></label><label>Duration (minutes)<input type="number" name="duration_minutes" value="15" min="1" max="480"></label><label>Passing Score %<input type="number" name="passing_score" value="80" min="0" max="100"></label><button class="btn primary">Save Course</button></form></div>'
+            return self.sendbody(200,self.admin_shell("New Training Course",body,"Training"))
         if path=="/admin/recipients/import":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.recipient_import_form())
@@ -655,6 +709,28 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             except Exception as e:
                 audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
                 return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
+        if p.path=="/admin/training/course/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            name=form.get("name",[""])[0][:150]; description=form.get("description",[""])[0][:1000]
+            try: duration=max(1,min(480,int(form.get("duration_minutes",["15"])[0]))); passing=max(0,min(100,float(form.get("passing_score",["80"])[0])))
+            except ValueError: return self.sendbody(400,"Invalid course values","text/plain")
+            if not name: return self.sendbody(400,"Course name required","text/plain")
+            c=db(); c.execute("""INSERT INTO training_courses(name,description,duration_minutes,passing_score,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)""",(name,description,duration,passing,"Active",now(),now())); c.commit(); c.close()
+            audit(ADMIN_USERNAME,"TRAINING_COURSE_CREATE",name,ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/training"})
+        if p.path=="/admin/training/assign":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            course_id=form.get("course_id",[""])[0]; recipient_id=form.get("recipient_id",[""])[0]; due_at=form.get("due_at",[""])[0][:40]
+            c=db()
+            if not c.execute("SELECT 1 FROM training_courses WHERE id=? AND status='Active'",(course_id,)).fetchone() or not c.execute("SELECT 1 FROM recipients WHERE id=? AND status!='Suppressed'",(recipient_id,)).fetchone():
+                c.close(); return self.sendbody(400,"Invalid course or recipient","text/plain")
+            try:
+                c.execute("""INSERT INTO training_assignments(course_id,recipient_id,assigned_at,due_at,status,completion) VALUES(?,?,?,?,?,0)""",(course_id,recipient_id,now(),due_at,"Assigned"))
+                c.commit()
+            except sqlite3.IntegrityError:
+                c.close(); return self.sendbody(409,"Training is already assigned to this recipient","text/plain")
+            c.close(); audit(ADMIN_USERNAME,"TRAINING_ASSIGN",f"course={course_id} recipient={recipient_id}",ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/training"})
         if p.path=="/admin/recipients/import":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             raw=form.get("csv_data",[""])[0]
