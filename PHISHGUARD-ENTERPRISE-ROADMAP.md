@@ -48,15 +48,15 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 ## Phase 3 — Enterprise Users
 - [x] CSV recipient import
 - [x] Employee ID, name, email, department, groups
-- [ ] Designation
-- [ ] Location
-- [ ] Manager
-- [ ] Language
-- [ ] Timezone
-- [ ] User profile
-- [ ] Suppression/exclusion management
-- [ ] Duplicate handling and validation report
-- [ ] Import history
+- [x] Designation
+- [x] Location
+- [x] Manager
+- [x] Language
+- [x] Timezone
+- [x] User profile
+- [x] Suppression/exclusion management
+- [x] Duplicate handling and validation report
+- [x] Import history
 
 ## Phase 4 — Tracking & Telemetry
 - [x] Click and non-secret form/action events
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**This roadmap is the source-of-truth checklist for subsequent implementation work.**
+**Current implementation milestone:** Enterprise recipient profile expansion and governed CSV import are complete. The next implementation order remains Tracking/Event Taxonomy + Bot Detection, followed by Risk Engine Expansion.
