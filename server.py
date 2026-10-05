@@ -315,9 +315,10 @@ def send_campaign(campaign_id):
                 if campaign["reply_to"]: msg["Reply-To"]=campaign["reply_to"]
                 msg["To"]=rec["email"]
                 msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
-                msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,link.replace(".html?","report?t="),link.replace(".html?","qr?t=")))
+                msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,PUBLIC_BASE_URL+"/report?t="+token,PUBLIC_BASE_URL+"/qr?t="+token))
                 smtp.send_message(msg)
                 c=db(); c.execute("UPDATE campaign_deliveries SET status='Sent',sent_at=? WHERE id=?",(now(),delivery_id)); c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec["id"],)); c.commit(); c.close()
+                record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",rec["mobile"] or "", "campaign-delivery",rec["employee_id"] or "","",campaign_id,rec["id"],token)
                 sent+=1
             except Exception:
                 c=db(); c.execute("UPDATE campaign_deliveries SET status='Failed',error=? WHERE id=?",("delivery failed",delivery_id)); c.commit(); c.close()
