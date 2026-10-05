@@ -411,14 +411,16 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         subject=esc(r["subject"]) if r else "Security Awareness Simulation"
         smtp_id=str(r["smtp_profile_id"]) if r and r["smtp_profile_id"] else ""
         landing_id=str(r["landing_page_id"]) if r and r["landing_page_id"] else ""
+        saved_group=str(r["group_name"]) if r and r["group_name"] else ""
         launch=esc(r["launch_at"]) if r else ""
         send_by=esc(r["send_by"]) if r else ""
         opts="".join('<option value="%s" %s>Template %s</option>'%(i,"selected" if str(i)==template else "",i) for i in range(1,11))
         smtp_opts='<option value="">-- Select SMTP provider --</option>'+"".join('<option value="%s" %s>%s · %s</option>'%(x["id"],"selected" if str(x["id"])==smtp_id else "",esc(x["name"]),esc(x["from_email"])) for x in smtps)
         land_opts='<option value="">-- Select landing page --</option>'+"".join('<option value="%s" %s>%s · Template %s</option>'%(x["id"],"selected" if str(x["id"])==landing_id else "",esc(x["name"]),esc(x["template"])) for x in lands)
-        group_opts='<option value="">All imported recipients</option>'+"".join('<option value="%s">%s · %s members</option>'%(esc(x["name"]),esc(x["name"]),x["members"]) for x in groups)
+        group_opts='<option value="">All imported recipients</option>'+"".join('<option value="%s" %s>%s · %s members</option>'%(esc(x["name"]),"selected" if x["name"]==saved_group else "",esc(x["name"]),x["members"]) for x in groups)
         stats="".join('<option %s>%s</option>'%("selected" if x==status else "",x) for x in ("Draft","Scheduled","Active","Paused","Completed"))
-        body='<h1>%s Campaign</h1><div class="card"><form class="form" method="post" action="/admin/campaigns/save"><input type="hidden" name="id" value="%s"><label>Name<input name="name" value="%s" required maxlength="150"></label><label>Template<select name="template">%s</select></label><label>SMTP Provider<select name="smtp_profile_id" required>%s</select></label><label>Landing Page<select name="landing_page_id" required>%s</select></label><label>Recipient Group<select name="group_name">%s</select></label><label>Subject<input name="subject" value="%s" maxlength="250" required></label><label>Launch At<input type="datetime-local" name="launch_at" value="%s"></label><label>Send By<input type="datetime-local" name="send_by" value="%s"></label><label>Status<select name="status">%s</select></label><button class="btn primary">Save Campaign</button></form></div>'%("Edit" if r else "New",cid or "",name,opts,smtp_opts,land_opts,group_opts,subject,launch,send_by,stats)
+        launch_link='<p><a class="btn primary" href="/admin/campaigns/launch?id=%s">Launch this campaign</a></p>'%cid if cid else ""
+        body='<h1>%s Campaign</h1>%s<div class="card"><form class="form" method="post" action="/admin/campaigns/save"><input type="hidden" name="id" value="%s"><label>Name<input name="name" value="%s" required maxlength="150"></label><label>Template<select name="template">%s</select></label><label>SMTP Provider<select name="smtp_profile_id" required>%s</select></label><label>Landing Page<select name="landing_page_id" required>%s</select></label><label>Recipient Group<select name="group_name">%s</select></label><label>Subject<input name="subject" value="%s" maxlength="250" required></label><label>Launch At<input type="datetime-local" name="launch_at" value="%s"></label><label>Send By<input type="datetime-local" name="send_by" value="%s"></label><label>Status<select name="status">%s</select></label><button class="btn primary">Save Campaign</button></form></div>'%("Edit" if r else "New",launch_link,cid or "",name,opts,smtp_opts,land_opts,group_opts,subject,launch,send_by,stats)
         return self.admin_shell("Campaign",body,"Campaigns")
 
     def do_HEAD(self):
@@ -556,10 +558,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             else:
                 targeted=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
             if cid:
-                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,now(),cid))
+                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,now(),cid))
                 action="CAMPAIGN_UPDATE"
             else:
-                c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,now(),now()))
+                c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,now(),now()))
                 action="CAMPAIGN_CREATE"
             c.commit(); c.close()
             audit(ADMIN_USERNAME,action,"%s targeted=%s group=%s"%(name,targeted,group_name or "all"),ip)
