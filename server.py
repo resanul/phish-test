@@ -3,67 +3,209 @@ import os, sqlite3, csv, io, secrets, html
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from http import cookies
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
-BASE="/opt/phish-simulation"; TEMPLATES=BASE+"/templates"; DATA=BASE+"/data"; LOGS=BASE+"/logs"
-DB=DATA+"/phish.db"; LOG=LOGS+"/access.log"; PORT=int(os.environ.get("PORT","8080"))
-ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME"); SESSIONS=set()
-os.makedirs(TEMPLATES,exist_ok=True); os.makedirs(DATA,exist_ok=True); os.makedirs(LOGS,exist_ok=True)
+
+BASE="/opt/phish-simulation"
+TEMPLATES=BASE+"/templates"
+DATA=BASE+"/data"
+LOGS=BASE+"/logs"
+DB=DATA+"/phish.db"
+LOG=LOGS+"/access.log"
+PORT=int(os.environ.get("PORT","8080"))
+ADMIN_USERNAME=os.environ.get("ADMIN_USERNAME","admin")
+ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
+SESSIONS=set()
+TZ=ZoneInfo("Asia/Dhaka")
+
+os.makedirs(TEMPLATES,exist_ok=True)
+os.makedirs(DATA,exist_ok=True)
+os.makedirs(LOGS,exist_ok=True)
+
 def db():
- c=sqlite3.connect(DB); c.row_factory=sqlite3.Row
- c.execute("CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT NOT NULL,ip TEXT NOT NULL,template TEXT NOT NULL,event TEXT NOT NULL,name TEXT,email TEXT,mobile TEXT,user_agent TEXT,employee_id TEXT,card_type TEXT)")
- cols={row[1] for row in c.execute("PRAGMA table_info(events)").fetchall()}
- for col in ("employee_id","card_type"):
-  if col not in cols:c.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
- c.commit(); return c
+    c=sqlite3.connect(DB)
+    c.row_factory=sqlite3.Row
+    c.execute("""CREATE TABLE IF NOT EXISTS events(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts TEXT NOT NULL, ip TEXT NOT NULL, template TEXT NOT NULL,
+        event TEXT NOT NULL, name TEXT, email TEXT, mobile TEXT,
+        user_agent TEXT, employee_id TEXT, card_type TEXT)""")
+    cols={row[1] for row in c.execute("PRAGMA table_info(events)").fetchall()}
+    for col in ("employee_id","card_type"):
+        if col not in cols:
+            c.execute(f"ALTER TABLE events ADD COLUMN {col} TEXT")
+    c.commit()
+    return c
+
 def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=""):
- c=db(); c.execute("INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type) VALUES(?,?,?,?,?,?,?,?,?,?)",(datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type)); c.commit(); c.close()
+    c=db()
+    c.execute(
+        "INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type))
+    c.commit()
+    c.close()
+
 def format_datetime(ts):
- dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(ZoneInfo("Asia/Dhaka"))
- return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
+    dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(TZ)
+    return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
+
 def access(ip,path,code):
- with open(LOG,"a",encoding="utf-8") as f:f.write(f"{datetime.now(timezone.utc).isoformat()} ip={ip} path={path} code={code}\n")
-def page(title,body):
- return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><style>body{{font-family:Arial;background:#f3f4f6;margin:0;color:#111827}}.wrap{{max-width:1250px;margin:25px auto;padding:0 16px}}.card{{background:white;padding:20px;border-radius:10px;box-shadow:0 2px 10px #0001;margin-bottom:18px}}.stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}}.stat{{background:white;padding:18px;border-radius:10px}}.num{{font-size:28px;font-weight:bold}}table{{width:100%;border-collapse:collapse;font-size:13px}}th,td{{padding:9px;border-bottom:1px solid #ddd;text-align:left}}th{{background:#f9fafb}}a,button{{background:#111827;color:#fff;padding:9px 13px;border-radius:6px;text-decoration:none;border:0}}@media(max-width:800px){{.stats{{grid-template-columns:repeat(2,1fr)}}table{{font-size:11px}}}}</style></head><body><div class="wrap">{body}</div></body></html>"""
+    with open(LOG,"a",encoding="utf-8") as f:
+        f.write(f"{datetime.now(timezone.utc).isoformat()} ip={ip} path={path} code={code}\n")
+
+def esc(v):
+    return html.escape("" if v is None else str(v), quote=True)
+
+def page(title,body,css=""):
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{esc(title)} · Trust PhishGuard</title>
+<style>
+*{{box-sizing:border-box}}body{{margin:0;background:#f4f7f6;color:#12231d;font-family:Inter,Segoe UI,Arial,sans-serif}}
+a{{color:inherit}}button,input,select{{font:inherit}}
+{css}
+</style></head><body>{body}</body></html>"""
+
+LOGIN_CSS="""
+.login-shell{min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr;background:#071b15}
+.login-left{padding:56px 7vw;color:#fff;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(145deg,#071b15,#0d3b2c)}
+.brand{display:flex;gap:13px;align-items:center;font-weight:800;font-size:24px}.brand-mark{width:42px;height:42px;border-radius:12px;background:#20b486;display:grid;place-items:center;color:#062218;font-weight:900}
+.login-left h1{font-size:clamp(36px,5vw,62px);line-height:1.02;margin:55px 0 20px;letter-spacing:-2px}.login-left p{max-width:570px;color:#b8d1c8;font-size:17px;line-height:1.7}.feature-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px}.feature{border:1px solid #2b5c4d;background:#0e3027;border-radius:999px;padding:9px 13px;font-size:12px;color:#d7ebe4}
+.login-right{background:#f7faf9;display:grid;place-items:center;padding:30px}.login-card{width:min(440px,100%);background:#fff;border:1px solid #dce7e2;border-radius:24px;padding:38px;box-shadow:0 24px 70px #00140d18}.login-card h2{margin:0 0 7px;font-size:28px}.muted{color:#71817b;font-size:14px}.field{margin-top:20px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:8px}.field input{width:100%;padding:13px 14px;border:1px solid #ccd9d4;border-radius:10px;outline:none}.field input:focus{border-color:#15966f;box-shadow:0 0 0 3px #15966f18}.login-btn{width:100%;border:0;border-radius:10px;padding:14px;background:#087b59;color:#fff;font-weight:800;cursor:pointer;margin-top:24px}.notice{margin-top:22px;padding:12px 14px;border-radius:10px;background:#edf8f4;color:#2b6554;font-size:12px;line-height:1.5}.trust{margin-top:25px;text-align:center;color:#84938e;font-size:12px}
+@media(max-width:850px){.login-shell{grid-template-columns:1fr}.login-left{padding:35px}.login-left h1{margin:35px 0 15px}.login-right{padding:25px}}
+"""
+
+DASH_CSS="""
+.topbar{height:72px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 30px}.topbrand{display:flex;align-items:center;gap:11px;font-weight:800}.mark{width:35px;height:35px;border-radius:10px;background:#20b486;color:#062218;display:grid;place-items:center;font-weight:900}.top-actions{display:flex;gap:9px;align-items:center}.top-actions a{padding:8px 12px;border:1px solid #31564b;border-radius:8px;text-decoration:none;font-size:12px}
+.wrap{max-width:1440px;margin:auto;padding:28px}.hero{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px}.hero h1{margin:0;font-size:29px;letter-spacing:-.7px}.hero p{margin:7px 0 0;color:#71817b;font-size:13px}.export{background:#087b59;color:#fff;text-decoration:none;padding:10px 14px;border-radius:9px;font-size:13px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat{background:#fff;border:1px solid #e0e9e5;border-radius:15px;padding:19px}.stat-label{font-size:12px;color:#71817b;font-weight:700}.num{font-size:30px;font-weight:800;margin-top:8px}.delta{font-size:11px;color:#087b59;margin-top:7px}.grid{display:grid;grid-template-columns:1.35fr .65fr;gap:15px;margin-top:15px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:15px;padding:19px}.card h3{margin:0;font-size:15px}.sub{color:#81908b;font-size:11px;margin-top:5px}.bars{margin-top:20px;display:grid;gap:13px}.bar-row{display:grid;grid-template-columns:105px 1fr 45px;gap:10px;align-items:center;font-size:12px}.bar{height:9px;background:#edf2f0;border-radius:20px;overflow:hidden}.bar>i{display:block;height:100%;background:#149b73;border-radius:20px}.trend{height:185px;display:flex;align-items:end;gap:8px;margin-top:20px;padding:0 3px}.day{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:100%;gap:7px}.daybar{width:100%;max-width:42px;background:#159b73;border-radius:6px 6px 2px 2px;min-height:3px}.day small{font-size:10px;color:#82908b}.day b{font-size:10px;color:#53645d}.activity{margin-top:15px}.table-wrap{overflow:auto;margin-top:15px}.table{width:100%;border-collapse:collapse;font-size:12px;min-width:850px}.table th{background:#f7faf8;text-align:left;color:#667770;font-size:11px}.table th,.table td{padding:11px 9px;border-bottom:1px solid #edf1ef;white-space:nowrap}.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800}.click{background:#eaf6f1;color:#087b59}.submitted{background:#e9f0ff;color:#345ca8}.filter{display:flex;gap:8px;align-items:center;margin-top:14px}.filter input{border:1px solid #d3dfda;border-radius:8px;padding:8px 10px;font-size:12px}.filter button{border:0;background:#e9f1ee;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:12px}
+@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.hero{align-items:flex-start;gap:15px;flex-direction:column}}@media(max-width:520px){.wrap{padding:18px}.stats{grid-template-columns:1fr 1fr}.topbar{padding:0 16px}.top-actions span{display:none}}
+"""
+
 class Handler(BaseHTTPRequestHandler):
- def sendbody(self,code,body,ctype="text/html; charset=utf-8",extra=None):
-  b=body.encode() if isinstance(body,str) else body; self.send_response(code); self.send_header("Content-Type",ctype); self.send_header("Content-Length",str(len(b)))
-  if extra:
-   for k,v in extra.items():self.send_header(k,v)
-  self.end_headers()
-  if self.command!="HEAD":self.wfile.write(b)
- def auth(self):
-  c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session"); return bool(s and s.value in SESSIONS)
- def do_HEAD(self):self.do_GET()
- def do_GET(self):
-  p=urlparse(self.path); path=p.path; ip=self.client_address[0]; ua=self.headers.get("User-Agent","")
-  if path=="/admin":
-   if not self.auth():return self.sendbody(200,page("Admin Login",'<div class="card"><h1>Phishing Simulation Admin</h1><form method="post" action="/admin/login"><input type="password" name="password" placeholder="Admin password" required style="padding:10px;width:280px"><br><br><button>Login</button></form></div>'))
-   c=db(); rows=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 500").fetchall(); clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]; c.close()
-   trs="".join((lambda d,t: f"<tr><td>{html.escape(d)}</td><td>{html.escape(t)}</td><td>{html.escape(r['event'])}</td><td>{html.escape(r['template'])}</td><td>{html.escape(r['ip'])}</td><td>{html.escape(r['name'] or '')}</td><td>{html.escape(r['employee_id'] or '')}</td><td>{html.escape(r['email'] or '')}</td><td>{html.escape(r['mobile'] or '')}</td><td>{html.escape(r['card_type'] or '')}</td></tr>")(*format_datetime(r['ts'])) for r in rows)
-   body=f"""<h1>Phishing Simulation Admin</h1><div class="card"><a href="/admin.csv">Export CSV</a></div><div class="stats"><div class="stat">Clicks<div class="num">{clicks}</div></div><div class="stat">Submissions<div class="num">{subs}</div></div><div class="stat">Unique IPs<div class="num">{ips}</div></div><div class="stat">Records<div class="num">{len(rows)}</div></div></div><div class="card"><h2>Activity</h2><table><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Local IP</th><th>Name</th><th>Employee ID</th><th>Email</th><th>Mobile</th><th>Card Type</th></tr>{trs or '<tr><td colspan="10">No activity</td></tr>'}</table></div>"""
-   return self.sendbody(200,page("Admin Dashboard",body))
-  if path=="/admin.csv":
-   if not self.auth():return self.sendbody(403,"Forbidden","text/plain")
-   c=db(); rows=c.execute("SELECT ts,event,template,ip,name,email,mobile,user_agent FROM events ORDER BY id DESC").fetchall(); c.close(); out=io.StringIO(); w=csv.writer(out); w.writerow(["timestamp","event","template","local_ip","name","employee_id","email","mobile","card_type","user_agent"])
-   for r in rows:w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
-   return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
-  if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
-   t=path[1:]; fn=os.path.join(TEMPLATES,t)
-   if os.path.isfile(fn):
-    record(ip,t,"click",ua=ua); access(ip,path,200)
-    with open(fn,"rb") as f:return self.sendbody(200,f.read())
-  access(ip,path,404); return self.sendbody(404,"404 File not found","text/plain")
- def do_POST(self):
-  p=urlparse(self.path); ip=self.client_address[0]; n=int(self.headers.get("Content-Length","0")); form=parse_qs(self.rfile.read(n).decode("utf-8","replace"))
-  if p.path=="/admin/login":
-   if secrets.compare_digest(form.get("password",[""])[0],ADMIN_PASSWORD):
-    sid=secrets.token_urlsafe(32); SESSIONS.add(sid); ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
-    return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
-   return self.sendbody(401,"Invalid password","text/plain")
-  if p.path=="/submit":
-   t=form.get("template",["unknown"])[0][:50]; name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]; email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]; card_type=form.get("card_type",[""])[0][:100]
-   record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type); access(ip,p.path,200)
-   return self.sendbody(200,page("Simulation Complete","<div class='card'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
-  return self.sendbody(404,"Not found","text/plain")
-if __name__=="__main__":db().close(); ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
+    def sendbody(self,code,body,ctype="text/html; charset=utf-8",extra=None):
+        b=body.encode() if isinstance(body,str) else body
+        self.send_response(code)
+        self.send_header("Content-Type",ctype)
+        self.send_header("Content-Length",str(len(b)))
+        if extra:
+            for k,v in extra.items(): self.send_header(k,v)
+        self.end_headers()
+        if self.command!="HEAD": self.wfile.write(b)
+
+    def auth(self):
+        c=cookies.SimpleCookie(self.headers.get("Cookie",""))
+        s=c.get("admin_session")
+        return bool(s and s.value in SESSIONS)
+
+    def login_page(self,error=""):
+        err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
+        body=f"""<div class="login-shell"><section class="login-left">
+<div class="brand"><div class="brand-mark">✓</div><div>Trust PhishGuard</div></div>
+<h1>Security awareness, measured.</h1>
+<p>Centralized phishing simulation monitoring for campaign activity, user engagement and security-awareness outcomes.</p>
+<div class="feature-row"><span class="feature">Campaign Management</span><span class="feature">Risk Analytics</span><span class="feature">Live Activity</span><span class="feature">Executive Reports</span></div>
+</section><section class="login-right"><div class="login-card">
+<h2>Admin Sign In</h2><div class="muted">Sign in to the Trust PhishGuard control center.</div>
+{err}<form method="post" action="/admin/login">
+<div class="field"><label>Admin Username</label><input name="username" autocomplete="username" placeholder="Enter username" required></div>
+<div class="field"><label>Password</label><input type="password" name="password" autocomplete="current-password" placeholder="Enter password" required></div>
+<button class="login-btn">Sign in securely</button></form>
+<div class="notice">Protected admin area · Simulation telemetry only. No password, OTP, PIN, CVV or full card-number data is requested or stored.</div>
+<div class="trust">Trust Bank PLC · Information Security</div>
+</div></section></div>"""
+        return page("Admin Sign In",body,LOGIN_CSS)
+
+    def dashboard(self):
+        c=db()
+        total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]
+        clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]
+        subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]
+        ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]
+        templates=c.execute("SELECT template, COUNT(*) n FROM events GROUP BY template ORDER BY n DESC").fetchall()
+        recent=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 80").fetchall()
+        since=(datetime.now(timezone.utc)-timedelta(days=6)).isoformat()
+        trend=c.execute("SELECT substr(ts,1,10) d, COUNT(*) n FROM events WHERE ts>=? GROUP BY d ORDER BY d", (since,)).fetchall()
+        c.close()
+
+        rate=(subs/clicks*100) if clicks else 0
+        max_t=max([r["n"] for r in templates],default=1)
+        bars="".join(f'<div class="bar-row"><span>Template {esc(r["template"])}</span><div class="bar"><i style="width:{r["n"]/max_t*100:.0f}%"></i></div><b>{r["n"]}</b></div>' for r in templates[:8]) or '<div class="sub">No template activity yet.</div>'
+
+        byday={r["d"]:r["n"] for r in trend}
+        days=[]
+        now=datetime.now(timezone.utc)
+        for i in range(6,-1,-1):
+            d=(now-timedelta(days=i)).date().isoformat()
+            days.append((d,byday.get(d,0)))
+        max_d=max([x[1] for x in days],default=1)
+        trend_html="".join(f'<div class="day"><b>{n}</b><div class="daybar" style="height:{max(3,n/max_d*135):.0f}px"></div><small>{d[5:]}</small></div>' for d,n in days)
+
+        rows=[]
+        for r in recent:
+            d,t=format_datetime(r["ts"])
+            rows.append(f'<tr><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td>{esc(r["template"])}</td><td>{esc(r["ip"])}</td><td>{esc(r["name"])}</td><td>{esc(r["email"])}</td><td>{esc(r["mobile"])}</td></tr>')
+        table="".join(rows) or '<tr><td colspan="8">No activity yet.</td></tr>'
+
+        body=f"""<header class="topbar"><div class="topbrand"><div class="mark">✓</div>Trust PhishGuard</div><div class="top-actions"><span style="font-size:11px;color:#b8d1c8">ADMIN CONTROL CENTER</span><a href="/admin.csv">Export CSV</a><a href="/admin/logout">Logout</a></div></header>
+<main class="wrap"><div class="hero"><div><h1>Security Awareness Dashboard</h1><p>Simulation telemetry and engagement overview · Asia/Dhaka</p></div></div>
+<section class="stats"><div class="stat"><div class="stat-label">TOTAL EVENTS</div><div class="num">{total}</div><div class="delta">All recorded activity</div></div><div class="stat"><div class="stat-label">CLICKS</div><div class="num">{clicks}</div><div class="delta">Simulation page visits</div></div><div class="stat"><div class="stat-label">SUBMISSIONS</div><div class="num">{subs}</div><div class="delta">Form actions recorded</div></div><div class="stat"><div class="stat-label">ACTION RATE</div><div class="num">{rate:.1f}%</div><div class="delta">{ips} unique source IPs</div></div></section>
+<section class="grid"><div class="card"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div><div class="card"><h3>Template Performance</h3><div class="sub">Total events by template</div><div class="bars">{bars}</div></div></section>
+<section class="card activity"><h3>Recent Activity</h3><div class="sub">Latest simulation events · dates and times shown in Bangladesh Standard Time</div><div class="filter"><input id="q" oninput="filterRows()" placeholder="Filter IP, template, email..."><button onclick="document.getElementById('q').value='';filterRows()">Clear</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Source IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr></thead><tbody id="rows">{table}</tbody></table></div></section></main>
+<script>
+function filterRows(){const q=document.getElementById('q').value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}
+</script>"""
+        return page("Dashboard",body,DASH_CSS)
+
+    def do_HEAD(self):
+        self.do_GET()
+
+    def do_GET(self):
+        p=urlparse(self.path); path=p.path; ip=self.client_address[0]; ua=self.headers.get("User-Agent","")
+        if path=="/admin":
+            if not self.auth(): return self.sendbody(200,self.login_page())
+            return self.sendbody(200,self.dashboard())
+        if path=="/admin/logout":
+            c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session")
+            if s: SESSIONS.discard(s.value)
+            return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":"admin_session=; Max-Age=0; HttpOnly; SameSite=Strict"})
+        if path=="/admin.csv":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            c=db(); rows=c.execute("SELECT ts,event,template,ip,name,employee_id,email,mobile,card_type,user_agent FROM events ORDER BY id DESC").fetchall(); c.close()
+            out=io.StringIO(); w=csv.writer(out)
+            w.writerow(["timestamp","event","template","local_ip","name","employee_id","email","mobile","card_type","user_agent"])
+            for r in rows:
+                w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
+            return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
+        if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
+            t=path[1:]; fn=os.path.join(TEMPLATES,t)
+            if os.path.isfile(fn):
+                record(ip,t,"click",ua=ua); access(ip,path,200)
+                with open(fn,"rb") as f: return self.sendbody(200,f.read())
+        access(ip,path,404); return self.sendbody(404,"404 File not found","text/plain")
+
+    def do_POST(self):
+        p=urlparse(self.path); ip=self.client_address[0]
+        n=int(self.headers.get("Content-Length","0"))
+        form=parse_qs(self.rfile.read(n).decode("utf-8","replace"))
+        if p.path=="/admin/login":
+            username=form.get("username",[""])[0]
+            password=form.get("password",[""])[0]
+            if secrets.compare_digest(username,ADMIN_USERNAME) and secrets.compare_digest(password,ADMIN_PASSWORD):
+                sid=secrets.token_urlsafe(32); SESSIONS.add(sid)
+                ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
+                return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
+            return self.sendbody(401,self.login_page("Invalid username or password"))
+        if p.path=="/submit":
+            t=form.get("template",["unknown"])[0][:50]
+            name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
+            email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]
+            card_type=form.get("card_type",[""])[0][:100]
+            record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type)
+            access(ip,p.path,200)
+            return self.sendbody(200,page("Simulation Complete","<div style='max-width:760px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
+        return self.sendbody(404,"Not found","text/plain")
+
+if __name__=="__main__":
+    db().close()
+    ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
