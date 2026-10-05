@@ -85,14 +85,14 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 
 ## Phase 6 — Training
 - [x] Training-record database foundation
-- [ ] Training courses/course catalog
-- [ ] Assignment
-- [ ] Due date
-- [ ] Completion percentage/status
+- [x] Training courses/course catalog
+- [x] Assignment
+- [x] Due date
+- [x] Completion percentage/status
 - [ ] Pass/fail
-- [ ] Overdue
+- [x] Overdue
 - [ ] Remediation campaign linkage
-- [ ] Training dashboard
+- [x] Training dashboard
 
 ## Phase 7 — Executive Reporting
 - [x] Campaign report foundation
