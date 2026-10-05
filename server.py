@@ -459,14 +459,28 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/groups/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.group_form())
+        if path=="/admin/campaigns/launch":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            cid=parse_qs(p.query).get("id",[""])[0]
+            c=db(); campaign=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone()
+            count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(campaign["group_name"] if campaign else "",campaign["group_name"] if campaign else "")).fetchone()["n"] if campaign else 0
+            c.close()
+            if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
+            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Target recipients: <b>%s</b></p><p>This action sends the configured simulation message using the selected SMTP profile. Launch only after confirming your authorized test scope.</p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary">Launch Now</button></form></div>'%(esc(campaign["name"]),count,cid)
+            return self.sendbody(200,self.admin_shell("Launch Campaign",body,"Campaigns"))
         if path=="/admin/campaigns/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.campaign_form())
         if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
             t=path[1:]; fn=os.path.join(TEMPLATES,t)
             if os.path.isfile(fn):
-                record(ip,t,"click",ua=ua); access(ip,path,200)
-                with open(fn,"rb") as f: return self.sendbody(200,f.read())
+                q=parse_qs(p.query); campaign_id=q.get("campaign_id",[""])[0]; recipient_id=q.get("recipient_id",[""])[0]
+                record(ip,t,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id); access(ip,path,200)
+                with open(fn,"rb") as f: body=f.read().decode("utf-8","replace")
+                if campaign_id and recipient_id:
+                    action="/submit?"+urlencode({"campaign_id":campaign_id,"recipient_id":recipient_id})
+                    body=body.replace('action="/submit"','action="'+action+'"').replace("action='/submit'","action='"+action+"'")
+                return self.sendbody(200,body)
         access(ip,path,404); return self.sendbody(404,"404 File not found","text/plain")
 
     def do_POST(self):
@@ -536,6 +550,20 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not name: return self.sendbody(400,"Group name required","text/plain")
             c=db(); c.execute("INSERT OR IGNORE INTO groups_tbl(name,department,created_at) VALUES(?,?,?)",(name,department,now())); c.commit(); c.close(); audit(ADMIN_USERNAME,"GROUP_CREATE",name,ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/groups"})
+        if p.path=="/admin/campaigns/launch":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            cid=form.get("id",[""])[0]
+            if form.get("confirm",[""])[0]!="YES": return self.sendbody(400,"Launch confirmation required","text/plain")
+            c=db(); campaign=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone(); c.close()
+            if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
+            if campaign["status"]=="Completed": return self.sendbody(409,"Campaign already completed","text/plain")
+            try:
+                sent,failed,total=send_campaign(cid)
+                audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH","campaign=%s sent=%s failed=%s total=%s"%(cid,sent,failed,total),ip)
+                return self.sendbody(200,page("Campaign Launch","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Campaign launch complete</h2><p>Attempted: %s · Sent: %s · Failed: %s</p><p><a href='/admin/campaigns'>Back to Campaigns</a></p></div>"%(total,sent,failed)))
+            except Exception:
+                audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH_FAILED","campaign=%s"%cid,ip)
+                return self.sendbody(502,page("Campaign Launch Failed","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px'><h2>Campaign launch failed</h2><p>Check PUBLIC_BASE_URL, SMTP configuration, target recipients and server logs. SMTP credentials are not displayed.</p><p><a href='/admin/campaigns'>Back to Campaigns</a></p></div>"))
         if p.path=="/admin/campaigns/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=form.get("id",[""])[0]
@@ -572,7 +600,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
             email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]
             card_type=form.get("card_type",[""])[0][:100]
-            record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type)
+            qs=parse_qs(p.query); campaign_id=qs.get("campaign_id",[""])[0]; recipient_id=qs.get("recipient_id",[""])[0]
+            record(ip,t,"submitted",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type,campaign_id,recipient_id)
             access(ip,p.path,200)
             return self.sendbody(200,page("Simulation Complete","<div style='max-width:760px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
         return self.sendbody(404,"Not found","text/plain")
