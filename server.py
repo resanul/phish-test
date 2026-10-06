@@ -1549,6 +1549,51 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,page("Simulation Complete","<div style='max-width:760px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))
         return self.sendbody(404,"Not found","text/plain")
 
+def scheduled_report_next_run(frequency, current):
+    if frequency=="Daily": return current+timedelta(days=1)
+    if frequency=="Weekly": return current+timedelta(days=7)
+    local=current.astimezone(TZ)
+    first=datetime(local.year + (1 if local.month==12 else 0), 1 if local.month==12 else local.month+1, 1, 9, 0, tzinfo=TZ)
+    return first.astimezone(timezone.utc)
+
+def send_scheduled_report(row):
+    c=db()
+    profile=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(row["smtp_profile_id"],)).fetchone()
+    if not profile: raise RuntimeError("Scheduled report SMTP profile is unavailable")
+    now_utc=datetime.now(timezone.utc)
+    if row["frequency"]=="Daily": start=now_utc-timedelta(days=1)
+    elif row["frequency"]=="Weekly": start=now_utc-timedelta(days=7)
+    else:
+        local=now_utc.astimezone(TZ)
+        first_this=datetime(local.year,local.month,1,tzinfo=TZ)
+        prev_end=first_this
+        prev_start=(datetime(local.year-1,12,1,tzinfo=TZ) if local.month==1 else datetime(local.year,local.month-1,1,tzinfo=TZ))
+        start=prev_start.astimezone(timezone.utc); now_utc=prev_end.astimezone(timezone.utc)
+    end=now_utc
+    start_day=start.astimezone(TZ).date().isoformat(); end_day=(end-timedelta(seconds=1)).astimezone(TZ).date().isoformat()
+    total=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<?",(start.isoformat(),end.isoformat())).fetchone()["n"]
+    clicks=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='click'",(start.isoformat(),end.isoformat())).fetchone()["n"]
+    actions=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='form_action'",(start.isoformat(),end.isoformat())).fetchone()["n"]
+    reports=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='report'",(start.isoformat(),end.isoformat())).fetchone()["n"]
+    lines=["Trust PhishGuard — Scheduled Executive Report","Period: %s to %s"%(start_day,end_day),"","Total events: %s"%total,"Clicks: %s"%clicks,"Actions: %s"%actions,"Reports: %s"%reports,"Action rate: %.1f%%"%((actions/max(clicks,1))*100),"Report rate: %.1f%%"%((reports/max(clicks,1))*100),"","Metrics reflect measured simulation telemetry only; unmeasured opens are not inferred."]
+    c.close()
+    pdf=build_pdf(lines)
+    recipients=[x.strip() for x in (row["recipients"] or "").split(",") if "@" in x.strip()][:50]
+    if not recipients: raise RuntimeError("Scheduled report has no valid recipient addresses")
+    smtp=smtp_connect(profile)
+    try:
+        msg=EmailMessage()
+        msg["Subject"]="Trust PhishGuard — %s report (%s to %s)"%(row["frequency"],start_day,end_day)
+        msg["From"]=formataddr((profile["from_name"] or "Trust PhishGuard",profile["from_email"]))
+        msg["To"]=", ".join(recipients)
+        if profile["reply_to"]: msg["Reply-To"]=profile["reply_to"]
+        msg.set_content("Attached is the Trust PhishGuard scheduled executive report for %s to %s."%(start_day,end_day))
+        msg.add_attachment(pdf,maintype="application",subtype="pdf",filename="phishguard-report-%s-to-%s.pdf"%(start_day,end_day))
+        smtp.send_message(msg)
+    finally:
+        smtp.quit()
+    c=db(); c.execute("UPDATE scheduled_reports SET last_run_at=?,last_status=?,next_run_at=?,updated_at=? WHERE id=?",(now(),"Sent",scheduled_report_next_run(row["frequency"],datetime.now(timezone.utc)).isoformat(),now(),row["id"])); c.commit(); c.close()
+
 def scheduler_loop():
     while True:
         try:
