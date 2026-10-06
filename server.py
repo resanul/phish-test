@@ -184,6 +184,11 @@ def db():
         html_body TEXT,
         text_body TEXT,
         version INTEGER DEFAULT 1,
+        from_name TEXT,
+        from_email TEXT,
+        reply_to TEXT,
+        owner TEXT,
+        status TEXT DEFAULT "Active",
         updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS template_versions(
@@ -223,6 +228,10 @@ def db():
     """)
     cols_template={row[1] for row in c.execute("PRAGMA table_info(template_library)").fetchall()}
     if "version" not in cols_template: c.execute("ALTER TABLE template_library ADD COLUMN version INTEGER DEFAULT 1")
+
+    cols_template={row[1] for row in c.execute("PRAGMA table_info(template_library)").fetchall()}
+    for col,definition in (("from_name","TEXT"),("from_email","TEXT"),("reply_to","TEXT"),("owner","TEXT"),("status","TEXT DEFAULT 'Active'")):
+        if col not in cols_template: c.execute("ALTER TABLE template_library ADD COLUMN %s %s"%(col,definition))
 
     cols_risk={row[1] for row in c.execute("PRAGMA table_info(risk_scores)").fetchall()}
     for col,definition in (("repeat_offender","INTEGER DEFAULT 0"),("remediation_status","TEXT DEFAULT 'None'"),("remediation_due_at","TEXT"),("factor_summary","TEXT")):
