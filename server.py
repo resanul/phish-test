@@ -146,6 +146,19 @@ def db():
         text_body TEXT,
         updated_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS landing_page_versions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        landing_page_id INTEGER NOT NULL,
+        version INTEGER NOT NULL,
+        html_body TEXT,
+        text_body TEXT,
+        created_at TEXT,
+        created_by TEXT,
+        UNIQUE(landing_page_id,version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_landing_page_versions_page
+    ON landing_page_versions(landing_page_id,version);
+
     """)
     cols_risk={row[1] for row in c.execute("PRAGMA table_info(risk_scores)").fetchall()}
     for col,definition in (("repeat_offender","INTEGER DEFAULT 0"),("remediation_status","TEXT DEFAULT 'None'"),("remediation_due_at","TEXT"),("factor_summary","TEXT")):
