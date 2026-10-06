@@ -1308,6 +1308,35 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.commit(); c.close()
             audit(ADMIN_USERNAME,"TEMPLATE_UPDATE","template=%s name=%s"%(tid,name),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/templates"})
+        if p.path=="/admin/reports/scheduled/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            name=form.get("name",[""])[0].strip()[:120]
+            frequency=form.get("frequency",["Weekly"])[0]
+            smtp_id=form.get("smtp_profile_id",[""])[0]
+            recipients=form.get("recipients",[""])[0].strip()[:3000]
+            next_run=form.get("next_run_at",[""])[0].strip()
+            if not name or frequency not in ("Daily","Weekly","Monthly") or not smtp_id.isdigit() or not recipients or not next_run:
+                return self.sendbody(400,"Invalid scheduled report configuration","text/plain")
+            try:
+                dt=datetime.fromisoformat(next_run).replace(tzinfo=TZ)
+                if dt.astimezone(timezone.utc)<=datetime.now(timezone.utc):
+                    return self.sendbody(400,"First run must be in the future","text/plain")
+            except Exception:
+                return self.sendbody(400,"Invalid first-run date/time","text/plain")
+            emails=[x.strip() for x in recipients.split(",") if x.strip()]
+            if not emails or any("@" not in x or len(x)>254 for x in emails[:50]):
+                return self.sendbody(400,"Enter valid recipient email addresses","text/plain")
+            c=db()
+            if not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(int(smtp_id),)).fetchone():
+                c.close(); return self.sendbody(400,"SMTP profile is unavailable","text/plain")
+            try:
+                c.execute("INSERT INTO scheduled_reports(name,frequency,report_view,smtp_profile_id,recipients,next_run_at,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",(name,frequency,"executive",int(smtp_id),", ".join(emails[:50]),dt.astimezone(timezone.utc).isoformat(),1,now(),now()))
+                c.commit()
+            except sqlite3.IntegrityError:
+                c.close(); return self.sendbody(409,"Scheduled report name already exists","text/plain")
+            c.close()
+            audit(ADMIN_USERNAME,"SCHEDULED_REPORT_CREATE","name=%s frequency=%s"%(name,frequency),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/reports/scheduled"})
         if p.path=="/admin/risk/settings":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             try:
