@@ -235,6 +235,8 @@ Progress:
 - [x] RBAC modernization gap identified
 - [x] Full implementation plan recorded
 - [x] Administrator creation schema foundation
+- [x] Administrator creation backend
+- [ ] Administrator creation UI
 - [ ] Roles management and custom role lifecycle
 - [ ] Permission catalog and matrix
 - [ ] Granular role-permission enforcement

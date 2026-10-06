@@ -464,6 +464,7 @@ Never record:
 
 - [x] Baseline audit and gap analysis
 - [x] Administrator creation schema compatibility
+- [x] Add Administrator creation backend
 - [ ] Add Administrator workflow
 - [ ] Administrator profile/access preview
 - [ ] Existing-role assignment
@@ -570,9 +571,9 @@ Current status:
 - [ ] Phase E — Governance/hardening
 - [ ] Phase F — Resource scoping
 
-**Completed task:** Phase A — administrator creation schema foundation is now backward-compatible and does not alter existing administrator records.
+**Completed task:** Phase A — administrator creation backend now creates active administrator accounts using the existing hashed-password model and existing built-in roles.
 
-**Next task:** Phase A — Administrator creation backend.
+**Next task:** Phase A — Administrator creation UI.
 
 ---
 

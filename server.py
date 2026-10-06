@@ -1715,6 +1715,32 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.close()
             audit(ADMIN_USERNAME,"SCHEDULED_REPORT_CREATE","name=%s frequency=%s"%(name,frequency),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/reports/scheduled"})
+        if p.path=="/admin/admins/create":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            username=form.get("username",[""])[0].strip().lower()[:254]
+            password=form.get("password",[""])[0]
+            role=form.get("role",[""])[0].strip()
+            allowed_roles=("Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor")
+            if not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+",username):
+                return self.sendbody(400,"A valid administrator email is required","text/plain")
+            if len(password)<12 or len(password)>256 or "\\r" in password or "\\n" in password:
+                return self.sendbody(400,"Temporary password must be 12-256 characters and must not contain line breaks","text/plain")
+            if role not in allowed_roles:
+                return self.sendbody(400,"Invalid administrator role","text/plain")
+            c=db()
+            existing=c.execute("SELECT id FROM admins WHERE lower(username)=lower(?)",(username,)).fetchone()
+            if existing:
+                c.close()
+                return self.sendbody(409,"An administrator with this email already exists","text/plain")
+            c.execute("INSERT INTO admins(username,role,password_hash,active,created_at) VALUES(?,?,?,?,?)",
+                      (username,role,password_hash(password),1,now()))
+            c.commit()
+            c.close()
+            audit(admin["username"],"ADMIN_CREATE","username=%s role=%s"%(username,role),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins"})
+
         if p.path=="/admin/admins/save":
             admin=self.current_admin()
             if not admin or admin.get("role")!="Administrator": return self.sendbody(403,"Administrator role required","text/plain")
