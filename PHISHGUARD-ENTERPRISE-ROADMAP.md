@@ -75,13 +75,13 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 ## Phase 5 — Risk Engine
 - [x] Basic heuristic risk score
 - [x] Failure count and user risk level
-- [ ] Repeat offender logic
-- [ ] Department risk
-- [ ] Campaign risk
-- [ ] Risk trend/history
-- [ ] Remediation status
-- [ ] Configurable scoring
-- [ ] Explainable score factors
+- [x] Repeat offender logic
+- [x] Department risk
+- [x] Campaign risk
+- [x] Risk trend/history
+- [x] Remediation status
+- [x] Configurable scoring
+- [x] Explainable score factors
 
 ## Phase 6 — Training
 - [x] Training-record database foundation
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Phase 4 Tracking & Telemetry is complete. Implemented normalized event taxonomy, opaque tracking tokens, report-phish and QR-scan telemetry, bot/security-scanner detection, and event deduplication/idempotency. Next implementation order: Phase 5 Risk Engine Expansion.
+**Current implementation milestone:** Phase 5 Risk Engine Expansion is complete. Implemented repeat-offender logic, department risk, campaign risk, risk history snapshots, remediation status, configurable scoring weights/lookback/thresholds, and explainable score factors. Next implementation order: Phase 6 Training completion/pass/fail and remediation linkage, followed by campaign scheduler/throttling controls.
