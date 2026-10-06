@@ -88,6 +88,38 @@ def db():
     CREATE INDEX IF NOT EXISTS idx_events_recipient_event ON events(recipient_id,event);
     """)
     c.executescript("""
+    CREATE TABLE IF NOT EXISTS rbac_roles(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        slug TEXT NOT NULL UNIQUE,
+        description TEXT,
+        built_in INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS rbac_permissions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        resource TEXT NOT NULL,
+        action TEXT NOT NULL,
+        label TEXT NOT NULL,
+        description TEXT,
+        risk_level TEXT NOT NULL DEFAULT 'normal' CHECK(risk_level IN ('normal','elevated','privileged')),
+        active INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(resource,action)
+    );
+    CREATE TABLE IF NOT EXISTS rbac_role_permissions(
+        role_id INTEGER NOT NULL,
+        permission_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(role_id,permission_id),
+        FOREIGN KEY(role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE,
+        FOREIGN KEY(permission_id) REFERENCES rbac_permissions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_rbac_role_permissions_role
+    ON rbac_role_permissions(role_id);
+    CREATE INDEX IF NOT EXISTS idx_rbac_role_permissions_permission
+    ON rbac_role_permissions(permission_id);
     CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, role TEXT DEFAULT "Administrator", password_hash TEXT, created_at TEXT);
     CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);
