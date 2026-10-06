@@ -1346,6 +1346,14 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/groups/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.group_form())
+        if path=="/admin/templates/test-send":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            tid=parse_qs(p.query).get("id",[""])[0]
+            c=db(); tpl=c.execute("SELECT * FROM template_library WHERE template=?",(tid,)).fetchone(); profiles=c.execute("SELECT id,name FROM smtp_profiles WHERE enabled=1 ORDER BY name").fetchall(); c.close()
+            if not tpl: return self.sendbody(404,"Template not found","text/plain")
+            opts="".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in profiles)
+            body='<h1>Template Test Send</h1><div class="card"><p>Template: <b>%s</b> · Version %s</p><p>This sends a single non-tracked test message. No campaign recipient or tracking event is created.</p><form class="form" method="post" action="/admin/templates/test-send"><input type="hidden" name="template" value="%s"><label>Test recipient email<input type="email" name="to_email" required maxlength="254"></label><label>SMTP Profile<select name="smtp_profile_id" required>%s</select></label><button class="btn primary">Send Test Message</button></form></div>'%(esc(tpl["name"]),tpl["version"] or 1,esc(tid),opts)
+            return self.admin_shell("Template Test Send",body,"Templates")
         if path=="/admin/campaigns/test-send":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=parse_qs(p.query).get("id",[""])[0]
