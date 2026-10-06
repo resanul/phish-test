@@ -859,6 +859,35 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             rows=c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
             return self.admin_shell("Audit",'<h1>Audit Log</h1><p>Administrative actions and exports.</p><div class="card"><table class="table"><tr><th>Date</th><th>Time</th><th>Action</th><th>Details</th></tr>'+table+'</table></div>',"Audit Log")
+        if path=="/admin/reports.pdf":
+            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
+            except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
+            c=db()
+            total=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<?",(start_iso,end_iso)).fetchone()["n"]
+            clicks=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='click'",(start_iso,end_iso)).fetchone()["n"]
+            actions=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='form_action'",(start_iso,end_iso)).fetchone()["n"]
+            reports=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='report'",(start_iso,end_iso)).fetchone()["n"]
+            delivered=c.execute("SELECT COUNT(*) n FROM campaign_deliveries WHERE sent_at>=? AND sent_at<? AND status='Sent'",(start_iso,end_iso)).fetchone()["n"]
+            training_assigned=c.execute("SELECT COUNT(*) n FROM training_assignments WHERE assigned_at>=? AND assigned_at<?",(start_iso,end_iso)).fetchone()["n"]
+            training_completed=c.execute("SELECT COUNT(*) n FROM training_assignments WHERE completed_at>=? AND completed_at<?",(start_iso,end_iso)).fetchone()["n"]
+            risk_rows=c.execute("SELECT level,COUNT(*) n FROM risk_scores GROUP BY level").fetchall()
+            campaign_rows=c.execute("""SELECT c.name,c.status,c.targeted,
+                COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.sent_at>=? AND d.sent_at<? AND d.status='Sent'),0) sent,
+                COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.ts>=? AND e.ts<? AND e.event='click'),0) clicks,
+                COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.ts>=? AND e.ts<? AND e.event='form_action'),0) actions,
+                COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.ts>=? AND e.ts<? AND e.event='report'),0) reports
+                FROM campaigns c ORDER BY c.id DESC LIMIT 25""",(start_iso,end_iso,start_iso,end_iso,start_iso,end_iso,start_iso,end_iso)).fetchall()
+            c.close()
+            lines=["Trust PhishGuard — Executive Report","Period: %s to %s"%(start_day,end_day),"","Measured activity","Total events: %s"%total,"Delivered: %s"%delivered,"Clicks: %s"%clicks,"Actions: %s"%actions,"Reports: %s"%reports,"Click rate: %.1f%%"%((clicks/max(delivered,1))*100),"Action rate: %.1f%%"%((actions/max(clicks,1))*100),"Report rate: %.1f%%"%((reports/max(clicks,1))*100),"","Training","Assigned: %s"%training_assigned,"Completed: %s"%training_completed,"Completion: %.1f%%"%((training_completed/max(training_assigned,1))*100),"","Current risk mix"]
+            lines.extend("%s: %s"%(r["level"],r["n"]) for r in risk_rows)
+            lines.extend(["","","Campaign summary"])
+            for r in campaign_rows:
+                lines.append("%s | %s | targeted=%s sent=%s clicks=%s actions=%s reports=%s"%(r["name"],r["status"],r["targeted"],r["sent"],r["clicks"],r["actions"],r["reports"]))
+            lines.append("")
+            lines.append("Metrics reflect measured simulation telemetry only; unmeasured opens are not inferred.")
+            audit(ADMIN_USERNAME,"report_pdf_export","Period %s to %s"%(start_day,end_day),self.client_address[0])
+            pdf=build_pdf(lines)
+            return self.sendbody(200,pdf,"application/pdf",{"Content-Disposition":'attachment; filename="phishguard-report-%s-to-%s.pdf"'%(start_day,end_day)})
         if path=="/admin/reports" and not parse_qs(p.query).get("view",[""])[0]:
             try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
