@@ -20,6 +20,7 @@ SEND_DELAY=float(os.environ.get("SEND_DELAY_SECONDS","0.2"))
 ADMIN_USERNAME=os.environ.get("ADMIN_USERNAME","admin")
 ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
 SESSIONS=set()
+LOGIN_ATTEMPTS={}
 TZ=ZoneInfo("Asia/Dhaka")
 SMTP_KEY=DATA+"/.smtp_master_key"
 SMTP_PROVIDERS={
@@ -745,6 +746,16 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return False
 
+    def login_allowed(self):
+        now_ts=time.time()
+        bucket=LOGIN_ATTEMPTS.get(self.client_address[0],[])
+        bucket=[x for x in bucket if now_ts-x<300]
+        LOGIN_ATTEMPTS[self.client_address[0]]=bucket
+        return len(bucket)<5
+
+    def login_failed(self):
+        LOGIN_ATTEMPTS.setdefault(self.client_address[0],[]).append(time.time())
+
     def login_page(self,error=""):
         err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
         body=f"""<div class="login-shell"><section class="login-left">
@@ -1269,10 +1280,14 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if p.path=="/admin/login":
             username=form.get("username",[""])[0]
             password=form.get("password",[""])[0]
+            if not self.login_allowed():
+                return self.sendbody(429,"Too many login attempts. Try again later.","text/plain",{"Retry-After":"300"})
             if secrets.compare_digest(username,ADMIN_USERNAME) and secrets.compare_digest(password,ADMIN_PASSWORD):
+                LOGIN_ATTEMPTS.pop(self.client_address[0],None)
                 sid=secrets.token_urlsafe(32); SESSIONS.add(sid)
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
+            self.login_failed()
             return self.sendbody(401,self.login_page("Invalid username or password"))
         if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.csrf_origin_ok():
             return self.sendbody(403,"CSRF validation failed","text/plain")
