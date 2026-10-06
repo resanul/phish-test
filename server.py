@@ -1283,7 +1283,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 custom_rows=c=db()
                 custom_roles=c.execute("SELECT name,description,active,created_at FROM rbac_roles WHERE built_in=0 ORDER BY name").fetchall()
                 c.close()
-                custom_cards="".join('<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>%s</h3><p class="sub">%s</p></div><span class="sub">%s</span></div></div>'%(esc(r["name"]),esc(r["description"] or "No description"),"Active" if r["active"] else "Disabled") for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
+                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">%s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><button class="btn primary" type="submit">Save Changes</button></form></div>'%(r["id"],esc(r["name"]),("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or "")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
                 body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Create Custom Role</h3><p class="sub">Create a named custom role for future granular permission assignment.</p><form class="form" method="post" action="/admin/roles/create"><label>Role name<input name="name" maxlength="80" placeholder="e.g. Training Coordinator" required></label><label>Description<textarea name="description" maxlength="500" rows="3" placeholder="Describe the intended access scope"></textarea></label><button class="btn primary" type="submit">Create Custom Role</button></form></div><div class="card" style="margin-top:15px"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div><div class="card" style="margin-top:15px"><h3>Custom Roles</h3><p class="sub">Custom roles are persisted independently from the protected built-in roles. Permission assignment will be added in the permission phase.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%(role_cards,custom_cards)
                 return self.admin_shell("Admin Users",body,"Admin Users")
             rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
@@ -1804,6 +1804,42 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.commit()
             c.close()
             audit(admin["username"],"ROLE_CREATE","name=%s slug=%s"%(name,slug),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
+
+        if p.path=="/admin/roles/save":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            rid=form.get("id",[""])[0]
+            name=form.get("name",[""])[0].strip()
+            description=form.get("description",[""])[0].strip()
+            if not rid.isdigit():
+                return self.sendbody(400,"Invalid custom role","text/plain")
+            if not name or len(name)>80 or "\r" in name or "\n" in name:
+                return self.sendbody(400,"Custom role name must be 1-80 characters and must not contain line breaks","text/plain")
+            if len(description)>500 or "\r" in description or "\n" in description:
+                return self.sendbody(400,"Role description must be 500 characters or fewer and must not contain line breaks","text/plain")
+            slug=re.sub(r"[^a-z0-9]+","-",name.lower()).strip("-")
+            if not slug or len(slug)>80:
+                return self.sendbody(400,"Invalid custom role name","text/plain")
+            c=db()
+            row=c.execute("SELECT name,slug,built_in FROM rbac_roles WHERE id=?",(int(rid),)).fetchone()
+            if not row:
+                c.close()
+                return self.sendbody(404,"Custom role not found","text/plain")
+            if row["built_in"]:
+                c.close()
+                return self.sendbody(400,"Built-in roles are protected","text/plain")
+            existing=c.execute("SELECT id FROM rbac_roles WHERE id<>? AND (lower(name)=lower(?) OR slug=?)",(int(rid),name,slug)).fetchone()
+            if existing:
+                c.close()
+                return self.sendbody(409,"A role with this name already exists","text/plain")
+            ts=now()
+            c.execute("UPDATE rbac_roles SET name=?,slug=?,description=?,updated_at=? WHERE id=?",
+                      (name,slug,description,ts,int(rid)))
+            c.commit()
+            c.close()
+            audit(admin["username"],"ROLE_UPDATE","role_id=%s name=%s slug=%s"%(rid,name,slug),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
 
         if p.path=="/admin/admins/save":

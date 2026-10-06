@@ -478,7 +478,7 @@ Never record:
 - [x] Built-in role display
 - [x] Custom role persistence foundation
 - [x] Custom role creation
-- [ ] Custom role editing
+- [x] Custom role editing
 - [ ] Custom role duplication
 - [ ] Safe custom role deletion
 - [ ] Administrator assignment counts
@@ -576,7 +576,7 @@ Current status:
 
 **Completed task:** Phase B — Custom role creation is complete, including protected custom-role persistence and the Roles-tab creation workflow.
 
-**Next task:** Phase B — Custom role editing.
+**Next task:** Phase B — Custom role duplication.
 
 ---
 
