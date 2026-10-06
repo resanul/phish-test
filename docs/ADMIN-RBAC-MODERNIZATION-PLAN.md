@@ -490,8 +490,8 @@ Never record:
 - [x] Seed permission definitions
 - [x] Permission search/filter
 - [x] Permission matrix UI
-- [ ] Risk/privilege classification
-- [ ] Mark milestone
+- [x] Risk/privilege classification
+- [x] Mark milestone
 
 ### Phase D — True RBAC Enforcement
 
@@ -590,7 +590,9 @@ Current status:
 
 **Completed task:** Phase C — Risk/privilege classification is now applied to the permission catalog, with elevated and privileged definitions explicitly classified while remaining permissions default to normal.
 
-**Next task:** Phase C — Mark milestone.
+**Completed milestone:** Phase C — Permission Catalog is complete, including the permission schema, seeded definitions, search/filter, read-only matrix, and risk/privilege classification.
+
+**Next task:** Phase D — True RBAC Enforcement.
 
 ---
 
