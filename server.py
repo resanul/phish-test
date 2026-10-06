@@ -846,6 +846,23 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 FROM events WHERE ts>=? AND ts<? GROUP BY substr(ts,1,7) ORDER BY month DESC""",(start_iso,end_iso)).fetchall(); c.close()
             table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td></tr>"%(esc(x["month"]),x["events"],x["clicks"] or 0,x["actions"] or 0,x["reports"] or 0,(x["actions"] or 0)/max(x["clicks"] or 0,1)*100,(x["reports"] or 0)/max(x["clicks"] or 0,1)*100) for x in rows) or "<tr><td colspan='7'>No monthly telemetry.</td></tr>"
             return self.admin_shell("Monthly Report",'<h1>Monthly Report</h1><p>Measured telemetry by calendar month · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="monthly"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Month</th><th>Events</th><th>Clicks</th><th>Actions</th><th>Reports</th><th>Action Rate</th><th>Report Rate</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),table),"Reports")
+        if path=="/admin/reports" and parse_qs(p.query).get("view",[""])[0]=="compare":
+            ids=[x for x in parse_qs(p.query).get("campaign_id",[]) if x.isdigit()][:10]
+            c=db(); campaigns=c.execute("SELECT id,name,status,targeted FROM campaigns ORDER BY id DESC LIMIT 100").fetchall()
+            selected=[x for x in campaigns if str(x["id"]) in ids]
+            rows=[]
+            if selected:
+                placeholders=",".join("?"*len(selected))
+                rows=c.execute("""SELECT c.id,c.name,c.targeted,
+                    COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Sent'),0) sent,
+                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='click'),0) clicks,
+                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='form_action'),0) actions,
+                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='report'),0) reports
+                    FROM campaigns c WHERE c.id IN (""" + placeholders + ") ORDER BY c.id DESC",tuple(x["id"] for x in selected)).fetchall()
+            c.close()
+            table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td>%.1f%%</td></tr>"%(x["id"],esc(x["name"]),x["targeted"],x["sent"],x["clicks"],x["clicks"]/max(x["sent"],1)*100,x["actions"]/max(x["sent"],1)*100,x["reports"]/max(x["sent"],1)*100) for x in rows) or "<tr><td colspan='8'>Select campaigns to compare.</td></tr>"
+            opts="".join("<option value='%s' %s>%s</option>"%(x["id"],"selected" if str(x["id"]) in ids else "",esc(x["name"])) for x in campaigns)
+            return self.admin_shell("Campaign Comparison",'<h1>Campaign Comparison</h1><p>Compare measured campaign outcomes. Select up to 10 campaigns.</p><div class="card"><form method="get"><input type="hidden" name="view" value="compare"><select name="campaign_id" multiple size="8" style="width:100%%;padding:10px;border:1px solid #ccd9d4;border-radius:8px">%s</select><p><button class="btn primary">Compare Selected</button></p></form></div><div class="card"><table class="table"><tr><th>ID</th><th>Campaign</th><th>Targeted</th><th>Sent</th><th>Clicks</th><th>Click Rate</th><th>Action Rate</th><th>Report Rate</th></tr>%s</table></div>'%(opts,table),"Reports")
         if path=="/admin/exports":
             total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]; clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; c.close(); rate=subs/clicks*100 if clicks else 0
             return self.admin_shell("Exports",'<h1>Exports</h1><p>Download measured simulation telemetry. SMTP passwords and encrypted secrets are excluded.</p><div class="card"><h3>Events</h3><p>Total: %s · Clicks: %s · Actions: %s · Action rate: %.1f%%</p><a class="btn primary" href="/admin.csv">Export Event CSV</a></div>'%(total,clicks,subs,rate),"Exports")
