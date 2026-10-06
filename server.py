@@ -114,6 +114,21 @@ def db():
         UNIQUE(campaign_id,recipient_id)
     );
     CREATE INDEX IF NOT EXISTS idx_campaign_queue_due ON campaign_queue(campaign_id,status,next_attempt_at);
+    CREATE TABLE IF NOT EXISTS scheduled_reports(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        frequency TEXT NOT NULL DEFAULT 'Weekly',
+        report_view TEXT NOT NULL DEFAULT 'executive',
+        smtp_profile_id INTEGER NOT NULL,
+        recipients TEXT NOT NULL,
+        next_run_at TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        last_run_at TEXT,
+        last_status TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_scheduled_reports_due ON scheduled_reports(enabled,next_run_at);
     CREATE TABLE IF NOT EXISTS smtp_profiles(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
