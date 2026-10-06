@@ -572,7 +572,17 @@ def _send_campaign_recipient(campaign,rec,queue_id):
         msg["Reply-To"]=campaign["reply_to"]
     msg["To"]=rec["email"]
     msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
-    msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,PUBLIC_BASE_URL+"/report?t="+token,PUBLIC_BASE_URL+"/qr?t="+token))
+    links={"tracking_link":link,"report_link":PUBLIC_BASE_URL+"/report?t="+token,"qr_link":PUBLIC_BASE_URL+"/qr?t="+token}
+    if campaign["template_status"] and campaign["template_status"]!="Active":
+        raise RuntimeError("Selected template is archived")
+    html_body=render_template_variables(campaign["template_html"],rec,campaign,links)
+    text_body=render_template_variables(campaign["template_text"],rec,campaign,links)
+    if not html_body:
+        html_body="<p>Hello %s,</p><p>%s</p><p><a href=\"%s\">Review the message</a></p><p><a href=\"%s\">Report this simulation</a></p>"%(esc(rec["name"] or "Colleague"),esc(campaign["subject"] or "Security Awareness Simulation"),esc(link),esc(links["report_link"]))
+    if not text_body:
+        text_body="Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s"%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,links["report_link"],links["qr_link"])
+    msg.set_content(text_body+"\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested.")
+    msg.add_alternative(html_body,subtype="html")
     smtp=None
     try:
         smtp=smtp_connect(campaign)
@@ -631,8 +641,10 @@ def send_campaign(campaign_id,scheduled=False):
     if not PUBLIC_BASE_URL:
         raise RuntimeError("PUBLIC_BASE_URL is not configured")
     c=db()
-    campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to
+    campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to,
+                          t.html_body template_html,t.text_body template_text,t.from_name template_from_name,t.from_email template_from_email,t.reply_to template_reply_to,t.status template_status
                           FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id
+                          LEFT JOIN template_library t ON t.template=c.template
                           WHERE c.id=? AND s.enabled=1""",(campaign_id,)).fetchone()
     c.close()
     if not campaign:
