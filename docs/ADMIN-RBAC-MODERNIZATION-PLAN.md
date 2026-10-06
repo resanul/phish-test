@@ -474,7 +474,7 @@ Never record:
 
 ### Phase B — Role Management
 
-- [ ] Roles tab
+- [x] Roles tab
 - [ ] Built-in role display
 - [ ] Custom role creation
 - [ ] Custom role editing
@@ -573,7 +573,7 @@ Current status:
 
 **Completed milestone:** Phase A — Administration UX is complete, including administrator creation, access preview, existing-role assignment, status controls, and safe self/last-admin protection.
 
-**Next task:** Phase B — Roles management and custom role lifecycle.
+**Next task:** Phase B — Built-in role display.
 
 ---
 

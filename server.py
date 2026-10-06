@@ -1270,6 +1270,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/admins":
             if not self.current_admin() or self.current_admin().get("role")!="Administrator":
                 return self.sendbody(403,"Administrator role required","text/plain")
+            tab=parse_qs(query).get("tab",["administrators"])[0]
+            if tab=="roles":
+                body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Roles</h3><p class="sub">Role management workspace is ready. Built-in role details will be added in the next RBAC task.</p></div>'
+                return self.admin_shell("Admin Users",body,"Admin Users")
             rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
             c.close()
             roles=["Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor"]
