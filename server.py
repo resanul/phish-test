@@ -1445,12 +1445,17 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             fn=os.path.join(TEMPLATES,tid+".html")
             with open(fn,"w",encoding="utf-8") as tf: tf.write(html_body)
             c=db()
-            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            existing=c.execute("SELECT version FROM template_library WHERE template=?",(tid,)).fetchone()
+            next_version=(int(existing["version"]) if existing and existing["version"] else 0)+1
+            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,version,updated_at)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                          ON CONFLICT(template) DO UPDATE SET name=excluded.name,subject=excluded.subject,preheader=excluded.preheader,
                          category=excluded.category,difficulty=excluded.difficulty,language=excluded.language,brand=excluded.brand,
-                         industry=excluded.industry,tags=excluded.tags,html_body=excluded.html_body,text_body=excluded.text_body,updated_at=excluded.updated_at""",
-                      (tid,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,now()))
+                         industry=excluded.industry,tags=excluded.tags,html_body=excluded.html_body,text_body=excluded.text_body,version=excluded.version,updated_at=excluded.updated_at""",
+                      (tid,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,next_version,now()))
+            c.execute("""INSERT INTO template_versions(template,version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,created_at,created_by)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (tid,next_version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,now(),ADMIN_USERNAME))
             c.commit(); c.close()
             audit(ADMIN_USERNAME,"TEMPLATE_UPDATE","template=%s name=%s"%(tid,name),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/templates"})
