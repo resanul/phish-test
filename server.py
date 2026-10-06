@@ -1208,6 +1208,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
 
     def do_GET(self):
         p=urlparse(self.path); path=p.path; ip=self.client_address[0]; ua=self.headers.get("User-Agent","")
+        if path.startswith("/admin/") and path not in ("/admin/login",):
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            if path!="/admin/logout" and not self.role_allowed(path): return self.sendbody(403,"Insufficient role permission","text/plain")
         if path=="/admin":
             if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(200,self.dashboard())
