@@ -1448,10 +1448,20 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             brand=form.get("brand",[""])[0][:100]
             industry=form.get("industry",[""])[0][:100]
             tags=form.get("tags",[""])[0][:500]
+            from_name=form.get("from_name",[""])[0][:150]
+            from_email=form.get("from_email",[""])[0][:254]
+            reply_to=form.get("reply_to",[""])[0][:254]
+            owner=form.get("owner",[""])[0][:150]
+            status=form.get("status",["Active"])[0]
             html_body=form.get("html_body",[""])[0]
             text_body=form.get("text_body",[""])[0][:10000]
             if not name or not html_body:
                 return self.sendbody(400,"Template name and HTML body are required","text/plain")
+            if status not in ("Active","Archived"): status="Active"
+            if from_email and not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+",from_email):
+                return self.sendbody(400,"Invalid From email","text/plain")
+            if reply_to and not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+",reply_to):
+                return self.sendbody(400,"Invalid Reply-To email","text/plain")
             ok,msg=validate_template_html(html_body)
             if not ok: return self.sendbody(400,msg,"text/plain")
             fn=os.path.join(TEMPLATES,tid+".html")
@@ -1459,12 +1469,13 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c=db()
             existing=c.execute("SELECT version FROM template_library WHERE template=?",(tid,)).fetchone()
             next_version=(int(existing["version"]) if existing and existing["version"] else 0)+1
-            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,version,updated_at)
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,version,from_name,from_email,reply_to,owner,status,updated_at)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                          ON CONFLICT(template) DO UPDATE SET name=excluded.name,subject=excluded.subject,preheader=excluded.preheader,
                          category=excluded.category,difficulty=excluded.difficulty,language=excluded.language,brand=excluded.brand,
-                         industry=excluded.industry,tags=excluded.tags,html_body=excluded.html_body,text_body=excluded.text_body,version=excluded.version,updated_at=excluded.updated_at""",
-                      (tid,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,next_version,now()))
+                         industry=excluded.industry,tags=excluded.tags,html_body=excluded.html_body,text_body=excluded.text_body,version=excluded.version,
+                         from_name=excluded.from_name,from_email=excluded.from_email,reply_to=excluded.reply_to,owner=excluded.owner,status=excluded.status,updated_at=excluded.updated_at""",
+                      (tid,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,next_version,from_name,from_email,reply_to,owner,status,now()))
             c.execute("""INSERT INTO template_versions(template,version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,created_at,created_by)
                          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                       (tid,next_version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,now(),ADMIN_USERNAME))
