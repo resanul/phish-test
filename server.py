@@ -1142,6 +1142,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/reports" and not parse_qs(p.query).get("view",[""])[0]:
             try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
+            c=db()
             total=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<?",(start_iso,end_iso)).fetchone()["n"]
             clicks=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='click'",(start_iso,end_iso)).fetchone()["n"]
             subs=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<? AND event='form_action'",(start_iso,end_iso)).fetchone()["n"]
