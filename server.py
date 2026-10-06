@@ -1227,10 +1227,19 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
 <label>Industry<input name="industry" value="%s" maxlength="100"></label>
 </div>
 <label>Tags<input name="tags" value="%s" placeholder="finance, employee, urgent" maxlength="500"></label>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+<label>From Name<input name="from_name" value="%s" maxlength="150"></label>
+<label>From Email<input name="from_email" value="%s" maxlength="254"></label>
+<label>Reply-To<input name="reply_to" value="%s" maxlength="254"></label>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<label>Owner<input name="owner" value="%s" maxlength="150"></label>
+<label>Status<select name="status"><option %s>Active</option><option %s>Archived</option></select></label>
+</div>
 <label>HTML Body<textarea name="html_body" rows="22" style="width:100%%;font-family:Consolas,monospace;padding:12px;border:1px solid #ccd9d4;border-radius:8px" required>%s</textarea></label>
 <label>Plain Text Body<textarea name="text_body" rows="8" style="width:100%%;padding:12px;border:1px solid #ccd9d4;border-radius:8px">%s</textarea></label>
 <div style="display:flex;gap:8px"><button class="btn primary">Save Template</button><a class="btn" target="_blank" href="/%s.html">Preview</a><a class="btn" href="/admin/templates">Cancel</a></div>
-</form></div><div class="card" style="margin-top:15px"><h3>Version History</h3><table class="table"><tr><th>Version</th><th>Created</th><th>Created By</th></tr>%s</table></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("html_body"),val("text_body"),val("template"),version_rows)
+</form></div><div class="card" style="margin-top:15px"><h3>Version History</h3><table class="table"><tr><th>Version</th><th>Created</th><th>Created By</th></tr>%s</table></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("from_name"),val("from_email"),val("reply_to"),val("owner"),"selected" if (r["status"] or "Active")=="Active" else "","selected" if (r["status"] or "Active")=="Archived" else "",val("html_body"),val("text_body"),val("template"),version_rows)
         return self.admin_shell("Template Builder",body,"Templates")
 
     def campaign_form(self,cid=None):
