@@ -1238,7 +1238,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.role_allowed(path): return self.sendbody(403,"Insufficient role permission","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
