@@ -182,8 +182,30 @@ def db():
         tags TEXT,
         html_body TEXT,
         text_body TEXT,
+        version INTEGER DEFAULT 1,
         updated_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS template_versions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        template TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        name TEXT,
+        subject TEXT,
+        preheader TEXT,
+        category TEXT,
+        difficulty TEXT,
+        language TEXT,
+        brand TEXT,
+        industry TEXT,
+        tags TEXT,
+        html_body TEXT,
+        text_body TEXT,
+        created_at TEXT,
+        created_by TEXT,
+        UNIQUE(template,version)
+    );
+    CREATE INDEX IF NOT EXISTS idx_template_versions_template
+    ON template_versions(template,version);
     CREATE TABLE IF NOT EXISTS landing_page_versions(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         landing_page_id INTEGER NOT NULL,
@@ -198,6 +220,9 @@ def db():
     ON landing_page_versions(landing_page_id,version);
 
     """)
+    cols_template={row[1] for row in c.execute("PRAGMA table_info(template_library)").fetchall()}
+    if "version" not in cols_template: c.execute("ALTER TABLE template_library ADD COLUMN version INTEGER DEFAULT 1")
+
     cols_risk={row[1] for row in c.execute("PRAGMA table_info(risk_scores)").fetchall()}
     for col,definition in (("repeat_offender","INTEGER DEFAULT 0"),("remediation_status","TEXT DEFAULT 'None'"),("remediation_due_at","TEXT"),("factor_summary","TEXT")):
         if col not in cols_risk:
