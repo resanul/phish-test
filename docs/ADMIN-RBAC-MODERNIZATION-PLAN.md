@@ -479,7 +479,7 @@ Never record:
 - [x] Custom role persistence foundation
 - [x] Custom role creation
 - [x] Custom role editing
-- [ ] Custom role duplication
+- [x] Custom role duplication
 - [ ] Safe custom role deletion
 - [ ] Administrator assignment counts
 - [ ] Mark milestone
@@ -574,9 +574,9 @@ Current status:
 
 **Completed milestone:** Phase A — Administration UX is complete, including administrator creation, access preview, existing-role assignment, status controls, and safe self/last-admin protection.
 
-**Completed task:** Phase B — Custom role creation is complete, including protected custom-role persistence and the Roles-tab creation workflow.
+**Completed task:** Phase B — Custom role duplication is complete, including metadata-only duplication of protected custom roles.
 
-**Next task:** Phase B — Custom role duplication.
+**Next task:** Phase B — Safe custom role deletion.
 
 ---
 

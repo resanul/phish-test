@@ -1281,9 +1281,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ]
                 role_cards="".join('<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>%s</h3><p class="sub">%s</p></div><span class="sub">%s</span></div></div>'%(esc(name),esc(desc),esc(kind)) for name,desc,kind in built_in_roles)
                 custom_rows=c=db()
-                custom_roles=c.execute("SELECT name,description,active,created_at FROM rbac_roles WHERE built_in=0 ORDER BY name").fetchall()
+                custom_roles=c.execute("SELECT id,name,description,active,created_at FROM rbac_roles WHERE built_in=0 ORDER BY name").fetchall()
                 c.close()
-                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">%s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><button class="btn primary" type="submit">Save Changes</button></form></div>'%(r["id"],esc(r["name"]),("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or "")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
+                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">%s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Save Changes</button><button class="btn" type="submit" formaction="/admin/roles/duplicate">Duplicate</button></div></form></div>'%(r["id"],esc(r["name"]),("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or "")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
                 body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Create Custom Role</h3><p class="sub">Create a named custom role for future granular permission assignment.</p><form class="form" method="post" action="/admin/roles/create"><label>Role name<input name="name" maxlength="80" placeholder="e.g. Training Coordinator" required></label><label>Description<textarea name="description" maxlength="500" rows="3" placeholder="Describe the intended access scope"></textarea></label><button class="btn primary" type="submit">Create Custom Role</button></form></div><div class="card" style="margin-top:15px"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div><div class="card" style="margin-top:15px"><h3>Custom Roles</h3><p class="sub">Custom roles are persisted independently from the protected built-in roles. Permission assignment will be added in the permission phase.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%(role_cards,custom_cards)
                 return self.admin_shell("Admin Users",body,"Admin Users")
             rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
@@ -1804,6 +1804,46 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.commit()
             c.close()
             audit(admin["username"],"ROLE_CREATE","name=%s slug=%s"%(name,slug),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
+
+        if p.path=="/admin/roles/duplicate":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            rid=form.get("id",[""])[0]
+            if not rid.isdigit():
+                return self.sendbody(400,"Invalid custom role","text/plain")
+            c=db()
+            row=c.execute("SELECT id,name,description,active,built_in FROM rbac_roles WHERE id=?",(int(rid),)).fetchone()
+            if not row:
+                c.close()
+                return self.sendbody(404,"Custom role not found","text/plain")
+            if row["built_in"]:
+                c.close()
+                return self.sendbody(400,"Built-in roles are protected","text/plain")
+            base_name="Copy of "+row["name"]
+            if len(base_name)>80:
+                base_name=base_name[:80].rstrip()
+            name=base_name
+            suffix=2
+            while c.execute("SELECT 1 FROM rbac_roles WHERE lower(name)=lower(?) OR slug=?",(name,re.sub(r"[^a-z0-9]+","-",name.lower()).strip("-"))).fetchone():
+                suffix_text=" (%s)"%suffix
+                name=base_name[:80-len(suffix_text)].rstrip()+suffix_text
+                suffix+=1
+                if suffix>9999:
+                    c.close()
+                    return self.sendbody(409,"Unable to generate a unique custom role name","text/plain")
+            slug=re.sub(r"[^a-z0-9]+","-",name.lower()).strip("-")
+            if not slug or len(slug)>80:
+                c.close()
+                return self.sendbody(400,"Invalid duplicated role name","text/plain")
+            ts=now()
+            c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                      (name,slug,row["description"] or "",0,int(row["active"]),ts,ts))
+            new_id=c.execute("SELECT last_insert_rowid()").fetchone()[0]
+            c.commit()
+            c.close()
+            audit(admin["username"],"ROLE_CREATE","source_role_id=%s duplicated_role_id=%s name=%s slug=%s"%(rid,new_id,name,slug),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
 
         if p.path=="/admin/roles/save":
