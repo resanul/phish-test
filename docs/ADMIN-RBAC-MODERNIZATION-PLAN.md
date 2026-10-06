@@ -477,7 +477,7 @@ Never record:
 - [x] Roles tab
 - [x] Built-in role display
 - [x] Custom role persistence foundation
-- [ ] Custom role creation
+- [x] Custom role creation
 - [ ] Custom role editing
 - [ ] Custom role duplication
 - [ ] Safe custom role deletion
@@ -574,9 +574,9 @@ Current status:
 
 **Completed milestone:** Phase A — Administration UX is complete, including administrator creation, access preview, existing-role assignment, status controls, and safe self/last-admin protection.
 
-**Completed task:** Phase B — Custom role persistence foundation is complete. The backend can persist protected custom roles without changing granular authorization enforcement.
+**Completed task:** Phase B — Custom role creation is complete, including protected custom-role persistence and the Roles-tab creation workflow.
 
-**Next task:** Phase B — Custom role creation UI.
+**Next task:** Phase B — Custom role editing.
 
 ---
 
