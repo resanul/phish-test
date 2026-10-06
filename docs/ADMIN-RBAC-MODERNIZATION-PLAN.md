@@ -470,7 +470,7 @@ Never record:
 - [x] Existing-role assignment
 - [x] Administrator status controls
 - [x] Safe self/last-admin protection
-- [ ] Mark milestone
+- [x] Mark milestone
 
 ### Phase B — Role Management
 
@@ -571,9 +571,9 @@ Current status:
 - [ ] Phase E — Governance/hardening
 - [ ] Phase F — Resource scoping
 
-**Completed task:** Phase A — safe self/last-admin protection now blocks self-demotion/self-disable and prevents disabling or demoting the last active Administrator account.
+**Completed milestone:** Phase A — Administration UX is complete, including administrator creation, access preview, existing-role assignment, status controls, and safe self/last-admin protection.
 
-**Next task:** Phase A — Mark milestone.
+**Next task:** Phase B — Roles management and custom role lifecycle.
 
 ---
 
