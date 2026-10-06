@@ -102,7 +102,7 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 - [x] Monthly report
 - [x] Executive dashboard
 - [x] Risk/resilience trends
-- [ ] PDF report
+- [x] PDF report
 - [ ] Scheduled reports
 - [x] Date-range/report filters
 
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Landing Page Editor is implemented with editable HTML/plain-text content, version history, preview, size limits, and a safety field-policy validator that blocks credential collection fields. Campaign Scheduler/Throttling remains implemented with timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Phase 2 campaign-engine controls are complete, including pre-launch validation and non-tracked SMTP test-send. Executive Reporting core views are now implemented: campaign comparison, department reporting, monthly reporting, executive dashboard, risk/resilience trends, and date-range filters. Remaining Phase 7 items are PDF reporting and scheduled reports. Next implementation order: PDF reporting and scheduled reports, followed by Security Hardening.
+**Current implementation milestone:** Landing Page Editor is implemented with editable HTML/plain-text content, version history, preview, size limits, and a safety field-policy validator that blocks credential collection fields. Campaign Scheduler/Throttling remains implemented with timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Phase 2 campaign-engine controls are complete, including pre-launch validation and non-tracked SMTP test-send. Executive Reporting core views are now implemented: campaign comparison, department reporting, monthly reporting, executive dashboard, risk/resilience trends, and date-range filters. Remaining Phase 7 item is scheduled reports. PDF executive report export is now implemented as a dependency-free standard-library PDF. Next implementation order: scheduled reports, followed by Security Hardening.
