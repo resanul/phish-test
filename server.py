@@ -734,6 +734,17 @@ class Handler(BaseHTTPRequestHandler):
         s=c.get("admin_session")
         return bool(s and s.value in SESSIONS)
 
+    def csrf_origin_ok(self):
+        origin=self.headers.get("Origin","").strip()
+        referer=self.headers.get("Referer","").strip()
+        source=origin or referer
+        if not source:
+            return False
+        try:
+            return urlparse(source).netloc==self.headers.get("Host","")
+        except Exception:
+            return False
+
     def login_page(self,error=""):
         err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
         body=f"""<div class="login-shell"><section class="login-left">
@@ -1263,6 +1274,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
             return self.sendbody(401,self.login_page("Invalid username or password"))
+        if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.csrf_origin_ok():
+            return self.sendbody(403,"CSRF validation failed","text/plain")
         if p.path=="/admin/landing-pages/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             lid=form.get("id",[""])[0]
