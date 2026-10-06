@@ -89,13 +89,6 @@ def db():
     """)
     c.executescript("""
     CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, role TEXT DEFAULT "Administrator", password_hash TEXT, created_at TEXT);
-    cols_admin={row[1] for row in c.execute("PRAGMA table_info(admins)").fetchall()}
-    if "role" not in cols_admin: c.execute('ALTER TABLE admins ADD COLUMN role TEXT DEFAULT "Administrator"')
-    if "password_hash" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN password_hash TEXT")
-    if "active" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN active INTEGER DEFAULT 1")
-    c.execute("INSERT OR IGNORE INTO admins(username,role,password_hash,active,created_at) VALUES(?,?,?,?,?)",(ADMIN_USERNAME,"Administrator",password_hash(ADMIN_PASSWORD),1,now()))
-    c.execute("UPDATE admins SET password_hash=? WHERE username=? AND (password_hash IS NULL OR password_hash='')",(password_hash(ADMIN_PASSWORD),ADMIN_USERNAME))
-    c.execute("UPDATE admins SET active=1 WHERE username=? AND active IS NULL",(ADMIN_USERNAME,))
     CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);
     CREATE TABLE IF NOT EXISTS groups_tbl(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,department TEXT,created_at TEXT);
@@ -232,6 +225,14 @@ def db():
     ON landing_page_versions(landing_page_id,version);
 
     """)
+
+    cols_admin={row[1] for row in c.execute("PRAGMA table_info(admins)").fetchall()}
+    if "role" not in cols_admin: c.execute('ALTER TABLE admins ADD COLUMN role TEXT DEFAULT "Administrator"')
+    if "password_hash" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN password_hash TEXT")
+    if "active" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN active INTEGER DEFAULT 1")
+    c.execute("INSERT OR IGNORE INTO admins(username,role,password_hash,active,created_at) VALUES(?,?,?,?,?)",(ADMIN_USERNAME,"Administrator",password_hash(ADMIN_PASSWORD),1,now()))
+    c.execute("UPDATE admins SET password_hash=? WHERE username=? AND (password_hash IS NULL OR password_hash='')",(password_hash(ADMIN_PASSWORD),ADMIN_USERNAME))
+    c.execute("UPDATE admins SET active=1 WHERE username=? AND active IS NULL",(ADMIN_USERNAME,))
     cols_smtp={row[1] for row in c.execute("PRAGMA table_info(smtp_profiles)").fetchall()}
     for col,definition in (("auth_method","TEXT DEFAULT 'password'"),("oauth_token_enc","TEXT"),("oauth_refresh_token_enc","TEXT"),("oauth_token_url","TEXT"),("oauth_client_id","TEXT"),("oauth_scopes","TEXT")):
         if col not in cols_smtp: c.execute("ALTER TABLE smtp_profiles ADD COLUMN %s %s"%(col,definition))
