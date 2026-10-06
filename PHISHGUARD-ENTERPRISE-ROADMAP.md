@@ -138,9 +138,9 @@ Current:
 ## Landing Page System
 - [x] Landing-page registry and template mapping
 - [x] Campaign selection and preview
-- [ ] Full editor
-- [ ] Versioning
-- [ ] Safe field-policy validation
+- [x] Full editor
+- [x] Versioning
+- [x] Safe field-policy validation
 
 Simulation policy: landing pages may collect approved identity/contact metadata only; never credentials.
 
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Campaign Scheduler/Throttling is implemented. Added timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Remaining Phase 2 controls are pre-launch validation and test-send before launch. Next implementation order: Landing-page editor, followed by Executive Reporting and Security Hardening.
+**Current implementation milestone:** Landing Page Editor is implemented with editable HTML/plain-text content, version history, preview, size limits, and a safety field-policy validator that blocks credential collection fields. Campaign Scheduler/Throttling remains implemented with timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Remaining Phase 2 controls are pre-launch validation and test-send before launch. Next implementation order: Campaign pre-launch validation and test-send, followed by Executive Reporting and Security Hardening.
