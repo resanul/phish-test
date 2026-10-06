@@ -63,12 +63,12 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 - [x] Campaign/recipient event linkage
 - [x] Timestamp, source IP, User-Agent
 - [x] Delivery status
-- [ ] Normalized event taxonomy: delivered, open, click, form_action, report, QR_scan, training_assigned, training_completed, bot_detected
-- [ ] Tracking token
-- [ ] Report-phish event
-- [ ] QR-scan event
-- [ ] Bot/security-scanner detection and filtering policy
-- [ ] Event deduplication/idempotency
+- [x] Normalized event taxonomy: delivered, open, click, form_action, report, QR_scan, training_assigned, training_completed, bot_detected
+- [x] Tracking token
+- [x] Report-phish event
+- [x] QR-scan event
+- [x] Bot/security-scanner detection and filtering policy
+- [x] Event deduplication/idempotency
 
 **Open tracking must never be fabricated; if it is not reliably measurable it must be shown as unavailable/not collected.**
 
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Enterprise recipient profile expansion and governed CSV import are complete. The next implementation order remains Tracking/Event Taxonomy + Bot Detection, followed by Risk Engine Expansion.
+**Current implementation milestone:** Phase 4 Tracking & Telemetry is complete. Implemented normalized event taxonomy, opaque tracking tokens, report-phish and QR-scan telemetry, bot/security-scanner detection, and event deduplication/idempotency. Next implementation order: Phase 5 Risk Engine Expansion.
