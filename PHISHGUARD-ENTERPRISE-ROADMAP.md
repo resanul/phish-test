@@ -89,9 +89,9 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 - [x] Assignment
 - [x] Due date
 - [x] Completion percentage/status
-- [ ] Pass/fail
+- [x] Pass/fail
 - [x] Overdue
-- [ ] Remediation campaign linkage
+- [x] Remediation campaign linkage
 - [x] Training dashboard
 
 ## Phase 7 — Executive Reporting
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Phase 5 Risk Engine Expansion is complete. Implemented repeat-offender logic, department risk, campaign risk, risk history snapshots, remediation status, configurable scoring weights/lookback/thresholds, and explainable score factors. Next implementation order: Phase 6 Training completion/pass/fail and remediation linkage, followed by campaign scheduler/throttling controls.
+**Current implementation milestone:** Phase 6 Training is complete. Implemented course assignment, due dates, completion tracking, overdue detection, pass/fail scoring against course passing thresholds, trigger/remediation campaign linkage, training telemetry, and training dashboard results. Next implementation order: Campaign scheduler/throttling controls, followed by Landing-page editor and Executive Reporting.
