@@ -588,7 +588,9 @@ Current status:
 
 **Completed task:** Phase C — Permission matrix UI is now available as a read-only resource/action grid in the administrator Permission Catalog, with the existing search/resource filters applied to the matrix.
 
-**Next task:** Phase C — Risk/privilege classification.
+**Completed task:** Phase C — Risk/privilege classification is now applied to the permission catalog, with elevated and privileged definitions explicitly classified while remaining permissions default to normal.
+
+**Next task:** Phase C — Mark milestone.
 
 ---
 
