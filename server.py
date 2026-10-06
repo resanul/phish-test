@@ -786,6 +786,19 @@ class Handler(BaseHTTPRequestHandler):
     def login_failed(self):
         LOGIN_ATTEMPTS.setdefault(self.client_address[0],[]).append(time.time())
 
+    def role_allowed(self,path):
+        admin=self.current_admin()
+        if not admin: return False
+        role=admin.get("role","Administrator")
+        if role=="Administrator": return True
+        permissions={
+            "Campaign Manager":("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/recipients","/admin/groups","/admin/training"),
+            "Reporting Analyst":("/admin/reports","/admin/risk","/admin/exports"),
+            "SMTP Manager":("/admin/smtp",),
+            "Security Auditor":("/admin/audit",)
+        }
+        return any(path==prefix or path.startswith(prefix+"/") for prefix in permissions.get(role,()))
+
     def login_page(self,error=""):
         err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
         body=f"""<div class="login-shell"><section class="login-left">
@@ -1212,6 +1225,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            if not self.role_allowed(path): return self.sendbody(403,"Insufficient role permission","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/reports" and parse_qs(p.query).get("campaign_id",[None])[0]:
