@@ -1499,6 +1499,39 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.commit(); c.close()
             audit(ADMIN_USERNAME,"TEMPLATE_UPDATE","template=%s name=%s"%(tid,name),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/templates"})
+        if p.path=="/admin/templates/test-send":
+            admin=self.current_admin()
+            if not admin: return self.sendbody(403,"Forbidden","text/plain")
+            tid=form.get("template",[""])[0]
+            to_email=form.get("to_email",[""])[0].strip()
+            smtp_id=form.get("smtp_profile_id",[""])[0]
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",to_email) or not smtp_id.isdigit():
+                return self.sendbody(400,"Invalid test-send parameters","text/plain")
+            c=db()
+            tpl=c.execute("SELECT * FROM template_library WHERE template=?",(tid,)).fetchone()
+            profile=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(int(smtp_id),)).fetchone()
+            c.close()
+            if not tpl: return self.sendbody(404,"Template not found","text/plain")
+            if not profile: return self.sendbody(400,"SMTP profile is unavailable","text/plain")
+            if (tpl["status"] or "Active")!="Active": return self.sendbody(400,"Archived templates cannot be test-sent","text/plain")
+            ok,msg=validate_template_html(tpl["html_body"] or "")
+            if not ok: return self.sendbody(400,msg,"text/plain")
+            smtp=smtp_connect(profile)
+            try:
+                msg_obj=EmailMessage()
+                msg_obj["Subject"]="[TEST] "+(tpl["subject"] or tpl["name"])
+                sender_email=tpl["from_email"] or profile["from_email"]
+                sender_name=tpl["from_name"] or profile["from_name"] or "Trust PhishGuard"
+                msg_obj["From"]=formataddr((sender_name,sender_email))
+                msg_obj["To"]=to_email
+                if tpl["reply_to"] or profile["reply_to"]: msg_obj["Reply-To"]=tpl["reply_to"] or profile["reply_to"]
+                msg_obj.set_content(tpl["text_body"] or "Trust PhishGuard authorized security-awareness simulation test message.")
+                msg_obj.add_alternative(tpl["html_body"],subtype="html")
+                smtp.send_message(msg_obj)
+            finally:
+                smtp.quit()
+            audit(admin["username"],"TEMPLATE_TEST_SEND","template=%s to=%s smtp_profile=%s"%(tid,to_email,smtp_id),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/templates?id="+urlencode({"x":tid})["x"]})
         if p.path=="/admin/reports/scheduled/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             name=form.get("name",[""])[0].strip()[:120]
