@@ -1703,6 +1703,19 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 c.execute("INSERT INTO smtp_profiles(name,provider,host,port,security,username,password_enc,from_name,from_email,reply_to,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,1,now(),now())); action="SMTP_PROFILE_CREATE"
             c.commit(); c.close(); audit(ADMIN_USERNAME,action,name,ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
+        if p.path=="/admin/smtp/diagnostics":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            sid=form.get("id",[""])[0]; to_email=form.get("to_email",[""])[0].strip()[:254]
+            if not sid.isdigit(): return self.sendbody(400,"Invalid SMTP profile","text/plain")
+            if to_email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",to_email):
+                return self.sendbody(400,"Invalid diagnostic recipient email","text/plain")
+            c=db(); profile=c.execute("SELECT * FROM smtp_profiles WHERE id=?",(int(sid),)).fetchone(); c.close()
+            if not profile: return self.sendbody(404,"SMTP profile not found","text/plain")
+            results=smtp_diagnostics(profile,to_email)
+            rows="".join("<tr><td>%s</td><td><b>%s</b></td><td>%s</td></tr>"%(esc(x["stage"]),esc(x["status"]),esc(x["detail"])) for x in results)
+            audit(ADMIN_USERNAME,"SMTP_DIAGNOSTICS","profile=%s result=%s"%(profile["name"],",".join(x["status"] for x in results)),ip)
+            body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><table class="table"><tr><th>Stage</th><th>Status</th><th>Detail</th></tr>%s</table><p><a class="btn" href="/admin/smtp">Back to SMTP Providers</a></p></div>'%rows
+            return self.sendbody(200,self.admin_shell("SMTP Diagnostics",body,"SMTP"))
         if p.path=="/admin/smtp/test":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; to_email=form.get("to_email",[""])[0][:255]
