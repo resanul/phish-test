@@ -1333,10 +1333,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not self.login_allowed():
                 return self.sendbody(429,"Too many login attempts. Try again later.","text/plain",{"Retry-After":"300"})
             c=db()
-            admin=c.execute("SELECT username,role,password_hash FROM admins WHERE username=?",(username,)).fetchone()
+            admin=c.execute("SELECT username,role,password_hash,active FROM admins WHERE username=?",(username,)).fetchone()
             c.close()
             valid=False
-            if admin and admin["password_hash"]:
+            if admin and admin["active"] and admin["password_hash"]:
                 valid=password_verify(password,admin["password_hash"])
             elif secrets.compare_digest(username,ADMIN_USERNAME) and secrets.compare_digest(password,ADMIN_PASSWORD):
                 valid=True
