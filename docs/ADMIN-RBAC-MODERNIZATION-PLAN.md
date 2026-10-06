@@ -481,7 +481,7 @@ Never record:
 - [x] Custom role editing
 - [x] Custom role duplication
 - [x] Safe custom role deletion
-- [ ] Administrator assignment counts
+- [x] Administrator assignment counts
 - [ ] Mark milestone
 
 ### Phase C — Permission Catalog
@@ -576,7 +576,9 @@ Current status:
 
 **Completed task:** Phase B — Safe custom role deletion is complete, including built-in protection and reference checks before removal.
 
-**Next task:** Phase B — Administrator assignment counts.
+**Completed task:** Phase B — Administrator assignment counts are now displayed for built-in and custom roles from current administrator assignments.
+
+**Next task:** Phase B — Mark milestone.
 
 ---
 
