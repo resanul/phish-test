@@ -998,6 +998,13 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/groups/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.group_form())
+        if path=="/admin/campaigns/test-send":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            cid=parse_qs(p.query).get("id",[""])[0]
+            c=db(); campaign=c.execute("SELECT c.*,s.name smtp_name,s.from_email,s.from_name,s.reply_to,s.username,s.password_enc,s.host,s.port,s.security FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id WHERE c.id=?",(cid,)).fetchone(); c.close()
+            if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
+            body="<h1>Test Send</h1><div class='card'><p>Campaign: <b>%s</b></p><p>This sends one non-tracked test message using the configured SMTP profile. It does not target campaign recipients.</p><form class='form' method='post' action='/admin/campaigns/test-send'><input type='hidden' name='id' value='%s'><label>Test recipient email<input type='email' name='to_email' required maxlength='255'></label><button class='btn primary'>Send Test Message</button></form></div>"%(esc(campaign["name"]),cid)
+            return self.sendbody(200,self.admin_shell("Campaign Test Send",body,"Campaigns"))
         if path=="/admin/campaigns/launch":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=parse_qs(p.query).get("id",[""])[0]
