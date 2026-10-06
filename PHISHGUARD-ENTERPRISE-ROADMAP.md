@@ -242,7 +242,7 @@ Progress:
 - [x] Administrator status controls
 - [x] Safe self/last-admin protection
 - [x] Roles management and custom role lifecycle
-- [ ] Permission catalog and matrix
+- [x] Permission catalog and matrix
 - [ ] Granular role-permission enforcement
 - [ ] RBAC governance and security hardening
 - [ ] Optional resource-level scoping
