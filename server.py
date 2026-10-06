@@ -1139,6 +1139,22 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             subject=form.get("subject",["Security Awareness Simulation"])[0][:250]
             launch_at=form.get("launch_at",[""])[0][:40]
             send_by=form.get("send_by",[""])[0][:40]
+            timezone=form.get("timezone",["Asia/Dhaka"])[0][:80]
+            business_days=form.get("business_days",["Sun,Mon,Tue,Wed,Thu"])[0][:100]
+            window_start=form.get("window_start",["09:00"])[0][:5]
+            window_end=form.get("window_end",["17:00"])[0][:5]
+            try:
+                batch_size=max(1,min(1000,int(form.get("batch_size",["50"])[0])))
+                rate_per_minute=max(1,min(1000,int(form.get("rate_per_minute",["60"])[0])))
+                retry_max=max(0,min(5,int(form.get("retry_max",["2"])[0])))
+                retry_backoff=max(1,min(300,int(form.get("retry_backoff_seconds",["5"])[0])))
+                zone=ZoneInfo(timezone)
+                if datetime.strptime(window_end,"%H:%M") <= datetime.strptime(window_start,"%H:%M"): raise ValueError()
+                days={x.strip() for x in business_days.split(",") if x.strip()}
+                if not days or not days.issubset({"Mon","Tue","Wed","Thu","Fri","Sat","Sun"}): raise ValueError()
+                if launch_at and send_by and campaign_dt(send_by,zone) < campaign_dt(launch_at,zone): raise ValueError()
+            except Exception:
+                return self.sendbody(400,"Invalid scheduler settings or send-by deadline","text/plain")
             c=db()
             if not smtp_id or not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(smtp_id,)).fetchone():
                 c.close(); return self.sendbody(400,"A valid SMTP provider is required","text/plain")
@@ -1149,10 +1165,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             else:
                 targeted=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
             if cid:
-                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,now(),cid))
+                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,timezone=?,business_days=?,window_start=?,window_end=?,batch_size=?,rate_per_minute=?,retry_max=?,retry_backoff_seconds=?,cancel_requested=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),cid))
                 action="CAMPAIGN_UPDATE"
             else:
-                c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,now(),now()))
+                c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),now()))
                 action="CAMPAIGN_CREATE"
             c.commit(); c.close()
             audit(ADMIN_USERNAME,action,"%s targeted=%s group=%s"%(name,targeted,group_name or "all"),ip)
