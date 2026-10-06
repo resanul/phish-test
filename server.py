@@ -927,6 +927,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(200,self.smtp_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/templates" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.template_form(parse_qs(p.query).get("id",[None])[0]))
+            if path=="/admin/landing-pages" and parse_qs(p.query).get("id",[None])[0]:
+                return self.sendbody(200,self.landing_page_form(parse_qs(p.query).get("id",[None])[0]))
             return self.sendbody(200,self.feature_page(path))
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
