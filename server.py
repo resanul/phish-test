@@ -804,7 +804,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             rows=c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
             return self.admin_shell("Audit",'<h1>Audit Log</h1><p>Administrative actions and exports.</p><div class="card"><table class="table"><tr><th>Date</th><th>Time</th><th>Action</th><th>Details</th></tr>'+table+'</table></div>',"Audit Log")
-        if path=="/admin/reports":
+        if path=="/admin/reports" and not parse_qs(p.query).get("view",[""])[0]:
             try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
             total=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<?",(start_iso,end_iso)).fetchone()["n"]
