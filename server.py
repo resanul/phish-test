@@ -1113,6 +1113,27 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not name: return self.sendbody(400,"Group name required","text/plain")
             c=db(); c.execute("INSERT OR IGNORE INTO groups_tbl(name,department,created_at) VALUES(?,?,?)",(name,department,now())); c.commit(); c.close(); audit(ADMIN_USERNAME,"GROUP_CREATE",name,ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/groups"})
+        if p.path=="/admin/campaigns/control":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            cid=form.get("id",[""])[0]
+            action=form.get("action",[""])[0]
+            if action not in ("pause","resume","cancel"): return self.sendbody(400,"Invalid campaign action","text/plain")
+            c=db()
+            campaign=c.execute("SELECT id,status FROM campaigns WHERE id=?",(cid,)).fetchone()
+            if not campaign:
+                c.close()
+                return self.sendbody(404,"Campaign not found","text/plain")
+            if action=="pause":
+                c.execute("UPDATE campaigns SET status='Paused',updated_at=? WHERE id=? AND status IN ('Scheduled','Active')",(now(),cid))
+            elif action=="resume":
+                c.execute("UPDATE campaigns SET status='Active',cancel_requested=0,updated_at=? WHERE id=? AND status='Paused'",(now(),cid))
+            else:
+                c.execute("UPDATE campaigns SET status='Cancelled',cancel_requested=1,updated_at=? WHERE id=? AND status NOT IN ('Completed','Cancelled','Expired')",(now(),cid))
+                c.execute("UPDATE campaign_queue SET status='Cancelled',updated_at=? WHERE campaign_id=? AND status IN ('Pending','Failed')",(now(),cid))
+            c.commit()
+            c.close()
+            audit(ADMIN_USERNAME,"CAMPAIGN_CONTROL","campaign=%s action=%s"%(cid,action),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/campaigns?id="+str(cid)})
         if p.path=="/admin/campaigns/launch":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=form.get("id",[""])[0]
