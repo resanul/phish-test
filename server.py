@@ -1415,6 +1415,13 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>")
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit"):
             return self.sendbody(200,self.feature_page(path))
+        if path=="/admin/smtp/diagnostics":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            sid=parse_qs(p.query).get("id",[""])[0]
+            c=db(); profile=c.execute("SELECT id,name,provider,host,port,security,from_name,from_email FROM smtp_profiles WHERE id=?",(sid,)).fetchone(); c.close()
+            if not profile: return self.sendbody(404,"SMTP profile not found","text/plain")
+            body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><p><b>%s</b> · %s · %s:%s · %s</p><p>Runs DNS → TCP → TLS → AUTH and optionally sends one diagnostic message. Secrets are never displayed.</p><form class="form" method="post" action="/admin/smtp/diagnostics"><input type="hidden" name="id" value="%s"><label>Diagnostic recipient email<input type="email" name="to_email" maxlength="254" placeholder="security@example.com"></label><button class="btn primary">Run Diagnostics</button></form></div>'%(esc(profile["name"]),esc(profile["provider"]),esc(profile["host"]),profile["port"],esc(profile["security"]),profile["id"])
+            return self.admin_shell("SMTP Diagnostics",body,"SMTP")
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
