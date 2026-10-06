@@ -1436,7 +1436,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             ok,msg=validate_landing_html(row["html_body"] or "")
             if not ok: return self.sendbody(400,msg,"text/plain")
             return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>")
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             return self.sendbody(200,self.feature_page(path))
         if path=="/admin/smtp/diagnostics":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
