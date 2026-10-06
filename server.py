@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64
+import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode
 from http import cookies
@@ -466,6 +466,61 @@ def audit(admin,action,details,ip):
     c=db()
     c.execute("INSERT INTO audit_logs(ts,admin,action,details,ip) VALUES(?,?,?,?,?)",(now(),admin,action,details,ip))
     c.commit(); c.close()
+
+def smtp_diagnostics(profile,to_email=""):
+    result=[]
+    host=profile["host"]; port=int(profile["port"]); security=profile["security"]
+    if not host:
+        return [{"stage":"DNS","status":"FAIL","detail":"SMTP host is empty."}]
+    try:
+        addresses=socket.getaddrinfo(host,port,type=socket.SOCK_STREAM)
+        result.append({"stage":"DNS","status":"PASS","detail":"Resolved %d address(es)."%len(addresses)})
+    except Exception as e:
+        return result+[{"stage":"DNS","status":"FAIL","detail":"DNS resolution failed."}]
+    try:
+        raw=socket.create_connection((host,port),timeout=10)
+        raw.close()
+        result.append({"stage":"TCP","status":"PASS","detail":"TCP connection established."})
+    except Exception:
+        return result+[{"stage":"TCP","status":"FAIL","detail":"TCP connection failed."}]
+    smtp=None
+    try:
+        if security=="SSL/TLS":
+            smtp=smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=15)
+            smtp.ehlo()
+        else:
+            smtp=smtplib.SMTP(host,port,timeout=15)
+            smtp.ehlo()
+            if security=="STARTTLS":
+                smtp.starttls(context=ssl.create_default_context()); smtp.ehlo()
+        result.append({"stage":"TLS","status":"PASS","detail":"SMTP TLS/session negotiation succeeded."})
+        if profile["username"]:
+            smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
+            result.append({"stage":"AUTH","status":"PASS","detail":"SMTP authentication succeeded."})
+        else:
+            result.append({"stage":"AUTH","status":"SKIP","detail":"No SMTP username configured; relay may use IP or other policy."})
+        if to_email:
+            msg=EmailMessage()
+            msg["Subject"]="[TEST] Trust PhishGuard SMTP diagnostics"
+            msg["From"]=formataddr((profile["from_name"] or "Trust PhishGuard",profile["from_email"]))
+            msg["To"]=to_email
+            if profile["reply_to"]: msg["Reply-To"]=profile["reply_to"]
+            msg.set_content("This is an authorized Trust PhishGuard SMTP connectivity diagnostic.")
+            smtp.send_message(msg)
+            result.append({"stage":"SEND","status":"PASS","detail":"Diagnostic test message accepted by SMTP server."})
+        else:
+            result.append({"stage":"SEND","status":"SKIP","detail":"No test recipient supplied."})
+    except smtplib.SMTPAuthenticationError:
+        result.append({"stage":"AUTH","status":"FAIL","detail":"SMTP authentication failed."})
+    except ssl.SSLError:
+        result.append({"stage":"TLS","status":"FAIL","detail":"TLS negotiation failed."})
+    except Exception:
+        result.append({"stage":"SEND" if to_email else "TLS","status":"FAIL","detail":"SMTP session operation failed."})
+    finally:
+        if smtp:
+            try: smtp.quit()
+            except Exception: pass
+    return result
 
 def smtp_connect(profile):
     host=profile["host"]; port=int(profile["port"]); security=profile["security"]
