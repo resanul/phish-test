@@ -225,6 +225,24 @@ Never fabricate metrics.
 - [ ] Deployment acceptance test execution on target server
 - [ ] Final production readiness review
 
+## Admin & RBAC Modernization Workstream
+
+A dedicated enterprise RBAC workstream is now tracked separately in `docs/ADMIN-RBAC-MODERNIZATION-PLAN.md`.
+
+Progress:
+- [x] Baseline repository/progress checked
+- [x] Existing admin/RBAC implementation reviewed
+- [x] RBAC modernization gap identified
+- [x] Full implementation plan recorded
+- [ ] Administrator creation workflow
+- [ ] Roles management and custom role lifecycle
+- [ ] Permission catalog and matrix
+- [ ] Granular role-permission enforcement
+- [ ] RBAC governance and security hardening
+- [ ] Optional resource-level scoping
+
+**Execution rule:** Before every implementation step, check progress first, perform one small task, validate it, mark it complete, and commit atomically.
+
 ## Definition of Done
 PhishGuard is enterprise-ready for the internal simulation use case when SMTP, campaigns, recipients/groups, reusable templates/landing pages, controlled scheduling, reliable campaign/recipient event correlation, bot handling, explainable risk history, training tracking, truthful reporting, protected secrets, audited admin actions, and deployment/rollback controls are all complete.
 
