@@ -140,6 +140,10 @@ def db():
         updated_at TEXT
     );
     """)
+    cols_risk={row[1] for row in c.execute("PRAGMA table_info(risk_scores)").fetchall()}
+    for col,definition in (("repeat_offender","INTEGER DEFAULT 0"),("remediation_status","TEXT DEFAULT 'None'"),("remediation_due_at","TEXT"),("factor_summary","TEXT")):
+        if col not in cols_risk:
+            c.execute("ALTER TABLE risk_scores ADD COLUMN %s %s"%(col,definition))
     cols_recipient={row[1] for row in c.execute("PRAGMA table_info(recipients)").fetchall()}
     for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'")):
         if col not in cols_recipient:
@@ -239,6 +243,16 @@ def snapshot_risk_history():
     for r in c.execute("""SELECT r.department,AVG(rs.score) score,SUM(rs.failures) failures,COUNT(*) members FROM recipients r JOIN risk_scores rs ON lower(r.email)=lower(rs.email) WHERE r.department!='' GROUP BY r.department"""):
         score=float(r["score"] or 0); level="High" if score>=70 else ("Medium" if score>=40 else "Low")
         c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("department",r["department"],score,level,int(r["failures"] or 0),ts,"members=%s"%r["members"]))
+    campaigns=c.execute("""SELECT c.id,c.name,COALESCE(SUM(CASE WHEN e.event='click' THEN 1 ELSE 0 END),0) clicks,
+                          COALESCE(SUM(CASE WHEN e.event='form_action' THEN 1 ELSE 0 END),0) actions,
+                          COALESCE(SUM(CASE WHEN e.event='report' THEN 1 ELSE 0 END),0) reports,
+                          COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Sent'),0) sent
+                          FROM campaigns c LEFT JOIN events e ON e.campaign_id=c.id GROUP BY c.id,c.name""").fetchall()
+    for r in campaigns:
+        sent=max(int(r["sent"] or 0),1)
+        score=max(0,min(100,(r["clicks"]*100.0/sent*0.6)+(r["actions"]*100.0/sent*0.4)-(r["reports"]*5)))
+        level="High" if score>=70 else ("Medium" if score>=40 else "Low")
+        c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("campaign",str(r["id"]),score,level,int(r["clicks"]+r["actions"]),ts,"campaign=%s;sent=%s;clicks=%s;actions=%s;reports=%s"%(r["name"],r["sent"],r["clicks"],r["actions"],r["reports"])))
     c.commit(); c.close()
 
 def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id="",token=""):
@@ -540,9 +554,23 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),r["events"],r["clicks"] or 0,r["submissions"] or 0) for r in rows) or '<tr><td colspan="6">No users recorded yet.</td></tr>'
             return self.admin_shell("Users",'<h1>Users & Groups</h1><p>Observed simulation users and engagement.</p><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Employee ID</th><th>Events</th><th>Clicks</th><th>Submissions</th></tr>'+table+'</table></div>',"Users & Groups")
         if path=="/admin/risk":
-            rows=c.execute("SELECT * FROM risk_scores ORDER BY score DESC").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%.0f</td><td><span class="pill">%s</span></td></tr>'%(esc(r["email"]),r["failures"],r["score"],r["level"]) for r in rows) or '<tr><td colspan="4">No risk data yet.</td></tr>'
-            return self.admin_shell("Risk",'<h1>Risk & Trends</h1><p>Heuristic user risk from observed simulation events.</p><div class="card"><table class="table"><tr><th>User</th><th>Failures</th><th>Score</th><th>Risk</th></tr>'+table+'</table></div>',"Risk & Trends")
+            snapshot_risk_history()
+            c=db()
+            rows=c.execute("SELECT * FROM risk_scores ORDER BY score DESC,email").fetchall()
+            departments=c.execute("""SELECT r.department,ROUND(AVG(rs.score),1) score,COUNT(*) members,SUM(rs.failures) failures
+                                     FROM recipients r JOIN risk_scores rs ON lower(r.email)=lower(rs.email)
+                                     WHERE r.department!='' GROUP BY r.department ORDER BY score DESC""").fetchall()
+            campaigns=c.execute("""SELECT c.id,c.name,COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Sent'),0) sent,
+                                   COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='click'),0) clicks,
+                                   COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='form_action'),0) actions,
+                                   COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='report'),0) reports FROM campaigns c ORDER BY c.id DESC LIMIT 100""").fetchall()
+            history=c.execute("SELECT * FROM risk_history WHERE scope='user' ORDER BY id DESC LIMIT 50").fetchall(); c.close()
+            table="".join('<tr><td>%s</td><td>%s</td><td>%.0f</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(r["email"]),r["failures"],r["score"],esc(r["level"]),"Yes" if r["repeat_offender"] else "No",esc(r["remediation_status"] or "None"),esc(r["factor_summary"] or "")) for r in rows) or '<tr><td colspan="7">No risk data yet.</td></tr>'
+            dept="".join('<tr><td>%s</td><td>%s</td><td>%.1f</td><td>%s</td></tr>'%(esc(r["department"]),r["members"],r["score"],r["failures"]) for r in departments) or '<tr><td colspan="4">No department risk data.</td></tr>'
+            camp="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td>%s</td></tr>'%(r["id"],esc(r["name"]),r["sent"],(r["clicks"] or 0)/max(r["sent"],1)*100,(r["actions"] or 0)/max(r["sent"],1)*100,r["reports"] or 0) for r in campaigns) or '<tr><td colspan="6">No campaign risk data.</td></tr>'
+            hist="".join('<tr><td>%s</td><td>%s</td><td>%.0f</td><td>%s</td><td>%s</td></tr>'%(esc(r["subject"]),esc(r["recorded_at"]),r["score"],esc(r["level"]),esc(r["factors"] or "")) for r in history) or '<tr><td colspan="5">No risk history yet.</td></tr>'
+            body='<h1>Risk & Trends</h1><p>Explainable risk based only on measured click, form-action and report telemetry.</p><div class="card"><h3>User Risk</h3><div class="table-wrap"><table class="table"><tr><th>User</th><th>Failures</th><th>Score</th><th>Risk</th><th>Repeat</th><th>Remediation</th><th>Factors</th></tr>%s</table></div></div><div class="card" style="margin-top:15px"><h3>Department Risk</h3><table class="table"><tr><th>Department</th><th>Members</th><th>Avg Score</th><th>Failures</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>Campaign Risk</h3><table class="table"><tr><th>ID</th><th>Campaign</th><th>Sent</th><th>Click Rate</th><th>Action Rate</th><th>Reports</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>User Risk History</h3><div class="table-wrap"><table class="table"><tr><th>User</th><th>Recorded</th><th>Score</th><th>Risk</th><th>Factors</th></tr>%s</table></div></div>'%(table,dept,camp,hist)
+            return self.admin_shell("Risk",body,"Risk & Trends")
         if path=="/admin/audit":
             rows=c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
