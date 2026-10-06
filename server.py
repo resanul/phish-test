@@ -164,7 +164,7 @@ def db():
         created_at TEXT
     )""")
     cols_campaign={row[1] for row in c.execute("PRAGMA table_info(campaigns)").fetchall()}
-    for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT"),("group_name","TEXT")):
+    for col,definition in (("smtp_profile_id","INTEGER"),("landing_page_id","INTEGER"),("subject","TEXT"),("launch_at","TEXT"),("send_by","TEXT"),("group_name","TEXT"),("timezone","TEXT DEFAULT 'Asia/Dhaka'"),("business_days","TEXT DEFAULT 'Sun,Mon,Tue,Wed,Thu'"),("window_start","TEXT DEFAULT '09:00'"),("window_end","TEXT DEFAULT '17:00'"),("batch_size","INTEGER DEFAULT 50"),("rate_per_minute","INTEGER DEFAULT 60"),("retry_max","INTEGER DEFAULT 2"),("retry_backoff_seconds","INTEGER DEFAULT 5"),("cancel_requested","INTEGER DEFAULT 0")):
         if col not in cols_campaign:
             c.execute("ALTER TABLE campaigns ADD COLUMN %s %s"%(col,definition))
     if not c.execute("SELECT 1 FROM admins WHERE username=?",(ADMIN_USERNAME,)).fetchone():
