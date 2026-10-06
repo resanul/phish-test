@@ -241,7 +241,7 @@ Progress:
 - [x] Existing-role assignment
 - [x] Administrator status controls
 - [x] Safe self/last-admin protection
-- [ ] Roles management and custom role lifecycle
+- [x] Roles management and custom role lifecycle
 - [ ] Permission catalog and matrix
 - [ ] Granular role-permission enforcement
 - [ ] RBAC governance and security hardening
@@ -254,5 +254,7 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
+
+**Current RBAC milestone:** Phase B — Role Management is complete. The next RBAC phase is Permission Catalog.
 
 **Current implementation milestone:** Deployment acceptance tooling now includes `acceptance-test.sh`, which performs safe server-side baseline checks for service state, Python syntax, HTTP health, runtime-directory Git exclusions, and credential-safety enforcement. Target-server execution and final production-readiness review remain pending. Landing Page Editor is implemented with editable HTML/plain-text content, version history, preview, size limits, and a safety field-policy validator that blocks credential collection fields. Campaign Scheduler/Throttling remains implemented with timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Phase 2 campaign-engine controls are complete, including pre-launch validation and non-tracked SMTP test-send. Executive Reporting core views are now implemented: campaign comparison, department reporting, monthly reporting, executive dashboard, risk/resilience trends, and date-range filters. Phase 7 is complete: executive PDF export and scheduled PDF email reports are implemented. Security hardening now includes security response headers, same-origin CSRF protection, login rate limiting, hashed admin credentials, least-privilege admin roles, role-based module enforcement, active-account controls, hardened session cookies, and idle/absolute session timeouts. Template Builder completion is implemented: sender metadata, non-tracked test-send, version history, ownership/status/archiving, and safe reusable variables are complete. SMTP connectivity diagnostics and the SMTP OAuth2 abstraction are implemented. OAuth2 uses encrypted server-local token storage and XOAUTH2 authentication; provider-specific consent/token acquisition flows remain outside this abstraction. Core README and enterprise acceptance documentation are now added. Remaining milestone: execute deployment acceptance testing on the target server and complete final production-readiness review.

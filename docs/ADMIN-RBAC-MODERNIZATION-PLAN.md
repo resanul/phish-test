@@ -482,7 +482,7 @@ Never record:
 - [x] Custom role duplication
 - [x] Safe custom role deletion
 - [x] Administrator assignment counts
-- [ ] Mark milestone
+- [x] Mark milestone
 
 ### Phase C — Permission Catalog
 
@@ -578,7 +578,9 @@ Current status:
 
 **Completed task:** Phase B — Administrator assignment counts are now displayed for built-in and custom roles from current administrator assignments.
 
-**Next task:** Phase B — Mark milestone.
+**Completed milestone:** Phase B — Role Management is complete, covering protected built-in role display, custom role persistence and lifecycle, safe deletion, and administrator assignment counts.
+
+**Next task:** Phase C — Permission catalog schema.
 
 ---
 
