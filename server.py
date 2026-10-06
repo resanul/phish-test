@@ -903,6 +903,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 else: result="Completed - Score Pending"; status="Completed"
             c.execute("UPDATE training_assignments SET completion=?,score=?,result=?,status=?,completed_at=?,result_at=? WHERE id=?",(completion,score,result,status,completed_at,now(),aid))
             c.execute("""INSERT INTO training_records(email,completion,course,updated_at) VALUES(?,?,?,?) ON CONFLICT(email) DO UPDATE SET completion=excluded.completion,course=excluded.course,updated_at=excluded.updated_at""",(a["email"],completion,a["course"],now())); c.commit(); c.close()
+            if result=="Passed":
+                record(ip,"training","training_completed","",a["email"] or "","","", "", "",a["trigger_campaign_id"] or "",a["recipient_id"],"")
             audit(ADMIN_USERNAME,"TRAINING_RESULT_UPDATE",f"assignment={aid} result={result} score={score if score is not None else ''}",ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/training"})
         if p.path=="/admin/training/course/save":
@@ -926,7 +928,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 c.execute("""INSERT INTO training_assignments(course_id,recipient_id,assigned_at,due_at,status,completion,score,result,trigger_campaign_id,remediation_campaign_id)
                              VALUES(?,?,?,?,?,?,?,?,?,?)""",(course_id,recipient_id,now(),due_at,"Assigned",0,None,"Pending",trigger_campaign_id or None,remediation_campaign_id or None)); c.commit()
             except sqlite3.IntegrityError: c.close(); return self.sendbody(409,"Training is already assigned to this recipient","text/plain")
-            c.close(); audit(ADMIN_USERNAME,"TRAINING_ASSIGN",f"course={course_id} recipient={recipient_id} trigger_campaign={trigger_campaign_id or ''} remediation_campaign={remediation_campaign_id or ''}",ip)
+            c.close()
+            record(ip,"training","training_assigned",recipient["name"] or "",recipient["email"] or "","","",recipient["employee_id"] or "","",trigger_campaign_id or "",recipient_id,"")
+            audit(ADMIN_USERNAME,"TRAINING_ASSIGN",f"course={course_id} recipient={recipient_id} trigger_campaign={trigger_campaign_id or ''} remediation_campaign={remediation_campaign_id or ''}",ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/training"})
         if p.path=="/admin/recipients/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
