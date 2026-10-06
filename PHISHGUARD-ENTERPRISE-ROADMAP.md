@@ -237,6 +237,7 @@ Progress:
 - [x] Administrator creation schema foundation
 - [x] Administrator creation backend
 - [x] Administrator creation UI
+- [x] Administrator access preview
 - [ ] Roles management and custom role lifecycle
 - [ ] Permission catalog and matrix
 - [ ] Granular role-permission enforcement

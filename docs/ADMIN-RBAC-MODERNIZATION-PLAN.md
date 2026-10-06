@@ -466,7 +466,7 @@ Never record:
 - [x] Administrator creation schema compatibility
 - [x] Add Administrator creation backend
 - [x] Add Administrator workflow
-- [ ] Administrator profile/access preview
+- [x] Administrator profile/access preview
 - [ ] Existing-role assignment
 - [ ] Administrator status controls
 - [ ] Safe self/last-admin protection
@@ -573,7 +573,7 @@ Current status:
 
 **Completed task:** Phase A — administrator creation workflow now includes the administrator creation backend and UI using the existing hashed-password model and built-in roles.
 
-**Next task:** Phase A — Administrator profile/access preview.
+**Next task:** Phase A — Existing-role assignment.
 
 ---
 
