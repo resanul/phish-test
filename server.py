@@ -1773,6 +1773,35 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             audit(admin["username"],"ADMIN_CREATE","username=%s role=%s"%(username,role),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins"})
 
+        if p.path=="/admin/roles/create":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            name=form.get("name",[""])[0].strip()
+            description=form.get("description",[""])[0].strip()
+            if not name or len(name)>80 or "\r" in name or "\n" in name:
+                return self.sendbody(400,"Custom role name must be 1-80 characters and must not contain line breaks","text/plain")
+            if len(description)>500 or "\r" in description or "\n" in description:
+                return self.sendbody(400,"Role description must be 500 characters or fewer and must not contain line breaks","text/plain")
+            slug=re.sub(r"[^a-z0-9]+","-",name.lower()).strip("-")
+            if not slug or len(slug)>80:
+                return self.sendbody(400,"Invalid custom role name","text/plain")
+            built_in_roles=("Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor")
+            if name in built_in_roles:
+                return self.sendbody(400,"Built-in role names are protected","text/plain")
+            c=db()
+            existing=c.execute("SELECT id FROM rbac_roles WHERE lower(name)=lower(?) OR slug=?",(name,slug)).fetchone()
+            if existing:
+                c.close()
+                return self.sendbody(409,"A custom role with this name already exists","text/plain")
+            ts=now()
+            c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                      (name,slug,description,0,1,ts,ts))
+            c.commit()
+            c.close()
+            audit(admin["username"],"ROLE_CREATE","name=%s slug=%s"%(name,slug),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
+
         if p.path=="/admin/admins/save":
             admin=self.current_admin()
             if not admin or admin.get("role")!="Administrator": return self.sendbody(403,"Administrator role required","text/plain")
