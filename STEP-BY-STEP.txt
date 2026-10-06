@@ -5,3 +5,47 @@
 4. Test: curl -i http://127.0.0.1:8080/admin
 5. Browse: http://abcd.com:8080/admin
 6. Future updates: ./update.sh
+
+# Admin acceptance checklist
+
+## Authentication and roles
+1. Verify administrator login.
+2. Open Admin Users and Roles.
+3. Confirm role-based access with a test non-administrator account.
+4. Confirm disabled accounts cannot authenticate.
+5. Confirm an idle session expires after the configured inactivity period.
+
+## Template Builder
+1. Create/update a template.
+2. Set From Name, From Email and Reply-To.
+3. Save and confirm a new version appears in Version History.
+4. Set Owner and Status.
+5. Verify Archived templates cannot be launched or test-sent.
+6. Run Template Test Send to one authorized test mailbox.
+7. Test safe variables such as {{name}} and {{department}}.
+8. Confirm credential fields are rejected by template validation.
+
+## SMTP
+1. Open an enabled SMTP profile.
+2. Run Diagnostics with an authorized test mailbox.
+3. Verify DNS, TCP, TLS and AUTH results.
+4. If SEND is requested, confirm exactly one diagnostic message is received.
+5. Confirm no SMTP password/token appears in the UI or audit details.
+
+## Campaign
+1. Create a Draft campaign.
+2. Run pre-launch validation.
+3. Send a non-tracked test message.
+4. Verify timezone, business days, sending window, batch/rate settings and send-by.
+5. Launch only against the approved internal target scope.
+6. Verify delivery, click, action/report and bot telemetry.
+7. Verify pause/resume/cancel behavior.
+
+## Reporting and recovery
+1. Open campaign, department, monthly, executive and risk/trend reports.
+2. Export a PDF report.
+3. Verify scheduled report delivery to an authorized mailbox.
+4. Test CSV export does not contain SMTP secrets.
+5. Run ./update.sh and verify the health check.
+6. Verify ./rollback.sh <commit-sha> restores the previous application version.
+
