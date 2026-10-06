@@ -487,7 +487,7 @@ Never record:
 ### Phase C — Permission Catalog
 
 - [x] Permission catalog schema
-- [ ] Seed permission definitions
+- [x] Seed permission definitions
 - [ ] Permission search/filter
 - [ ] Permission matrix UI
 - [ ] Risk/privilege classification
@@ -582,7 +582,9 @@ Current status:
 
 **Completed task:** Phase C — Permission catalog schema is already present in the backend, including resource/action identity, labels/descriptions, risk classification, active state, uniqueness, and role-permission foreign-key structure.
 
-**Next task:** Phase C — Seed permission definitions.
+**Completed task:** Phase C — Seed permission definitions are now seeded idempotently in the backend with 38 resource/action definitions.
+
+**Next task:** Phase C — Permission search/filter.
 
 ---
 
