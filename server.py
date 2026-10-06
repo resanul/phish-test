@@ -349,53 +349,175 @@ def smtp_connect(profile):
         smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
     return smtp
 
-def send_campaign(campaign_id):
+def campaign_zone(campaign):
+    try:
+        return ZoneInfo(campaign["timezone"] or "Asia/Dhaka")
+    except Exception:
+        raise ValueError("Invalid campaign timezone")
+
+def campaign_dt(value, zone):
+    if not value:
+        return None
+    dt=datetime.fromisoformat(value)
+    return dt.replace(tzinfo=zone) if dt.tzinfo is None else dt.astimezone(zone)
+
+def campaign_window_open(campaign, when=None):
+    zone=campaign_zone(campaign)
+    local=(when or datetime.now(timezone.utc)).astimezone(zone)
+    days={x.strip() for x in (campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu").split(",") if x.strip()}
+    if days and local.strftime("%a") not in days:
+        return False
+    start=datetime.strptime(campaign["window_start"] or "09:00","%H:%M").time()
+    end=datetime.strptime(campaign["window_end"] or "17:00","%H:%M").time()
+    return start <= local.time() <= end
+
+def campaign_validation(campaign):
+    zone=campaign_zone(campaign)
+    launch=campaign_dt(campaign["launch_at"],zone)
+    deadline=campaign_dt(campaign["send_by"],zone)
+    if launch and deadline and deadline < launch:
+        raise ValueError("Send-by deadline must be after launch time")
+    start=datetime.strptime(campaign["window_start"] or "09:00","%H:%M")
+    end=datetime.strptime(campaign["window_end"] or "17:00","%H:%M")
+    if end <= start:
+        raise ValueError("Sending window end must be after start")
+    days={x.strip() for x in (campaign["business_days"] or "").split(",") if x.strip()}
+    if not days or not days.issubset({"Mon","Tue","Wed","Thu","Fri","Sat","Sun"}):
+        raise ValueError("Business days are invalid")
+    return launch,deadline
+
+def queue_campaign(campaign_id):
+    c=db()
+    campaign=c.execute("SELECT * FROM campaigns WHERE id=?",(campaign_id,)).fetchone()
+    if not campaign:
+        c.close()
+        raise ValueError("Campaign not found")
+    if campaign["group_name"]:
+        recipients=c.execute("SELECT id FROM recipients WHERE status!='Suppressed' AND group_name=? ORDER BY id",(campaign["group_name"],)).fetchall()
+    else:
+        recipients=c.execute("SELECT id FROM recipients WHERE status!='Suppressed' ORDER BY id").fetchall()
+    for rec in recipients:
+        c.execute("""INSERT OR IGNORE INTO campaign_queue
+                     (campaign_id,recipient_id,status,attempts,next_attempt_at,queued_at,updated_at)
+                     VALUES(?,?,?,?,?,?,?)""",(campaign_id,rec["id"],"Pending",0,now(),now(),now()))
+    c.execute("UPDATE campaigns SET targeted=?,updated_at=? WHERE id=?",(len(recipients),now(),campaign_id))
+    c.commit()
+    c.close()
+    return len(recipients)
+
+def _send_campaign_recipient(campaign,rec,queue_id):
+    c=db()
+    c.execute("UPDATE campaign_queue SET status='Sending',attempts=attempts+1,updated_at=? WHERE id=?",(now(),queue_id))
+    c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,attempted_at) VALUES(?,?,?,?)",(campaign["id"],rec["id"],"Attempted",now()))
+    delivery_id=c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+    c.commit()
+    c.close()
+    token=create_tracking_token(campaign["id"],rec["id"])
+    link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"t":token})
+    msg=EmailMessage()
+    msg["From"]=formataddr((campaign["from_name"] or "Trust PhishGuard",campaign["from_email"]))
+    if campaign["reply_to"]:
+        msg["Reply-To"]=campaign["reply_to"]
+    msg["To"]=rec["email"]
+    msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
+    msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,PUBLIC_BASE_URL+"/report?t="+token,PUBLIC_BASE_URL+"/qr?t="+token))
+    smtp=None
+    try:
+        smtp=smtp_connect(campaign)
+        smtp.send_message(msg)
+        c=db()
+        c.execute("UPDATE campaign_deliveries SET status='Sent',sent_at=?,error=NULL WHERE id=?",(now(),delivery_id))
+        c.execute("UPDATE campaign_queue SET status='Sent',next_attempt_at=NULL,last_error=NULL,updated_at=? WHERE id=?",(now(),queue_id))
+        c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec["id"],))
+        c.commit()
+        c.close()
+        record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",rec["mobile"] or "","campaign-delivery",rec["employee_id"] or "","",campaign["id"],rec["id"],token)
+        return True
+    except Exception as e:
+        err=str(e)[:500]
+        retry_at=(datetime.now(timezone.utc)+timedelta(seconds=max(1,int(campaign["retry_backoff_seconds"] or 5)))).isoformat()
+        c=db()
+        c.execute("UPDATE campaign_deliveries SET status='Failed',error=? WHERE id=?",(err,delivery_id))
+        c.execute("UPDATE campaign_queue SET status='Failed',last_error=?,next_attempt_at=?,updated_at=? WHERE id=?",(err,retry_at,now(),queue_id))
+        c.commit()
+        c.close()
+        return False
+    finally:
+        if smtp:
+            try: smtp.quit()
+            except Exception: pass
+
+def send_campaign(campaign_id,scheduled=False):
     if not PUBLIC_BASE_URL:
         raise RuntimeError("PUBLIC_BASE_URL is not configured")
     c=db()
     campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to
                           FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id
                           WHERE c.id=? AND s.enabled=1""",(campaign_id,)).fetchone()
+    c.close()
     if not campaign:
-        c.close(); raise RuntimeError("Campaign or SMTP profile not found")
-    group=campaign["group_name"]
-    if group:
-        recipients=c.execute("SELECT * FROM recipients WHERE status!='Suppressed' AND group_name=? ORDER BY id",(group,)).fetchall()
-    else:
-        recipients=c.execute("SELECT * FROM recipients WHERE status!='Suppressed' ORDER BY id").fetchall()
-    c.execute("UPDATE campaigns SET status='Active',updated_at=? WHERE id=?",(now(),campaign_id)); c.commit(); c.close()
-    sent=0; failed=0
-    smtp=smtp_connect(campaign)
-    try:
-        for rec in recipients:
-            c=db()
-            c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,attempted_at) VALUES(?,?,?,?)",(campaign_id,rec["id"],"Attempted",now()))
-            delivery_id=c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
-            c.commit(); c.close()
-            try:
-                token=create_tracking_token(campaign_id,rec["id"])
-                link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"t":token})
-                msg=EmailMessage()
-                msg["From"]=formataddr((campaign["from_name"] or "Trust PhishGuard",campaign["from_email"]))
-                if campaign["reply_to"]: msg["Reply-To"]=campaign["reply_to"]
-                msg["To"]=rec["email"]
-                msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
-                msg.set_content("Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested."%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,PUBLIC_BASE_URL+"/report?t="+token,PUBLIC_BASE_URL+"/qr?t="+token))
-                smtp.send_message(msg)
-                c=db(); c.execute("UPDATE campaign_deliveries SET status='Sent',sent_at=? WHERE id=?",(now(),delivery_id)); c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec["id"],)); c.commit(); c.close()
-                record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",rec["mobile"] or "", "campaign-delivery",rec["employee_id"] or "","",campaign_id,rec["id"],token)
-                sent+=1
-            except Exception:
-                c=db(); c.execute("UPDATE campaign_deliveries SET status='Failed',error=? WHERE id=?",("delivery failed",delivery_id)); c.commit(); c.close()
-                failed+=1
-            if SEND_DELAY>0:
-                import time; time.sleep(SEND_DELAY)
-    finally:
-        smtp.quit()
+        raise RuntimeError("Campaign or SMTP profile not found")
+    campaign_validation(campaign)
+    queued=queue_campaign(campaign_id)
+    if campaign["cancel_requested"] or campaign["status"] in ("Cancelled","Paused"):
+        return 0,0,queued
+    if scheduled and not campaign_window_open(campaign):
+        return 0,0,queued
     c=db()
-    c.execute("UPDATE campaigns SET status=?,updated_at=? WHERE id=?",("Completed" if failed==0 else "Active",now(),campaign_id))
-    c.commit(); c.close()
-    return sent,failed,len(recipients)
+    c.execute("UPDATE campaigns SET status='Active',updated_at=? WHERE id=?",(now(),campaign_id))
+    c.commit()
+    limit=max(1,int(campaign["batch_size"] or 50)) if scheduled else -1
+    qrows=c.execute("""SELECT q.*,r.* FROM campaign_queue q JOIN recipients r ON r.id=q.recipient_id
+                       WHERE q.campaign_id=? AND q.status IN ('Pending','Failed')
+                       AND (q.next_attempt_at IS NULL OR q.next_attempt_at<=?)
+                       AND r.status!='Suppressed' ORDER BY q.id LIMIT ?""",(campaign_id,now(),limit)).fetchall()
+    c.close()
+    sent=failed=0
+    interval=60.0/max(1,int(campaign["rate_per_minute"] or 60))
+    for idx,q in enumerate(qrows):
+        c=db()
+        current=c.execute("SELECT status,cancel_requested FROM campaigns WHERE id=?",(campaign_id,)).fetchone()
+        c.close()
+        if not current or current["cancel_requested"] or current["status"] in ("Cancelled","Paused"):
+            break
+        if not campaign_window_open(campaign):
+            break
+        if campaign["send_by"]:
+            deadline=campaign_dt(campaign["send_by"],campaign_zone(campaign))
+            if deadline and datetime.now(timezone.utc)>deadline.astimezone(timezone.utc):
+                c=db()
+                c.execute("UPDATE campaigns SET status='Expired',updated_at=? WHERE id=?",(now(),campaign_id))
+                c.execute("UPDATE campaign_queue SET status='Cancelled',updated_at=? WHERE campaign_id=? AND status IN ('Pending','Failed')",(now(),campaign_id))
+                c.commit()
+                c.close()
+                break
+        attempts=max(1,int(campaign["retry_max"] or 2)+1)
+        ok=False
+        for attempt in range(attempts):
+            ok=_send_campaign_recipient(campaign,q,q["id"])
+            if ok:
+                break
+            if attempt < attempts-1:
+                time.sleep(max(1,int(campaign["retry_backoff_seconds"] or 5))*(attempt+1))
+        if ok:
+            sent+=1
+        else:
+            failed+=1
+        if idx < len(qrows)-1:
+            time.sleep(interval)
+    c=db()
+    pending=c.execute("SELECT COUNT(*) n FROM campaign_queue WHERE campaign_id=? AND status IN ('Pending','Failed')",(campaign_id,)).fetchone()["n"]
+    current=c.execute("SELECT status,cancel_requested FROM campaigns WHERE id=?",(campaign_id,)).fetchone()
+    if current and current["cancel_requested"]:
+        c.execute("UPDATE campaign_queue SET status='Cancelled',updated_at=? WHERE campaign_id=? AND status IN ('Pending','Failed')",(now(),campaign_id))
+        c.execute("UPDATE campaigns SET status='Cancelled',updated_at=? WHERE id=?",(now(),campaign_id))
+    elif pending==0:
+        c.execute("UPDATE campaigns SET status='Completed',updated_at=? WHERE id=?",(now(),campaign_id))
+    else:
+        c.execute("UPDATE campaigns SET status='Active',updated_at=? WHERE id=?",(now(),campaign_id))
+    c.commit()
+    c.close()
+    return sent,failed,queued
 
 def format_datetime(ts):
     dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(TZ)
