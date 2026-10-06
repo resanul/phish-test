@@ -492,6 +492,34 @@ def _send_campaign_recipient(campaign,rec,queue_id):
             try: smtp.quit()
             except Exception: pass
 
+def campaign_prelaunch_validation(campaign):
+    errors=[]
+    if not campaign: return ["Campaign not found."]
+    if not os.environ.get("PUBLIC_BASE_URL","").strip(): errors.append("PUBLIC_BASE_URL is not configured.")
+    c=db()
+    smtp=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(campaign["smtp_profile_id"],)).fetchone() if campaign["smtp_profile_id"] else None
+    landing=c.execute("SELECT * FROM landing_pages WHERE id=? AND status='Enabled'",(campaign["landing_page_id"],)).fetchone() if campaign["landing_page_id"] else None
+    group=campaign["group_name"] or ""
+    recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(group,group)).fetchone()["n"]
+    c.close()
+    if not smtp: errors.append("Enabled SMTP provider is required.")
+    if not landing: errors.append("Enabled landing page is required.")
+    if not recipient_count: errors.append("No eligible recipients are available.")
+    if not (campaign["subject"] or "").strip(): errors.append("Campaign subject is required.")
+    if not re.fullmatch(r"\\d+",str(campaign["template"] or "")): errors.append("Template selection is invalid.")
+    ok,msg=validate_landing_html(landing["html_body"] if landing else "")
+    if landing and not ok: errors.append(msg)
+    try:
+        zone=ZoneInfo(campaign["timezone"] or "Asia/Dhaka")
+        if campaign["launch_at"] and campaign["send_by"] and campaign_dt(campaign["send_by"],zone)<campaign_dt(campaign["launch_at"],zone):
+            errors.append("Send-by deadline must be on or after launch time.")
+        datetime.strptime(campaign["window_start"],"%H:%M")
+        datetime.strptime(campaign["window_end"],"%H:%M")
+        if datetime.strptime(campaign["window_end"],"%H:%M")<=datetime.strptime(campaign["window_start"],"%H:%M"): errors.append("Sending window end must be later than start.")
+    except Exception:
+        errors.append("Campaign timezone or sending-window settings are invalid.")
+    return errors
+
 def send_campaign(campaign_id,scheduled=False):
     if not PUBLIC_BASE_URL:
         raise RuntimeError("PUBLIC_BASE_URL is not configured")
