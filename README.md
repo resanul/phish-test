@@ -72,16 +72,21 @@ Do not commit:
 - access logs
 - production secrets
 
-Set the admin password only in:
+Set the admin password only in the protected environment file:
 
-`/etc/systemd/system/phish-simulation.service`
+`/etc/phish-simulation.env`
 
-After changing it:
+Example:
 
 ```bash
+printf 'ADMIN_PASSWORD=%s\n' '<strong-random-password>' > /etc/phish-simulation.env
+chmod 600 /etc/phish-simulation.env
 systemctl daemon-reload
 systemctl restart phish-simulation
 ```
+
+The systemd unit loads this file with `EnvironmentFile=-/etc/phish-simulation.env`.
+
 ## Trust PhishGuard enterprise capabilities
 
 The platform currently includes:
