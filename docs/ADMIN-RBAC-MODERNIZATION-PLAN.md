@@ -469,7 +469,7 @@ Never record:
 - [x] Administrator profile/access preview
 - [x] Existing-role assignment
 - [x] Administrator status controls
-- [ ] Safe self/last-admin protection
+- [x] Safe self/last-admin protection
 - [ ] Mark milestone
 
 ### Phase B — Role Management
@@ -571,9 +571,9 @@ Current status:
 - [ ] Phase E — Governance/hardening
 - [ ] Phase F — Resource scoping
 
-**Completed task:** Phase A — administrator status controls now persist Active/Disabled state and emit dedicated ADMIN_ENABLE/ADMIN_DISABLE audit events while preserving role-change auditing.
+**Completed task:** Phase A — safe self/last-admin protection now blocks self-demotion/self-disable and prevents disabling or demoting the last active Administrator account.
 
-**Next task:** Phase A — Safe self/last-admin protection.
+**Next task:** Phase A — Mark milestone.
 
 ---
 
