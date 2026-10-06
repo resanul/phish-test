@@ -468,7 +468,7 @@ Never record:
 - [x] Add Administrator workflow
 - [x] Administrator profile/access preview
 - [x] Existing-role assignment
-- [ ] Administrator status controls
+- [x] Administrator status controls
 - [ ] Safe self/last-admin protection
 - [ ] Mark milestone
 
@@ -571,9 +571,9 @@ Current status:
 - [ ] Phase E — Governance/hardening
 - [ ] Phase F — Resource scoping
 
-**Completed task:** Phase A — existing-role assignment is now validated through the existing administrator save workflow, preserving the five built-in roles and auditing role changes.
+**Completed task:** Phase A — administrator status controls now persist Active/Disabled state and emit dedicated ADMIN_ENABLE/ADMIN_DISABLE audit events while preserving role-change auditing.
 
-**Next task:** Phase A — Administrator status controls.
+**Next task:** Phase A — Safe self/last-admin protection.
 
 ---
 

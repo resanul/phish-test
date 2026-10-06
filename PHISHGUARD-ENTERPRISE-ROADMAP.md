@@ -239,6 +239,7 @@ Progress:
 - [x] Administrator creation UI
 - [x] Administrator access preview
 - [x] Existing-role assignment
+- [x] Administrator status controls
 - [ ] Roles management and custom role lifecycle
 - [ ] Permission catalog and matrix
 - [ ] Granular role-permission enforcement

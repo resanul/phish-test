@@ -1769,12 +1769,18 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             active=form.get("active",["1"])[0]
             if not aid.isdigit() or role not in ("Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor") or active not in ("0","1"):
                 return self.sendbody(400,"Invalid administrator settings","text/plain")
-            c=db(); row=c.execute("SELECT username FROM admins WHERE id=?",(int(aid),)).fetchone()
+            c=db(); row=c.execute("SELECT username,role,active FROM admins WHERE id=?",(int(aid),)).fetchone()
             if not row: c.close(); return self.sendbody(404,"Administrator not found","text/plain")
             if row["username"]==admin["username"] and active=="0":
                 c.close(); return self.sendbody(400,"You cannot disable your current administrator account","text/plain")
-            c.execute("UPDATE admins SET role=?,active=? WHERE id=?",(role,int(active),int(aid))); c.commit(); c.close()
-            audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s role=%s active=%s"%(row["username"],role,active),ip)
+            old_role=row["role"] or "Administrator"
+            old_active=bool(row["active"])
+            new_active=(active=="1")
+            c.execute("UPDATE admins SET role=?,active=? WHERE id=?",(role,int(new_active),int(aid))); c.commit(); c.close()
+            if role!=old_role:
+                audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s role=%s"%(row["username"],role),ip)
+            if new_active!=old_active:
+                audit(admin["username"],"ADMIN_ENABLE" if new_active else "ADMIN_DISABLE","username=%s"%(row["username"]),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins"})
         if p.path=="/admin/risk/settings":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
