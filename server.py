@@ -1348,6 +1348,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(401,self.login_page("Invalid username or password"))
         if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.csrf_origin_ok():
             return self.sendbody(403,"CSRF validation failed","text/plain")
+        if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.role_allowed(p.path):
+            return self.sendbody(403,"Insufficient role permission","text/plain")
         if p.path=="/admin/landing-pages/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             lid=form.get("id",[""])[0]
