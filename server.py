@@ -1005,7 +1005,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(campaign["group_name"] if campaign else "",campaign["group_name"] if campaign else "")).fetchone()["n"] if campaign else 0
             c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
-            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Target recipients: <b>%s</b></p><p>This action sends the configured simulation message using the selected SMTP profile. Launch only after confirming your authorized test scope.</p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary">Launch Now</button></form></div>'%(esc(campaign["name"]),count,cid)
+            errors=campaign_prelaunch_validation(campaign)
+            checks="".join("<li style='color:%s'>%s</li>"%("#a12d2d" if e else "#087b59",esc(e or "Ready")) for e in errors) if errors else "<li style='color:#087b59'>All pre-launch checks passed.</li>"
+            disabled=" disabled" if errors else ""
+            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Eligible recipients: <b>%s</b></p><h3>Pre-launch validation</h3><ul>%s</ul><p>This action sends only to the configured authorized target scope.</p><p><a class="btn" href="/admin/campaigns/test-send?id=%s">Send Test Message</a></p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required%s> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary"%s>Launch Now</button></form></div>'%(esc(campaign["name"]),count,checks,cid,cid,disabled,disabled)
             return self.sendbody(200,self.admin_shell("Launch Campaign",body,"Campaigns"))
         if path=="/admin/campaigns/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
