@@ -237,24 +237,30 @@ def risk_recalculate(email=""):
 
 def snapshot_risk_history():
     risk_recalculate()
-    c=db(); ts=now()
-    for r in c.execute("SELECT email,score,level,failures,factor_summary FROM risk_scores"):
-        c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("user",r["email"],r["score"],r["level"],r["failures"],ts,r["factor_summary"] or ""))
-    for r in c.execute("""SELECT r.department,AVG(rs.score) score,SUM(rs.failures) failures,COUNT(*) members FROM recipients r JOIN risk_scores rs ON lower(r.email)=lower(rs.email) WHERE r.department!='' GROUP BY r.department"""):
+    c=db(); ts=now(); day=ts[:10]
+    user_rows=c.execute("SELECT email,score,level,failures,factor_summary FROM risk_scores").fetchall()
+    for r in user_rows:
+        if not c.execute("SELECT 1 FROM risk_history WHERE scope='user' AND subject=? AND substr(recorded_at,1,10)=?",(r["email"],day)).fetchone():
+            c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("user",r["email"],r["score"],r["level"],r["failures"],ts,r["factor_summary"] or ""))
+    dept_rows=c.execute("""SELECT r.department,AVG(rs.score) score,SUM(rs.failures) failures,COUNT(*) members
+                           FROM recipients r JOIN risk_scores rs ON lower(r.email)=lower(rs.email)
+                           WHERE r.department!='' GROUP BY r.department""").fetchall()
+    for r in dept_rows:
         score=float(r["score"] or 0); level="High" if score>=70 else ("Medium" if score>=40 else "Low")
-        c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("department",r["department"],score,level,int(r["failures"] or 0),ts,"members=%s"%r["members"]))
-    campaigns=c.execute("""SELECT c.id,c.name,COALESCE(SUM(CASE WHEN e.event='click' THEN 1 ELSE 0 END),0) clicks,
-                          COALESCE(SUM(CASE WHEN e.event='form_action' THEN 1 ELSE 0 END),0) actions,
-                          COALESCE(SUM(CASE WHEN e.event='report' THEN 1 ELSE 0 END),0) reports,
-                          COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Sent'),0) sent
-                          FROM campaigns c LEFT JOIN events e ON e.campaign_id=c.id GROUP BY c.id,c.name""").fetchall()
-    for r in campaigns:
+        if not c.execute("SELECT 1 FROM risk_history WHERE scope='department' AND subject=? AND substr(recorded_at,1,10)=?",(r["department"],day)).fetchone():
+            c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("department",r["department"],score,level,int(r["failures"] or 0),ts,"members=%s"%r["members"]))
+    campaign_rows=c.execute("""SELECT c.id,c.name,COALESCE(SUM(CASE WHEN e.event='click' THEN 1 ELSE 0 END),0) clicks,
+                               COALESCE(SUM(CASE WHEN e.event='form_action' THEN 1 ELSE 0 END),0) actions,
+                               COALESCE(SUM(CASE WHEN e.event='report' THEN 1 ELSE 0 END),0) reports,
+                               COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Sent'),0) sent
+                               FROM campaigns c LEFT JOIN events e ON e.campaign_id=c.id GROUP BY c.id,c.name""").fetchall()
+    for r in campaign_rows:
         sent=max(int(r["sent"] or 0),1)
         score=max(0,min(100,(r["clicks"]*100.0/sent*0.6)+(r["actions"]*100.0/sent*0.4)-(r["reports"]*5)))
         level="High" if score>=70 else ("Medium" if score>=40 else "Low")
-        c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("campaign",str(r["id"]),score,level,int(r["clicks"]+r["actions"]),ts,"campaign=%s;sent=%s;clicks=%s;actions=%s;reports=%s"%(r["name"],r["sent"],r["clicks"],r["actions"],r["reports"])))
+        if not c.execute("SELECT 1 FROM risk_history WHERE scope='campaign' AND subject=? AND substr(recorded_at,1,10)=?",(str(r["id"]),day)).fetchone():
+            c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("campaign",str(r["id"]),score,level,int(r["clicks"]+r["actions"]),ts,"campaign=%s;sent=%s;clicks=%s;actions=%s;reports=%s"%(r["name"],r["sent"],r["clicks"],r["actions"],r["reports"])))
     c.commit(); c.close()
-
 def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id="",token=""):
     if event not in EVENT_TAXONOMY: raise ValueError("Unsupported event taxonomy: %s" % event)
     c=db()
