@@ -489,7 +489,7 @@ Never record:
 - [x] Permission catalog schema
 - [x] Seed permission definitions
 - [x] Permission search/filter
-- [ ] Permission matrix UI
+- [x] Permission matrix UI
 - [ ] Risk/privilege classification
 - [ ] Mark milestone
 
@@ -586,7 +586,9 @@ Current status:
 
 **Completed task:** Phase C — Permission search/filter is now available in the administrator Permission Catalog with text search and resource filtering across the seeded definitions.
 
-**Next task:** Phase C — Permission matrix UI.
+**Completed task:** Phase C — Permission matrix UI is now available as a read-only resource/action grid in the administrator Permission Catalog, with the existing search/resource filters applied to the matrix.
+
+**Next task:** Phase C — Risk/privilege classification.
 
 ---
 
