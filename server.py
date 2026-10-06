@@ -1272,7 +1272,15 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(403,"Administrator role required","text/plain")
             tab=parse_qs(query).get("tab",["administrators"])[0]
             if tab=="roles":
-                body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Roles</h3><p class="sub">Role management workspace is ready. Built-in role details will be added in the next RBAC task.</p></div>'
+                built_in_roles=[
+                    ("Administrator","Full administrative control","Protected built-in role"),
+                    ("Campaign Manager","Campaigns, templates, landing pages, recipients, groups and training","Built-in role"),
+                    ("Reporting Analyst","Reports, risk analytics and exports","Built-in role"),
+                    ("SMTP Manager","SMTP provider profiles, diagnostics and delivery settings","Built-in role"),
+                    ("Security Auditor","Audit log and security activity review","Built-in role")
+                ]
+                role_cards="".join('<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>%s</h3><p class="sub">%s</p></div><span class="sub">%s</span></div></div>'%(esc(name),esc(desc),esc(kind)) for name,desc,kind in built_in_roles)
+                body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%role_cards
                 return self.admin_shell("Admin Users",body,"Admin Users")
             rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
             c.close()
