@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time
+import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode
 from http import cookies
@@ -19,7 +19,7 @@ PUBLIC_BASE_URL=os.environ.get("PUBLIC_BASE_URL","").rstrip("/")
 SEND_DELAY=float(os.environ.get("SEND_DELAY_SECONDS","0.2"))
 ADMIN_USERNAME=os.environ.get("ADMIN_USERNAME","admin")
 ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
-SESSIONS=set()
+SESSIONS={}
 LOGIN_ATTEMPTS={}
 TZ=ZoneInfo("Asia/Dhaka")
 SMTP_KEY=DATA+"/.smtp_master_key"
@@ -33,6 +33,22 @@ SMTP_PROVIDERS={
     "Mailgun":{"host":"smtp.mailgun.org","port":587,"security":"STARTTLS"},
     "Custom SMTP":{"host":"","port":587,"security":"STARTTLS"}
 }
+
+def password_hash(password):
+    salt=secrets.token_bytes(16)
+    digest=hashlib.pbkdf2_hmac("sha256",password.encode(),salt,150000)
+    return "pbkdf2_sha256$150000$%s$%s"%(base64.urlsafe_b64encode(salt).decode(),base64.urlsafe_b64encode(digest).decode())
+
+def password_verify(password,stored):
+    try:
+        algo,iterations,salt_b64,digest_b64=stored.split("$",3)
+        if algo!="pbkdf2_sha256": return False
+        salt=base64.urlsafe_b64decode(salt_b64.encode())
+        expected=base64.urlsafe_b64decode(digest_b64.encode())
+        actual=hashlib.pbkdf2_hmac("sha256",password.encode(),salt,int(iterations))
+        return hmac.compare_digest(actual,expected)
+    except Exception:
+        return False
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -72,10 +88,11 @@ def db():
     CREATE INDEX IF NOT EXISTS idx_events_recipient_event ON events(recipient_id,event);
     """)
     c.executescript("""
-    CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, role TEXT DEFAULT "Administrator", created_at TEXT);
+    CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, role TEXT DEFAULT "Administrator", password_hash TEXT, created_at TEXT);
     cols_admin={row[1] for row in c.execute("PRAGMA table_info(admins)").fetchall()}
     if "role" not in cols_admin: c.execute('ALTER TABLE admins ADD COLUMN role TEXT DEFAULT "Administrator"')
-    c.execute("INSERT OR IGNORE INTO admins(username,role,created_at) VALUES(?,?,?)",(ADMIN_USERNAME,"Administrator",now()))
+    if "password_hash" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN password_hash TEXT")
+    c.execute("INSERT OR IGNORE INTO admins(username,role,password_hash,created_at) VALUES(?,?,?,?)",(ADMIN_USERNAME,"Administrator",password_hash(ADMIN_PASSWORD),now()))
     CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);
     CREATE TABLE IF NOT EXISTS groups_tbl(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,department TEXT,created_at TEXT);
