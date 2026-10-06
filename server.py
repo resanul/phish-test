@@ -77,6 +77,10 @@ def db():
     CREATE TABLE IF NOT EXISTS groups_tbl(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,department TEXT,created_at TEXT);
     CREATE TABLE IF NOT EXISTS landing_pages(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,template TEXT,status TEXT DEFAULT 'Enabled',created_at TEXT);
     CREATE TABLE IF NOT EXISTS risk_scores(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,score REAL DEFAULT 0,level TEXT DEFAULT 'Low',failures INTEGER DEFAULT 0,last_event TEXT,updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS risk_history(id INTEGER PRIMARY KEY AUTOINCREMENT,scope TEXT NOT NULL,subject TEXT NOT NULL,score REAL DEFAULT 0,level TEXT DEFAULT 'Low',failures INTEGER DEFAULT 0,recorded_at TEXT NOT NULL,factors TEXT);
+    CREATE INDEX IF NOT EXISTS idx_risk_history_scope_subject_time ON risk_history(scope,subject,recorded_at);
+    CREATE TABLE IF NOT EXISTS risk_settings(key TEXT PRIMARY KEY,value TEXT);
+    INSERT OR IGNORE INTO risk_settings(key,value) VALUES('click_weight','20'),('form_action_weight','35'),('report_bonus','-10'),('repeat_bonus','15'),('lookback_days','180'),('high_threshold','70'),('medium_threshold','40');
     CREATE TABLE IF NOT EXISTS training_records(id INTEGER PRIMARY KEY AUTOINCREMENT,email TEXT UNIQUE,completion REAL DEFAULT 0,course TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS training_courses(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,37 +199,58 @@ def resolve_tracking_token(token):
     c=db(); row=c.execute("SELECT * FROM tracking_tokens WHERE token=?",(token,)).fetchone(); c.close()
     return row
 
-def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id="",token=""):
-    if event not in EVENT_TAXONOMY:
-        raise ValueError("Unsupported event taxonomy: %s" % event)
-    c=db()
-    if token and event in ("click","form_action","report","QR_scan","open"):
-        try:
-            c.execute("INSERT INTO event_dedup(token,event,first_seen_at) VALUES(?,?,?)",(token,event,now()))
-        except sqlite3.IntegrityError:
-            c.close(); return False
-    c.execute(
-        "INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type,campaign_id,recipient_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-        (datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type,campaign_id,recipient_id))
-    c.commit()
-    if email:
-        row=c.execute("SELECT * FROM risk_scores WHERE email=?",(email,)).fetchone()
-        failures=(row["failures"] if row else 0)+(1 if event in ("click","form_action") else 0)
-        score=min(100,failures*20); level="High" if score>=70 else ("Medium" if score>=40 else "Low")
-        c.execute("""INSERT INTO risk_scores(email,score,level,failures,last_event,updated_at) VALUES(?,?,?,?,?,?)
-        ON CONFLICT(email) DO UPDATE SET score=excluded.score,level=excluded.level,failures=excluded.failures,last_event=excluded.last_event,updated_at=excluded.updated_at""",(email,score,level,failures,event,now()))
-        c.commit()
-    c.close()
-    return True
+def risk_settings(c=None):
+    own=False
+    if c is None: c=db(); own=True
+    rows=c.execute("SELECT key,value FROM risk_settings").fetchall()
+    vals={r["key"]:r["value"] for r in rows}
+    if own: c.close()
+    def num(k,d):
+        try: return float(vals.get(k,d))
+        except: return float(d)
+    return {"click_weight":num("click_weight",20),"form_action_weight":num("form_action_weight",35),"report_bonus":num("report_bonus",-10),"repeat_bonus":num("repeat_bonus",15),"lookback_days":max(1,int(num("lookback_days",180))),"high_threshold":num("high_threshold",70),"medium_threshold":num("medium_threshold",40)}
 
 def risk_recalculate(email=""):
+    c=db(); cfg=risk_settings(c)
+    cutoff=(datetime.now(timezone.utc)-timedelta(days=cfg["lookback_days"])).isoformat()
+    rows=c.execute("SELECT email,event,campaign_id,ts FROM events WHERE email!='' AND ts>=?"+(" AND email=?" if email else ""), (cutoff,email) if email else (cutoff,)).fetchall()
+    grouped={}
+    for r in rows: grouped.setdefault(r["email"],[]).append(r)
+    if email and email not in grouped: grouped[email]=[]
+    for addr,evs in grouped.items():
+        clicks=sum(r["event"]=="click" for r in evs); actions=sum(r["event"]=="form_action" for r in evs); reports=sum(r["event"]=="report" for r in evs)
+        failures=clicks+actions; campaigns={str(r["campaign_id"]) for r in evs if r["campaign_id"] not in (None,"")}
+        repeat=int(failures>=2 and len(campaigns)>=2)
+        score=max(0,min(100,clicks*cfg["click_weight"]+actions*cfg["form_action_weight"]+reports*cfg["report_bonus"]+repeat*cfg["repeat_bonus"]))
+        level="High" if score>=cfg["high_threshold"] else ("Medium" if score>=cfg["medium_threshold"] else "Low")
+        factors="clicks=%d;form_actions=%d;reports=%d;campaigns=%d;repeat_offender=%s;lookback_days=%d"%(clicks,actions,reports,len(campaigns),"yes" if repeat else "no",cfg["lookback_days"])
+        cur=c.execute("SELECT remediation_status,remediation_due_at FROM risk_scores WHERE email=?",(addr,)).fetchone()
+        rem=(cur["remediation_status"] if cur else "") or ("Required" if level=="High" else ("Recommended" if level=="Medium" else "None"))
+        due=cur["remediation_due_at"] if cur else ""
+        c.execute("""INSERT INTO risk_scores(email,score,level,failures,last_event,updated_at,repeat_offender,remediation_status,remediation_due_at,factor_summary)
+        VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET score=excluded.score,level=excluded.level,failures=excluded.failures,last_event=excluded.last_event,updated_at=excluded.updated_at,repeat_offender=excluded.repeat_offender,remediation_status=excluded.remediation_status,remediation_due_at=excluded.remediation_due_at,factor_summary=excluded.factor_summary""",(addr,score,level,failures,evs[-1]["event"] if evs else "",now(),repeat,rem,due,factors))
+    c.commit(); c.close()
+
+def snapshot_risk_history():
+    risk_recalculate()
+    c=db(); ts=now()
+    for r in c.execute("SELECT email,score,level,failures,factor_summary FROM risk_scores"):
+        c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("user",r["email"],r["score"],r["level"],r["failures"],ts,r["factor_summary"] or ""))
+    for r in c.execute("""SELECT r.department,AVG(rs.score) score,SUM(rs.failures) failures,COUNT(*) members FROM recipients r JOIN risk_scores rs ON lower(r.email)=lower(rs.email) WHERE r.department!='' GROUP BY r.department"""):
+        score=float(r["score"] or 0); level="High" if score>=70 else ("Medium" if score>=40 else "Low")
+        c.execute("INSERT INTO risk_history(scope,subject,score,level,failures,recorded_at,factors) VALUES(?,?,?,?,?,?,?)",("department",r["department"],score,level,int(r["failures"] or 0),ts,"members=%s"%r["members"]))
+    c.commit(); c.close()
+
+def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type="",campaign_id="",recipient_id="",token=""):
+    if event not in EVENT_TAXONOMY: raise ValueError("Unsupported event taxonomy: %s" % event)
     c=db()
-    where="WHERE email=?" if email else ""
-    params=(email,) if email else ()
-    rows=c.execute("SELECT event,email FROM events %s"%where,params).fetchall()
-    c.execute("SELECT COUNT(*) n FROM events WHERE event='click' AND email=?",(email,)) if email else None
-    c.close()
-    return len(rows)
+    if token and event in ("click","form_action","report","QR_scan","open"):
+        try: c.execute("INSERT INTO event_dedup(token,event,first_seen_at) VALUES(?,?,?)",(token,event,now()))
+        except sqlite3.IntegrityError: c.close(); return False
+    c.execute("INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type,campaign_id,recipient_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type,campaign_id,recipient_id))
+    c.commit(); c.close()
+    if email and event in ("click","form_action","report"): risk_recalculate(email)
+    return True
 
 def ensure_smtp_key():
     os.makedirs(DATA,exist_ok=True)
