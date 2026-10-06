@@ -1033,7 +1033,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
         return page(title,body,css)
 
-    def feature_page(self,path):
+    def feature_page(self,path,query=""):
         c=db()
         if path=="/admin/campaigns":
             rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall(); c.close()
@@ -1111,7 +1111,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
             return self.admin_shell("Audit",'<h1>Audit Log</h1><p>Administrative actions and exports.</p><div class="card"><table class="table"><tr><th>Date</th><th>Time</th><th>Action</th><th>Details</th></tr>'+table+'</table></div>',"Audit Log")
         if path=="/admin/reports.pdf":
-            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
+            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
             c=db()
             total=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<?",(start_iso,end_iso)).fetchone()["n"]
@@ -1139,8 +1139,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             audit(ADMIN_USERNAME,"report_pdf_export","Period %s to %s"%(start_day,end_day),self.client_address[0])
             pdf=build_pdf(lines)
             return self.sendbody(200,pdf,"application/pdf",{"Content-Disposition":'attachment; filename="phishguard-report-%s-to-%s.pdf"'%(start_day,end_day)})
-        if path=="/admin/reports" and not parse_qs(p.query).get("view",[""])[0]:
-            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
+        if path=="/admin/reports" and not parse_qs(query).get("view",[""])[0]:
+            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
             c=db()
             total=c.execute("SELECT COUNT(*) n FROM events WHERE ts>=? AND ts<?",(start_iso,end_iso)).fetchone()["n"]
@@ -1158,8 +1158,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td><a class="btn" href="/admin/reports?campaign_id=%s">Details</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),r["targeted"],r["sent"],r["failed"],r["clicks"],(r["actions"] or 0)/(r["clicks"] or 1)*100,(r["reports"] or 0)/(r["clicks"] or 1)*100,r["id"]) for r in campaigns) or '<tr><td colspan="10">No campaign telemetry in this period.</td></tr>'
             controls='<div class="card"><form method="get" class="filter"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Last 30 Days</a><a class="btn" href="/admin/reports.pdf?start=%s&end=%s">PDF Report</a></form></div>'%(esc(start_day),esc(end_day))
             return self.admin_shell("Reports",'<h1>Campaign Reports</h1><p>Measured telemetry · %s to %s.</p>%s<div class="card"><h3>Overall</h3><p>Events: %s · Clicks: %s · Actions: %s · Reports: %s · Action rate: %.1f%% · Report rate: %.1f%%</p></div><div class="card"><p><a class="btn" href="/admin/reports?view=compare">Campaign Comparison</a> <a class="btn" href="/admin/reports?view=department">Department Report</a> <a class="btn" href="/admin/reports?view=monthly">Monthly Report</a> <a class="btn" href="/admin/reports?view=executive">Executive Dashboard</a> <a class="btn" href="/admin/reports?view=trend">Risk & Resilience Trends</a> <a class="btn" href="/admin/reports/scheduled">Scheduled Reports</a></p><table class="table"><tr><th>ID</th><th>Campaign</th><th>Status</th><th>Targeted</th><th>Sent</th><th>Failed</th><th>Clicks</th><th>Action Rate</th><th>Report Rate</th><th></th></tr>%s</table></div>'%(esc(start_day),esc(end_day),controls,total,clicks,subs,reports,rate,report_rate,rows),"Reports")
-        if path=="/admin/reports" and parse_qs(p.query).get("view",[""])[0]=="department":
-            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
+        if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="department":
+            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
             c=db(); rows=c.execute("""SELECT COALESCE(r.department,'Unassigned') department,
                 COUNT(DISTINCT r.id) users,
@@ -1171,8 +1171,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 GROUP BY COALESCE(r.department,'Unassigned') ORDER BY action_users DESC,clicked_users DESC""",(start_iso,end_iso)).fetchall(); c.close()
             table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"%(esc(x["department"]),x["users"],x["clicked_users"],x["action_users"],x["report_users"],x["events"]) for x in rows) or "<tr><td colspan='6'>No department telemetry.</td></tr>"
             return self.admin_shell("Department Report",'<h1>Department Report</h1><p>Unique users with measured simulation events · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="department"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Department</th><th>Users</th><th>Clicked Users</th><th>Action Users</th><th>Reported Users</th><th>Events</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),table),"Reports")
-        if path=="/admin/reports" and parse_qs(p.query).get("view",[""])[0]=="monthly":
-            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
+        if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="monthly":
+            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
             c=db(); rows=c.execute("""SELECT substr(ts,1,7) month,
                 COUNT(*) events,
@@ -1182,8 +1182,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 FROM events WHERE ts>=? AND ts<? GROUP BY substr(ts,1,7) ORDER BY month DESC""",(start_iso,end_iso)).fetchall(); c.close()
             table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td></tr>"%(esc(x["month"]),x["events"],x["clicks"] or 0,x["actions"] or 0,x["reports"] or 0,(x["actions"] or 0)/max(x["clicks"] or 0,1)*100,(x["reports"] or 0)/max(x["clicks"] or 0,1)*100) for x in rows) or "<tr><td colspan='7'>No monthly telemetry.</td></tr>"
             return self.admin_shell("Monthly Report",'<h1>Monthly Report</h1><p>Measured telemetry by calendar month · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="monthly"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Month</th><th>Events</th><th>Clicks</th><th>Actions</th><th>Reports</th><th>Action Rate</th><th>Report Rate</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),table),"Reports")
-        if path=="/admin/reports" and parse_qs(p.query).get("view",[""])[0]=="compare":
-            ids=[x for x in parse_qs(p.query).get("campaign_id",[]) if x.isdigit()][:10]
+        if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="compare":
+            ids=[x for x in parse_qs(query).get("campaign_id",[]) if x.isdigit()][:10]
             c=db(); campaigns=c.execute("SELECT id,name,status,targeted FROM campaigns ORDER BY id DESC LIMIT 100").fetchall()
             selected=[x for x in campaigns if str(x["id"]) in ids]
             rows=[]
@@ -1199,8 +1199,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td>%.1f%%</td></tr>"%(x["id"],esc(x["name"]),x["targeted"],x["sent"],x["clicks"],x["clicks"]/max(x["sent"],1)*100,x["actions"]/max(x["sent"],1)*100,x["reports"]/max(x["sent"],1)*100) for x in rows) or "<tr><td colspan='8'>Select campaigns to compare.</td></tr>"
             opts="".join("<option value='%s' %s>%s</option>"%(x["id"],"selected" if str(x["id"]) in ids else "",esc(x["name"])) for x in campaigns)
             return self.admin_shell("Campaign Comparison",'<h1>Campaign Comparison</h1><p>Compare measured campaign outcomes. Select up to 10 campaigns.</p><div class="card"><form method="get"><input type="hidden" name="view" value="compare"><select name="campaign_id" multiple size="8" style="width:100%%;padding:10px;border:1px solid #ccd9d4;border-radius:8px">%s</select><p><button class="btn primary">Compare Selected</button></p></form></div><div class="card"><table class="table"><tr><th>ID</th><th>Campaign</th><th>Targeted</th><th>Sent</th><th>Clicks</th><th>Click Rate</th><th>Action Rate</th><th>Report Rate</th></tr>%s</table></div>'%(opts,table),"Reports")
-        if path=="/admin/reports" and parse_qs(p.query).get("view",[""])[0]=="executive":
-            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(p.query))
+        if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="executive":
+            try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
             c=db()
             targeted=c.execute("SELECT COALESCE(SUM(targeted),0) n FROM campaigns WHERE created_at>=? AND created_at<?",(start_iso,end_iso)).fetchone()["n"]
@@ -1216,7 +1216,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             risk_html="".join("<span class='pill'>%s: %s</span> "%(esc(x["level"]),x["n"]) for x in risk) or "No risk data"
             cards='<section class="stats"><div class="stat"><div class="stat-label">TARGETED</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">DELIVERED</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">CLICK RATE</div><div class="num">%.1f%%</div></div><div class="stat"><div class="stat-label">ACTION RATE</div><div class="num">%.1f%%</div></div></section>'%(targeted,sent,click_rate,action_rate)
             return self.admin_shell("Executive Dashboard",'<h1>Executive Dashboard</h1><p>Measured security-awareness outcomes · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="executive"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button></form></div>%s<div class="grid"><div class="card"><h3>Reporting & Training</h3><p>Report rate: <b>%.1f%%</b> · Training assigned: <b>%s</b> · Training completed: <b>%s</b> · Training completion: <b>%.1f%%</b></p></div><div class="card"><h3>Current Risk Mix</h3><p>%s</p></div></div><div class="card"><h3>Executive Interpretation</h3><p>Metrics shown here are calculated only from recorded delivery, click, form-action, report and training telemetry. Open rates are not shown unless genuinely measured.</p></div>'%(esc(start_day),esc(end_day),cards,report_rate,training_assigned,training_completed,training_rate,risk_html),"Reports")
-        if path=="/admin/reports" and parse_qs(p.query).get("view",[""])[0]=="trend":
+        if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="trend":
             c=db()
             rows=c.execute("""SELECT substr(ts,1,7) month,
                 SUM(event='click') clicks,SUM(event='form_action') actions,SUM(event='report') reports
@@ -1437,7 +1437,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not ok: return self.sendbody(400,msg,"text/plain")
             return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>")
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
-            return self.sendbody(200,self.feature_page(path))
+            return self.sendbody(200,self.feature_page(path,p.query))
         if path=="/admin/smtp/diagnostics":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=parse_qs(p.query).get("id",[""])[0]
