@@ -1711,17 +1711,17 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             sid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:100]; provider=form.get("provider",["Custom SMTP"])[0]
             host=form.get("host",[""])[0][:255]; port=int(form.get("port",["587"])[0]); security=form.get("security",["STARTTLS"])[0]
             username=form.get("username",[""])[0][:255]; password=form.get("password",[""])[0]; from_name=form.get("from_name",[""])[0][:150]
-            from_email=form.get("from_email",[""])[0][:255]; reply_to=form.get("reply_to",[""])[0][:255]
-            if provider not in SMTP_PROVIDERS or security not in ("STARTTLS","SSL/TLS","NONE") or not host or not from_email or port<1 or port>65535:
+            from_email=form.get("from_email",[""])[0][:255]; reply_to=form.get("reply_to",[""])[0][:255]; auth_method=form.get("auth_method",["password"])[0]; oauth_url=form.get("oauth_token_url",[""])[0][:500]; oauth_client=form.get("oauth_client_id",[""])[0][:255]; oauth_scopes=form.get("oauth_scopes",[""])[0][:1000]
+            if provider not in SMTP_PROVIDERS or security not in ("STARTTLS","SSL/TLS","NONE") or auth_method not in ("password","oauth2") or not host or not from_email or port<1 or port>65535:
                 return self.sendbody(400,"Invalid SMTP profile","text/plain")
             c=db()
             if sid:
                 old=c.execute("SELECT password_enc FROM smtp_profiles WHERE id=?",(sid,)).fetchone()
                 enc=encrypt_secret(password) if password else (old["password_enc"] if old else "")
-                c.execute("UPDATE smtp_profiles SET name=?,provider=?,host=?,port=?,security=?,username=?,password_enc=?,from_name=?,from_email=?,reply_to=?,updated_at=? WHERE id=?",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,now(),sid)); action="SMTP_PROFILE_UPDATE"
+                c.execute("UPDATE smtp_profiles SET name=?,provider=?,host=?,port=?,security=?,username=?,password_enc=?,from_name=?,from_email=?,reply_to=?,auth_method=?,oauth_token_url=?,oauth_client_id=?,oauth_scopes=?,updated_at=? WHERE id=?",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,auth_method,oauth_url,oauth_client,oauth_scopes,now(),sid)); action="SMTP_PROFILE_UPDATE"
             else:
                 enc=encrypt_secret(password) if password else ""
-                c.execute("INSERT INTO smtp_profiles(name,provider,host,port,security,username,password_enc,from_name,from_email,reply_to,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,1,now(),now())); action="SMTP_PROFILE_CREATE"
+                c.execute("INSERT INTO smtp_profiles(name,provider,host,port,security,username,password_enc,from_name,from_email,reply_to,auth_method,oauth_token_url,oauth_client_id,oauth_scopes,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,auth_method,oauth_url,oauth_client,oauth_scopes,1,now(),now())); action="SMTP_PROFILE_CREATE"
             c.commit(); c.close(); audit(ADMIN_USERNAME,action,name,ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
         if p.path=="/admin/smtp/diagnostics":
