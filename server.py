@@ -862,7 +862,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         return self.admin_shell("Overview",dashboard_main,"Overview")
 
     def admin_shell(self,title,content,active):
-        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Training","/admin/training"),("Recipients","/admin/recipients"),("Groups & Departments","/admin/groups"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit")]
+        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Training","/admin/training"),("Recipients","/admin/recipients"),("Groups & Departments","/admin/groups"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit"),("Admin Users","/admin/admins")]
         links="".join('<a href="%s" class="%s">%s</a>'%(u,"active" if n==active else "",n) for n,u in nav)
         css=DASH_CSS+".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
         body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
@@ -1069,6 +1069,16 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             opts="".join('<option value="%s">%s</option>'%(p["id"],esc(p["name"])) for p in profiles) or '<option value="">No enabled SMTP profile</option>'
             body='<h1>Scheduled Reports</h1><p>Automatically email measured executive PDF reports using an enabled SMTP profile.</p><div class="card"><form class="form" method="post" action="/admin/reports/scheduled/save"><label>Name<input name="name" maxlength="120" required></label><label>Frequency<select name="frequency"><option>Daily</option><option selected>Weekly</option><option>Monthly</option></select></label><label>SMTP Profile<select name="smtp_profile_id" required>%s</select></label><label>Recipients (comma-separated)<input name="recipients" placeholder="security@example.com, ciso@example.com" required></label><label>First Run (Asia/Dhaka)<input type="datetime-local" name="next_run_at" required></label><button class="btn primary">Create Schedule</button></form></div><div class="card" style="margin-top:15px"><table class="table"><tr><th>ID</th><th>Name</th><th>Frequency</th><th>SMTP</th><th>Recipients</th><th>Next Run UTC</th><th>Status</th></tr>%s</table></div>'%(opts,table)
             return self.admin_shell("Scheduled Reports",body,"Reports")
+        if path=="/admin/admins":
+            if not self.current_admin() or self.current_admin().get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
+            c.close()
+            roles=["Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor"]
+            role_opts=lambda selected:"".join('<option%s>%s</option>'%(' selected' if x==selected else '',x) for x in roles)
+            table="".join('<tr><td>%s</td><td>%s</td><td><form method="post" action="/admin/admins/save" style="display:flex;gap:6px"><input type="hidden" name="id" value="%s"><select name="role">%s</select><select name="active"><option value="1"%s>Active</option><option value="0"%s>Disabled</option></select><button class="btn primary">Save</button></form></td></tr>'%(r["id"],esc(r["username"]),r["id"],role_opts(r["role"] or "Administrator")," selected" if r["active"] else ""," selected" if not r["active"] else "") for r in rows)
+            body='<h1>Admin Users & Roles</h1><p>Assign least-privilege roles to administrative accounts. Passwords are hashed and never displayed.</p><div class="card"><table class="table"><tr><th>ID</th><th>Username</th><th>Role / Status</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>Role permissions</h3><p><b>Administrator:</b> full control · <b>Campaign Manager:</b> campaigns, templates, landing pages, recipients, groups, training · <b>Reporting Analyst:</b> reports, risk, exports · <b>SMTP Manager:</b> SMTP profiles · <b>Security Auditor:</b> audit log.</p></div>'%table
+            return self.admin_shell("Admin Users",body,"Admin Users")
         if path=="/admin/settings":
             cfg=risk_settings(c); c.close()
             body='<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'%(cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
@@ -1430,6 +1440,21 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.close()
             audit(ADMIN_USERNAME,"SCHEDULED_REPORT_CREATE","name=%s frequency=%s"%(name,frequency),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/reports/scheduled"})
+        if p.path=="/admin/admins/save":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator": return self.sendbody(403,"Administrator role required","text/plain")
+            aid=form.get("id",[""])[0]
+            role=form.get("role",[""])[0]
+            active=form.get("active",["1"])[0]
+            if not aid.isdigit() or role not in ("Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor") or active not in ("0","1"):
+                return self.sendbody(400,"Invalid administrator settings","text/plain")
+            c=db(); row=c.execute("SELECT username FROM admins WHERE id=?",(int(aid),)).fetchone()
+            if not row: c.close(); return self.sendbody(404,"Administrator not found","text/plain")
+            if row["username"]==admin["username"] and active=="0":
+                c.close(); return self.sendbody(400,"You cannot disable your current administrator account","text/plain")
+            c.execute("UPDATE admins SET role=?,active=? WHERE id=?",(role,int(active),int(aid))); c.commit(); c.close()
+            audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s role=%s active=%s"%(row["username"],role,active),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins"})
         if p.path=="/admin/risk/settings":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             try:
