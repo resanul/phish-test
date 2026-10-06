@@ -1610,6 +1610,16 @@ def scheduler_loop():
                         send_campaign(row["id"],scheduled=True)
                 except Exception:
                     pass
+            c=db()
+            due_reports=c.execute("SELECT * FROM scheduled_reports WHERE enabled=1 AND next_run_at<=?",(now_utc.isoformat(),)).fetchall()
+            c.close()
+            for report in due_reports:
+                try:
+                    send_scheduled_report(report)
+                except Exception as exc:
+                    c=db()
+                    c.execute("UPDATE scheduled_reports SET last_run_at=?,last_status=?,next_run_at=?,updated_at=? WHERE id=?",(now(),"Failed: %s"%str(exc)[:180],scheduled_report_next_run(report["frequency"],now_utc).isoformat(),now(),report["id"]))
+                    c.commit(); c.close()
             for row in active:
                 try:
                     send_campaign(row["id"],scheduled=True)
