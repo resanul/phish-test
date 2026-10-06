@@ -218,6 +218,15 @@ def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=
     c.close()
     return True
 
+def risk_recalculate(email=""):
+    c=db()
+    where="WHERE email=?" if email else ""
+    params=(email,) if email else ()
+    rows=c.execute("SELECT event,email FROM events %s"%where,params).fetchall()
+    c.execute("SELECT COUNT(*) n FROM events WHERE event='click' AND email=?",(email,)) if email else None
+    c.close()
+    return len(rows)
+
 def ensure_smtp_key():
     os.makedirs(DATA,exist_ok=True)
     if not os.path.exists(SMTP_KEY):
