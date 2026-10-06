@@ -463,6 +463,7 @@ Never record:
 ### Phase A — Administration UX
 
 - [x] Baseline audit and gap analysis
+- [x] Administrator creation schema compatibility
 - [ ] Add Administrator workflow
 - [ ] Administrator profile/access preview
 - [ ] Existing-role assignment
@@ -569,7 +570,9 @@ Current status:
 - [ ] Phase E — Governance/hardening
 - [ ] Phase F — Resource scoping
 
-**Completed task:** Phase A — administrator creation schema foundation is now backward-compatible and does not alter existing administrator records.\n\n**Next task:** Phase A — Administrator creation backend.
+**Completed task:** Phase A — administrator creation schema foundation is now backward-compatible and does not alter existing administrator records.
+
+**Next task:** Phase A — Administrator creation backend.
 
 ---
 
