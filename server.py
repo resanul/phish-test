@@ -753,7 +753,17 @@ class Handler(BaseHTTPRequestHandler):
     def auth(self):
         c=cookies.SimpleCookie(self.headers.get("Cookie",""))
         s=c.get("admin_session")
-        return bool(s and s.value in SESSIONS)
+        session=SESSIONS.get(s.value) if s else None
+        if not session: return False
+        if time.time()-session["created_at"]>28800:
+            SESSIONS.pop(s.value,None)
+            return False
+        return True
+
+    def current_admin(self):
+        c=cookies.SimpleCookie(self.headers.get("Cookie",""))
+        s=c.get("admin_session")
+        return SESSIONS.get(s.value) if s else None
 
     def csrf_origin_ok(self):
         origin=self.headers.get("Origin","").strip()
@@ -1190,7 +1200,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,self.dashboard())
         if path=="/admin/logout":
             c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session")
-            if s: SESSIONS.discard(s.value)
+            if s: SESSIONS.pop(s.value,None)
             return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":"admin_session=; Max-Age=0; HttpOnly; SameSite=Strict"})
         if path=="/admin.csv":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -1303,9 +1313,17 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             password=form.get("password",[""])[0]
             if not self.login_allowed():
                 return self.sendbody(429,"Too many login attempts. Try again later.","text/plain",{"Retry-After":"300"})
-            if secrets.compare_digest(username,ADMIN_USERNAME) and secrets.compare_digest(password,ADMIN_PASSWORD):
+            c=db()
+            admin=c.execute("SELECT username,role,password_hash FROM admins WHERE username=?",(username,)).fetchone()
+            c.close()
+            valid=False
+            if admin and admin["password_hash"]:
+                valid=password_verify(password,admin["password_hash"])
+            elif secrets.compare_digest(username,ADMIN_USERNAME) and secrets.compare_digest(password,ADMIN_PASSWORD):
+                valid=True
+            if valid:
                 LOGIN_ATTEMPTS.pop(self.client_address[0],None)
-                sid=secrets.token_urlsafe(32); SESSIONS.add(sid)
+                sid=secrets.token_urlsafe(32); SESSIONS[sid]={"username":username,"role":admin["role"] if admin else "Administrator","created_at":time.time()}
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"
                 if self.headers.get("X-Forwarded-Proto","").lower()=="https": ck["admin_session"]["Secure"]=True
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
