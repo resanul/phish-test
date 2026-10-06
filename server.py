@@ -1211,14 +1211,21 @@ def scheduler_loop():
     while True:
         try:
             c=db()
-            rows=c.execute("SELECT id,launch_at FROM campaigns WHERE status='Scheduled' AND launch_at IS NOT NULL AND launch_at!=''").fetchall()
+            scheduled=c.execute("SELECT id,launch_at,timezone FROM campaigns WHERE status='Scheduled' AND launch_at IS NOT NULL AND launch_at!=''").fetchall()
+            active=c.execute("SELECT id FROM campaigns WHERE status='Active' AND cancel_requested=0").fetchall()
             c.close()
-            now_local=datetime.now(TZ)
-            for row in rows:
+            now_utc=datetime.now(timezone.utc)
+            for row in scheduled:
                 try:
-                    dt=datetime.fromisoformat(row["launch_at"]).replace(tzinfo=TZ)
-                    if dt<=now_local:
-                        send_campaign(row["id"])
+                    zone=ZoneInfo(row["timezone"] or "Asia/Dhaka")
+                    dt=campaign_dt(row["launch_at"],zone)
+                    if dt and dt.astimezone(timezone.utc) <= now_utc:
+                        send_campaign(row["id"],scheduled=True)
+                except Exception:
+                    pass
+            for row in active:
+                try:
+                    send_campaign(row["id"],scheduled=True)
                 except Exception:
                     pass
         except Exception:
