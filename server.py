@@ -178,6 +178,15 @@ def db():
                      version=COALESCE(version,1),
                      updated_at=COALESCE(updated_at,created_at)
                  WHERE html_body IS NULL OR text_body IS NULL OR version IS NULL OR updated_at IS NULL""")
+    for lp in c.execute("SELECT id,template,html_body,text_body FROM landing_pages").fetchall():
+        if not (lp["html_body"] or "").strip():
+            fn=os.path.join(TEMPLATES,str(lp["template"])+".html")
+            try:
+                with open(fn,"r",encoding="utf-8") as tf:
+                    seed_html=tf.read()
+                c.execute("UPDATE landing_pages SET html_body=?,text_body=?,updated_at=? WHERE id=?",(seed_html,"Authorized security-awareness simulation landing page.",now(),lp["id"]))
+            except Exception:
+                pass
     cols_recipient={row[1] for row in c.execute("PRAGMA table_info(recipients)").fetchall()}
     for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'")):
         if col not in cols_recipient:
