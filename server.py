@@ -1259,6 +1259,28 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.close()
             audit(ADMIN_USERNAME,"CAMPAIGN_CONTROL","campaign=%s action=%s"%(cid,action),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/campaigns?id="+str(cid)})
+        if p.path=="/admin/campaigns/test-send":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            cid=form.get("id",[""])[0]
+            to_email=form.get("to_email",[""])[0].strip().lower()
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",to_email): return self.sendbody(400,"Invalid test recipient email","text/plain")
+            c=db(); campaign=c.execute("SELECT c.*,s.* FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id WHERE c.id=?",(cid,)).fetchone(); c.close()
+            if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
+            errors=campaign_prelaunch_validation(campaign)
+            if errors: return self.sendbody(409,"Test-send blocked by pre-launch validation: "+" ".join(errors),"text/plain")
+            try:
+                msg=EmailMessage()
+                msg["From"]=formataddr((campaign["from_name"] or "Trust PhishGuard",campaign["from_email"]))
+                msg["To"]=to_email
+                msg["Subject"]="[TEST] "+(campaign["subject"] or "Trust PhishGuard Simulation")
+                if campaign["reply_to"]: msg["Reply-To"]=campaign["reply_to"]
+                msg.set_content("This is a pre-launch test message for an authorized Trust PhishGuard security-awareness simulation. No credentials are requested or collected.")
+                smtp=smtp_connect(campaign); smtp.send_message(msg); smtp.quit()
+                audit(ADMIN_USERNAME,"CAMPAIGN_TEST_SEND","campaign=%s recipient=%s"%(cid,to_email),ip)
+                return self.sendbody(200,page("Campaign Test Send","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Test message sent</h2><p>The pre-launch test message was accepted by the configured SMTP server.</p><p>No campaign recipient was contacted or tracked.</p><p><a href='/admin/campaigns?id=%s'>Back to Campaign</a></p></div>"%cid))
+            except Exception:
+                audit(ADMIN_USERNAME,"CAMPAIGN_TEST_SEND_FAILED","campaign=%s recipient=%s"%(cid,to_email),ip)
+                return self.sendbody(502,page("Campaign Test Send Failed","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Test message failed</h2><p>SMTP connection or authentication failed. No SMTP secret is displayed.</p></div>"))
         if p.path=="/admin/campaigns/launch":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=form.get("id",[""])[0]
