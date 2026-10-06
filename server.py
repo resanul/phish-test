@@ -504,11 +504,11 @@ def smtp_diagnostics(profile,to_email=""):
             if security=="STARTTLS":
                 smtp.starttls(context=ssl.create_default_context()); smtp.ehlo()
         result.append({"stage":"TLS","status":"PASS","detail":"SMTP TLS/session negotiation succeeded."})
-        if profile["username"]:
-            smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
+        if profile["username"] or (profile["auth_method"] or "password").lower()=="oauth2":
+            smtp_authenticate(smtp,profile)
             result.append({"stage":"AUTH","status":"PASS","detail":"SMTP authentication succeeded."})
         else:
-            result.append({"stage":"AUTH","status":"SKIP","detail":"No SMTP username configured; relay may use IP or other policy."})
+            result.append({"stage":"AUTH","status":"SKIP","detail":"No SMTP authentication configured; relay may use IP or other policy."})
         if to_email:
             msg=EmailMessage()
             msg["Subject"]="[TEST] Trust PhishGuard SMTP diagnostics"
