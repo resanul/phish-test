@@ -1259,6 +1259,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c=db(); campaign=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone(); c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
             if campaign["status"]=="Completed": return self.sendbody(409,"Campaign already completed","text/plain")
+            errors=campaign_prelaunch_validation(campaign)
+            if errors:
+                return self.sendbody(409,"Pre-launch validation failed: "+" ".join(errors),"text/plain")
             try:
                 sent,failed,total=send_campaign(cid)
                 audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH","campaign=%s sent=%s failed=%s total=%s"%(cid,sent,failed,total),ip)
