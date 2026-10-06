@@ -486,7 +486,7 @@ Never record:
 
 ### Phase C — Permission Catalog
 
-- [ ] Permission catalog schema
+- [x] Permission catalog schema
 - [ ] Seed permission definitions
 - [ ] Permission search/filter
 - [ ] Permission matrix UI
@@ -580,7 +580,9 @@ Current status:
 
 **Completed milestone:** Phase B — Role Management is complete, covering protected built-in role display, custom role persistence and lifecycle, safe deletion, and administrator assignment counts.
 
-**Next task:** Phase C — Permission catalog schema.
+**Completed task:** Phase C — Permission catalog schema is already present in the backend, including resource/action identity, labels/descriptions, risk classification, active state, uniqueness, and role-permission foreign-key structure.
+
+**Next task:** Phase C — Seed permission definitions.
 
 ---
 
