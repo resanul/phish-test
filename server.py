@@ -104,6 +104,7 @@ def db():
         completed_at TEXT,
         UNIQUE(course_id,recipient_id)
     );
+    CREATE INDEX IF NOT EXISTS idx_training_assignments_recipient ON training_assignments(recipient_id,status);
     CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,admin TEXT,action TEXT,details TEXT,ip TEXT);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
     CREATE TABLE IF NOT EXISTS campaign_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,recipient_id INTEGER,status TEXT,attempted_at TEXT,sent_at TEXT,error TEXT);
@@ -144,6 +145,10 @@ def db():
     for col,definition in (("repeat_offender","INTEGER DEFAULT 0"),("remediation_status","TEXT DEFAULT 'None'"),("remediation_due_at","TEXT"),("factor_summary","TEXT")):
         if col not in cols_risk:
             c.execute("ALTER TABLE risk_scores ADD COLUMN %s %s"%(col,definition))
+    cols_training={row[1] for row in c.execute("PRAGMA table_info(training_assignments)").fetchall()}
+    for col,definition in (("result","TEXT"),("trigger_campaign_id","INTEGER"),("remediation_campaign_id","INTEGER"),("result_at","TEXT")):
+        if col not in cols_training:
+            c.execute("ALTER TABLE training_assignments ADD COLUMN %s %s"%(col,definition))
     cols_recipient={row[1] for row in c.execute("PRAGMA table_info(recipients)").fetchall()}
     for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'")):
         if col not in cols_recipient:
@@ -739,13 +744,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,self.smtp_form())
         if path=="/admin/training/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            c=db()
-            courses=c.execute("SELECT id,name FROM training_courses WHERE status='Active' ORDER BY name").fetchall()
-            recipients=c.execute("SELECT id,email,name,department FROM recipients WHERE status!='Suppressed' ORDER BY email").fetchall()
-            c.close()
-            co="".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in courses)
-            ro="".join('<option value="%s">%s · %s</option>'%(x["id"],esc(x["email"]),esc(x["department"] or "")) for x in recipients)
-            body='<h1>Assign Training</h1><div class="card"><form class="form" method="post" action="/admin/training/assign"><label>Course<select name="course_id" required>%s</select></label><label>Recipient<select name="recipient_id" required>%s</select></label><label>Due Date<input type="datetime-local" name="due_at" required></label><button class="btn primary">Assign Training</button></form></div>'%(co,ro)
+            c=db(); courses=c.execute("SELECT id,name FROM training_courses WHERE status='Active' ORDER BY name").fetchall(); recipients=c.execute("SELECT id,email,name,department FROM recipients WHERE status!='Suppressed' ORDER BY email").fetchall(); campaigns=c.execute("SELECT id,name FROM campaigns ORDER BY id DESC").fetchall(); c.close()
+            co="".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in courses); ro="".join('<option value="%s">%s · %s</option>'%(x["id"],esc(x["email"]),esc(x["department"] or "")) for x in recipients)
+            ca='<option value="">None</option>'+"".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in campaigns)
+            body='<h1>Assign Training</h1><div class="card"><form class="form" method="post" action="/admin/training/assign"><label>Course<select name="course_id" required>%s</select></label><label>Recipient<select name="recipient_id" required>%s</select></label><label>Due Date<input type="datetime-local" name="due_at" required></label><label>Trigger Campaign<select name="trigger_campaign_id">%s</select></label><label>Remediation Campaign<select name="remediation_campaign_id">%s</select></label><p style="font-size:12px;color:#71817b">Trigger campaign identifies the simulation that led to training. Remediation campaign identifies the follow-up simulation.</p><button class="btn primary">Assign Training</button></form></div>'%(co,ro,ca,ca)
             return self.sendbody(200,self.admin_shell("Assign Training",body,"Training"))
         if path=="/admin/training/course/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -883,6 +885,24 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             except Exception as e:
                 audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
                 return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
+        if p.path=="/admin/training/update":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            aid=form.get("id",[""])[0]
+            try:
+                completion=max(0,min(100,float(form.get("completion",["0"])[0]))); raw=form.get("score",[""])[0].strip(); score=None if raw=="" else max(0,min(100,float(raw)))
+            except (ValueError,TypeError): return self.sendbody(400,"Invalid completion or score","text/plain")
+            c=db(); a=c.execute("""SELECT a.*,c.passing_score,c.name course,r.email FROM training_assignments a JOIN training_courses c ON c.id=a.course_id JOIN recipients r ON r.id=a.recipient_id WHERE a.id=?""",(aid,)).fetchone()
+            if not a: c.close(); return self.sendbody(404,"Training assignment not found","text/plain")
+            result="In Progress"; status="In Progress"; completed_at=None
+            if completion>=100:
+                completed_at=now()
+                if score is not None and score>=a["passing_score"]: result="Passed"; status="Completed"
+                elif score is not None: result="Failed"; status="Failed"
+                else: result="Completed - Score Pending"; status="Completed"
+            c.execute("UPDATE training_assignments SET completion=?,score=?,result=?,status=?,completed_at=?,result_at=? WHERE id=?",(completion,score,result,status,completed_at,now(),aid))
+            c.execute("""INSERT INTO training_records(email,completion,course,updated_at) VALUES(?,?,?,?) ON CONFLICT(email) DO UPDATE SET completion=excluded.completion,course=excluded.course,updated_at=excluded.updated_at""",(a["email"],completion,a["course"],now())); c.commit(); c.close()
+            audit(ADMIN_USERNAME,"TRAINING_RESULT_UPDATE",f"assignment={aid} result={result} score={score if score is not None else ''}",ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/training"})
         if p.path=="/admin/training/course/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             name=form.get("name",[""])[0][:150]; description=form.get("description",[""])[0][:1000]
@@ -895,15 +915,16 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if p.path=="/admin/training/assign":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             course_id=form.get("course_id",[""])[0]; recipient_id=form.get("recipient_id",[""])[0]; due_at=form.get("due_at",[""])[0][:40]
-            c=db()
-            if not c.execute("SELECT 1 FROM training_courses WHERE id=? AND status='Active'",(course_id,)).fetchone() or not c.execute("SELECT 1 FROM recipients WHERE id=? AND status!='Suppressed'",(recipient_id,)).fetchone():
-                c.close(); return self.sendbody(400,"Invalid course or recipient","text/plain")
+            remediation_campaign_id=form.get("remediation_campaign_id",[""])[0]; trigger_campaign_id=form.get("trigger_campaign_id",[""])[0]
+            c=db(); course=c.execute("SELECT * FROM training_courses WHERE id=? AND status='Active'",(course_id,)).fetchone(); recipient=c.execute("SELECT * FROM recipients WHERE id=? AND status!='Suppressed'",(recipient_id,)).fetchone()
+            if not course or not recipient: c.close(); return self.sendbody(400,"Invalid course or recipient","text/plain")
+            if remediation_campaign_id and not c.execute("SELECT 1 FROM campaigns WHERE id=?",(remediation_campaign_id,)).fetchone(): c.close(); return self.sendbody(400,"Invalid remediation campaign","text/plain")
+            if trigger_campaign_id and not c.execute("SELECT 1 FROM campaigns WHERE id=?",(trigger_campaign_id,)).fetchone(): c.close(); return self.sendbody(400,"Invalid trigger campaign","text/plain")
             try:
-                c.execute("""INSERT INTO training_assignments(course_id,recipient_id,assigned_at,due_at,status,completion) VALUES(?,?,?,?,?,0)""",(course_id,recipient_id,now(),due_at,"Assigned"))
-                c.commit()
-            except sqlite3.IntegrityError:
-                c.close(); return self.sendbody(409,"Training is already assigned to this recipient","text/plain")
-            c.close(); audit(ADMIN_USERNAME,"TRAINING_ASSIGN",f"course={course_id} recipient={recipient_id}",ip)
+                c.execute("""INSERT INTO training_assignments(course_id,recipient_id,assigned_at,due_at,status,completion,score,result,trigger_campaign_id,remediation_campaign_id)
+                             VALUES(?,?,?,?,?,?,?,?,?,?)""",(course_id,recipient_id,now(),due_at,"Assigned",0,None,"Pending",trigger_campaign_id or None,remediation_campaign_id or None)); c.commit()
+            except sqlite3.IntegrityError: c.close(); return self.sendbody(409,"Training is already assigned to this recipient","text/plain")
+            c.close(); audit(ADMIN_USERNAME,"TRAINING_ASSIGN",f"course={course_id} recipient={recipient_id} trigger_campaign={trigger_campaign_id or ''} remediation_campaign={remediation_campaign_id or ''}",ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/training"})
         if p.path=="/admin/recipients/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
