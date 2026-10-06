@@ -506,7 +506,7 @@ def campaign_prelaunch_validation(campaign):
     if not landing: errors.append("Enabled landing page is required.")
     if not recipient_count: errors.append("No eligible recipients are available.")
     if not (campaign["subject"] or "").strip(): errors.append("Campaign subject is required.")
-    if not re.fullmatch(r"\\d+",str(campaign["template"] or "")): errors.append("Template selection is invalid.")
+    if not re.fullmatch(r"\d+",str(campaign["template"] or "")): errors.append("Template selection is invalid.")
     ok,msg=validate_landing_html(landing["html_body"] if landing else "")
     if landing and not ok: errors.append(msg)
     try:
