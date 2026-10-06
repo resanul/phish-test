@@ -720,6 +720,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type",ctype)
         self.send_header("Content-Length",str(len(b)))
+        self.send_header("X-Content-Type-Options","nosniff")
+        self.send_header("X-Frame-Options","DENY")
+        self.send_header("Referrer-Policy","same-origin")
+        self.send_header("Permissions-Policy","camera=(),microphone=(),geolocation=()")
         if extra:
             for k,v in extra.items(): self.send_header(k,v)
         self.end_headers()
