@@ -1333,11 +1333,21 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 admin_counts={r["role"]:r["n"] for r in c.execute("SELECT role,COUNT(*) AS n FROM admins GROUP BY role").fetchall()}
                 role_cards="".join('<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>%s</h3><p class="sub">%s</p></div><span class="sub">Administrators: %s · %s</span></div></div>'%(esc(name),esc(desc),admin_counts.get(name,0),esc(kind)) for name,desc,kind in built_in_roles)
                 custom_roles=c.execute("SELECT r.id,r.name,r.description,r.active,r.created_at,COUNT(a.id) AS admin_count FROM rbac_roles r LEFT JOIN admins a ON a.role=r.name WHERE r.built_in=0 GROUP BY r.id,r.name,r.description,r.active,r.created_at ORDER BY r.name").fetchall()
+                permission_rows=c.execute("SELECT id,resource,action,label,risk_level FROM rbac_permissions WHERE active=1 ORDER BY resource,action").fetchall()
+                assigned_rows=c.execute("SELECT role_id,permission_id FROM rbac_role_permissions").fetchall()
+                assigned_by_role={}
+                for ar in assigned_rows:
+                    assigned_by_role.setdefault(ar["role_id"],set()).add(ar["permission_id"])
                 c.close()
-                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">Administrators: %s · %s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Save Changes</button><button class="btn" type="submit" formaction="/admin/roles/duplicate">Duplicate</button><button class="btn" type="submit" formaction="/admin/roles/delete" formmethod="post" onclick="return confirm(&quot;Delete this custom role? This cannot be undone.&quot;)">Delete</button></div></form></div>'%(r["id"],esc(r["name"]),r["admin_count"],("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or "")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
-                body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Create Custom Role</h3><p class="sub">Create a named custom role for future granular permission assignment.</p><form class="form" method="post" action="/admin/roles/create"><label>Role name<input name="name" maxlength="80" placeholder="e.g. Training Coordinator" required></label><label>Description<textarea name="description" maxlength="500" rows="3" placeholder="Describe the intended access scope"></textarea></label><button class="btn primary" type="submit">Create Custom Role</button></form></div><div class="card" style="margin-top:15px"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div><div class="card" style="margin-top:15px"><h3>Custom Roles</h3><p class="sub">Custom roles are persisted independently from the protected built-in roles. Permission assignment will be added in the permission phase.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%(role_cards,custom_cards)
+                permission_controls={}
+                for role in custom_roles:
+                    checked=assigned_by_role.get(role["id"],set())
+                    controls="".join('<label style="display:flex;gap:8px;align-items:center;font-size:12px;margin:4px 0"><input type="checkbox" name="permission_ids" value="%s"%s> %s <span class="sub">(%s · %s)</span></label>'%(p["id"]," checked" if p["id"] in checked else "",esc(p["label"]),esc(p["resource"]+"."+p["action"]),esc(p["risk_level"])) for p in permission_rows)
+                    permission_controls[role["id"]]=controls or '<p class="sub">No active permissions are available.</p>'
+                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">Administrators: %s · %s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Save Changes</button><button class="btn" type="submit" formaction="/admin/roles/duplicate">Duplicate</button><button class="btn" type="submit" formaction="/admin/roles/delete" formmethod="post" onclick="return confirm(&quot;Delete this custom role? This cannot be undone.&quot;)">Delete</button></div></form><div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2ebe7"><h4>Permissions</h4><p class="sub">Persist the permissions assigned to this custom role. Authorization enforcement is a separate Phase D task.</p><form class="form" method="post" action="/admin/roles/permissions"><input type="hidden" name="role_id" value="%s"><div style="max-height:360px;overflow:auto;padding:8px 4px">%s</div><button class="btn primary" type="submit">Save Permissions</button></form></div></div>'%(r["id"],esc(r["name"]),r["admin_count"],("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or ""),r["id"],permission_controls.get(r["id"],"")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
+                body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Create Custom Role</h3><p class="sub">Create a named custom role for granular permission assignment.</p><form class="form" method="post" action="/admin/roles/create"><label>Role name<input name="name" maxlength="80" placeholder="e.g. Training Coordinator" required></label><label>Description<textarea name="description" maxlength="500" rows="3" placeholder="Describe the intended access scope"></textarea></label><button class="btn primary" type="submit">Create Custom Role</button></form></div><div class="card" style="margin-top:15px"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div><div class="card" style="margin-top:15px"><h3>Custom Roles</h3><p class="sub">Custom roles can now persist granular permission assignments. Enforcement remains a separate Phase D task.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%(role_cards,custom_cards)
                 return self.admin_shell("Admin Users",body,"Admin Users")
-            rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
+                        rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
             c.close()
             roles=["Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor"]
             role_opts=lambda selected:"".join('<option value="%s"%s>%s</option>'%(esc(x),' selected' if x==selected else '',esc(x)) for x in roles)
@@ -1828,6 +1838,45 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             audit(admin["username"],"ADMIN_CREATE","username=%s role=%s"%(username,role),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins"})
 
+        if p.path=="/admin/roles/permissions":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            role_id=form.get("role_id",[""])[0]
+            if not role_id.isdigit():
+                return self.sendbody(400,"Invalid custom role","text/plain")
+            permission_ids=sorted({int(value) for value in form.get("permission_ids",[]) if value.isdigit()})
+            c=db()
+            role=c.execute("SELECT id,name,built_in,active FROM rbac_roles WHERE id=?",(int(role_id),)).fetchone()
+            if not role:
+                c.close()
+                return self.sendbody(404,"Custom role not found","text/plain")
+            if role["built_in"]:
+                c.close()
+                return self.sendbody(400,"Built-in roles cannot be modified","text/plain")
+            if not role["active"]:
+                c.close()
+                return self.sendbody(400,"Inactive custom roles cannot receive permissions","text/plain")
+            valid=[]
+            if permission_ids:
+                placeholders=",".join("?" for _ in permission_ids)
+                valid=c.execute("SELECT id FROM rbac_permissions WHERE active=1 AND id IN (%s)"%placeholders,tuple(permission_ids)).fetchall()
+            if {int(x["id"]) for x in valid} != set(permission_ids):
+                c.close()
+                return self.sendbody(400,"One or more selected permissions are invalid or inactive","text/plain")
+            try:
+                c.execute("BEGIN")
+                c.execute("DELETE FROM rbac_role_permissions WHERE role_id=?",(int(role_id),))
+                if permission_ids:
+                    c.executemany("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",[(int(role_id),pid,now()) for pid in permission_ids])
+                c.commit()
+            except Exception:
+                c.rollback()
+                c.close()
+                return self.sendbody(500,"Unable to save role permissions","text/plain")
+            c.close()
+            audit(admin["username"],"ROLE_PERMISSION_UPDATE","role_id=%s permission_count=%s"%(role_id,len(permission_ids)),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
         if p.path=="/admin/roles/create":
             admin=self.current_admin()
             if not admin or admin.get("role")!="Administrator":

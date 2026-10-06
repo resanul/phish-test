@@ -495,7 +495,7 @@ Never record:
 
 ### Phase D — True RBAC Enforcement
 
-- [ ] Role-permission persistence
+- [x] Role-permission persistence
 - [ ] Permission resolver
 - [ ] Route/action permission mapping
 - [ ] Compatibility layer for current roles
@@ -592,7 +592,7 @@ Current status:
 
 **Completed milestone:** Phase C — Permission Catalog is complete, including the permission schema, seeded definitions, search/filter, read-only matrix, and risk/privilege classification.
 
-**Next task:** Phase D — True RBAC Enforcement.
+**Completed task:** Phase D — Role-permission persistence is complete for custom roles, including validated permission assignment persistence, replacement semantics, built-in/inactive protection, and ROLE_PERMISSION_UPDATE audit logging. Authorization resolution and enforcement remain separate Phase D tasks.\n\n**Next task:** Phase D — Permission resolver.
 
 ---
 
