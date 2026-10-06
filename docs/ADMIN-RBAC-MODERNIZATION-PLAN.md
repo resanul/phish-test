@@ -488,7 +488,7 @@ Never record:
 
 - [x] Permission catalog schema
 - [x] Seed permission definitions
-- [ ] Permission search/filter
+- [x] Permission search/filter
 - [ ] Permission matrix UI
 - [ ] Risk/privilege classification
 - [ ] Mark milestone
@@ -584,7 +584,9 @@ Current status:
 
 **Completed task:** Phase C — Seed permission definitions are now seeded idempotently in the backend with 38 resource/action definitions.
 
-**Next task:** Phase C — Permission search/filter.
+**Completed task:** Phase C — Permission search/filter is now available in the administrator Permission Catalog with text search and resource filtering across the seeded definitions.
+
+**Next task:** Phase C — Permission matrix UI.
 
 ---
 
