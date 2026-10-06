@@ -82,3 +82,37 @@ After changing it:
 systemctl daemon-reload
 systemctl restart phish-simulation
 ```
+## Trust PhishGuard enterprise capabilities
+
+The platform currently includes:
+
+- Controlled campaigns with timezone-aware scheduling, business-day windows, batching, rate limits, retries, pause/resume/cancel and send-by enforcement.
+- Recipient profiles, groups, suppression and import validation.
+- Campaign/recipient tracking tokens, delivery, click, action, report, QR and bot telemetry with event deduplication.
+- Training courses, assignments, pass/fail tracking, overdue state and remediation campaign linkage.
+- Executive reporting: campaign comparison, department/monthly reports, risk/resilience trends, PDF export and scheduled PDF email reports.
+- Template Builder with sender metadata, version history, ownership/status, safe reusable variables and non-tracked test-send.
+- Landing-page editor with versioning and credential-field safety validation.
+- SMTP provider profiles, encrypted secrets, connectivity diagnostics and an OAuth2/XOAUTH2 authentication abstraction.
+- Security hardening: CSRF protection, security headers, login rate limiting, role-based admin permissions and idle/absolute session timeouts.
+
+### Safe template variables
+
+Reusable simulation variables are intentionally limited to non-secret recipient/campaign metadata:
+
+`{{name}}`, `{{email}}`, `{{employee_id}}`, `{{department}}`, `{{designation}}`, `{{location}}`, `{{manager}}`, `{{language}}`, `{{timezone}}`, `{{campaign_name}}`, `{{tracking_link}}`, `{{report_link}}`, `{{qr_link}}`.
+
+The platform must never request, collect, store, export or process passwords, OTPs, PINs, CVVs, full card numbers or authentication secrets.
+
+### SMTP diagnostics
+
+From an enabled SMTP profile, **Run Diagnostics** performs:
+
+1. DNS resolution
+2. TCP connection
+3. TLS/session negotiation
+4. SMTP authentication when configured
+5. Optional one-message send to an explicitly supplied test recipient
+
+Diagnostic output never displays SMTP passwords or tokens.
+
