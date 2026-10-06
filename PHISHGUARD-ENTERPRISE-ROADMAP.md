@@ -36,12 +36,12 @@ PhishGuard is being developed as a full internal phishing-simulation and securit
 - [x] Immediate controlled launch
 - [x] Scheduled launch
 - [x] Campaign-specific tracking and delivery records
-- [ ] Start date/time/timezone UI
-- [ ] Business days/hours
-- [ ] Sending windows
-- [ ] Throttling / batch size
-- [ ] Send-by deadline
-- [ ] Pause/resume/cancel
+- [x] Start date/time/timezone UI
+- [x] Business days/hours
+- [x] Sending windows
+- [x] Throttling / batch size
+- [x] Send-by deadline
+- [x] Pause/resume/cancel
 - [ ] Pre-launch validation
 - [ ] Test-send before launch
 
@@ -163,14 +163,14 @@ Target controls:
 
 Current:
 - [x] Background scheduler and scheduled launch
-- [ ] Timezone-safe validation
-- [ ] Business-day calendar
-- [ ] Sending window
-- [ ] Rate limiting
-- [ ] Batch queue
-- [ ] Retry/backoff
-- [ ] Pause/resume/cancel
-- [ ] Send-by enforcement
+- [x] Timezone-safe validation
+- [x] Business-day calendar
+- [x] Sending window
+- [x] Rate limiting
+- [x] Batch queue
+- [x] Retry/backoff
+- [x] Pause/resume/cancel
+- [x] Send-by enforcement
 
 ## Reporting Metrics
 Required where genuinely measurable:
@@ -223,4 +223,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Phase 6 Training is complete. Implemented course assignment, due dates, completion tracking, overdue detection, pass/fail scoring against course passing thresholds, trigger/remediation campaign linkage, training telemetry, and training dashboard results. Next implementation order: Campaign scheduler/throttling controls, followed by Landing-page editor and Executive Reporting.
+**Current implementation milestone:** Campaign Scheduler/Throttling is implemented. Added timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Remaining Phase 2 controls are pre-launch validation and test-send before launch. Next implementation order: Landing-page editor, followed by Executive Reporting and Security Hardening.
