@@ -567,9 +567,9 @@ def _send_campaign_recipient(campaign,rec,queue_id):
     token=create_tracking_token(campaign["id"],rec["id"])
     link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"t":token})
     msg=EmailMessage()
-    msg["From"]=formataddr((campaign["from_name"] or "Trust PhishGuard",campaign["from_email"]))
-    if campaign["reply_to"]:
-        msg["Reply-To"]=campaign["reply_to"]
+    msg["From"]=formataddr((campaign["template_from_name"] or campaign["from_name"] or "Trust PhishGuard",campaign["template_from_email"] or campaign["from_email"]))
+    if campaign["template_reply_to"] or campaign["reply_to"]:
+        msg["Reply-To"]=campaign["template_reply_to"] or campaign["reply_to"]
     msg["To"]=rec["email"]
     msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
     links={"tracking_link":link,"report_link":PUBLIC_BASE_URL+"/report?t="+token,"qr_link":PUBLIC_BASE_URL+"/qr?t="+token}
@@ -616,11 +616,16 @@ def campaign_prelaunch_validation(campaign):
     c=db()
     smtp=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(campaign["smtp_profile_id"],)).fetchone() if campaign["smtp_profile_id"] else None
     landing=c.execute("SELECT * FROM landing_pages WHERE id=? AND status='Enabled'",(campaign["landing_page_id"],)).fetchone() if campaign["landing_page_id"] else None
+    template=c.execute("SELECT status,html_body FROM template_library WHERE template=?",(campaign["template"],)).fetchone()
     group=campaign["group_name"] or ""
     recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(group,group)).fetchone()["n"]
     c.close()
     if not smtp: errors.append("Enabled SMTP provider is required.")
     if not landing: errors.append("Enabled landing page is required.")
+    if template and (template["status"] or "Active")!="Active": errors.append("Selected template is archived.")
+    if template:
+        ok,msg=validate_template_html(template["html_body"] or "")
+        if not ok: errors.append(msg)
     if not recipient_count: errors.append("No eligible recipients are available.")
     if not (campaign["subject"] or "").strip(): errors.append("Campaign subject is required.")
     if not re.fullmatch(r"\d+",str(campaign["template"] or "")): errors.append("Template selection is invalid.")
