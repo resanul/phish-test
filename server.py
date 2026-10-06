@@ -532,6 +532,18 @@ def smtp_diagnostics(profile,to_email=""):
             except Exception: pass
     return result
 
+def smtp_authenticate(smtp,profile):
+    method=(profile["auth_method"] or "password").lower()
+    if method=="oauth2":
+        token=decrypt_secret(profile["oauth_token_enc"]) if profile["oauth_token_enc"] else ""
+        if not token:
+            raise RuntimeError("SMTP OAuth2 access token is not configured")
+        auth_string=lambda challenge=None: "\x00%s\x00%s"%(profile["username"] or "",token)
+        smtp.auth("XOAUTH2",auth_string,initial_response_ok=True)
+        return
+    if profile["username"]:
+        smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
+
 def smtp_connect(profile):
     host=profile["host"]; port=int(profile["port"]); security=profile["security"]
     if security=="SSL/TLS":
@@ -542,8 +554,7 @@ def smtp_connect(profile):
         if security=="STARTTLS":
             smtp.starttls(context=ssl.create_default_context())
             smtp.ehlo()
-    if profile["username"]:
-        smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
+    smtp_authenticate(smtp,profile)
     return smtp
 
 def campaign_zone(campaign):
