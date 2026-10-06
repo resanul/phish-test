@@ -240,6 +240,7 @@ Progress:
 - [x] Administrator access preview
 - [x] Existing-role assignment
 - [x] Administrator status controls
+- [x] Safe self/last-admin protection
 - [ ] Roles management and custom role lifecycle
 - [ ] Permission catalog and matrix
 - [ ] Granular role-permission enforcement
