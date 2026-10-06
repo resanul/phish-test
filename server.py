@@ -639,6 +639,61 @@ def report_window(query):
         raise ValueError("Start date must be before end date.")
     return start_dt.isoformat(),end_dt.isoformat(),start_dt.date().isoformat(),(end_dt-timedelta(days=1)).date().isoformat()
 
+def pdf_escape(value):
+    text_value=str(value or "").replace("\\","\\\\").replace("(","\\(").replace(")","\\)")
+    return text_value.encode("latin-1","replace").decode("latin-1")
+
+def build_pdf(lines,title="Trust PhishGuard Report"):
+    # Minimal dependency-free PDF writer for RHEL/python-stdlib deployments.
+    page_lines=[]; current=[]
+    for line in lines:
+        if len(current)>=48:
+            page_lines.append(current); current=[]
+        current.append(str(line)[:105])
+    if current or not page_lines: page_lines.append(current)
+    objects=[]
+    page_ids=[]; content_ids=[]
+    for page in page_lines:
+        content="BT /F1 10 Tf 42 750 Td 14 TL "
+        first=True
+        for line in page:
+            if not first: content+="T* "
+            content+="("+pdf_escape(line)+") Tj "
+            first=False
+        content+="ET"
+        cb=content.encode("latin-1","replace")
+        content_ids.append(len(objects)+4)
+        objects.extend([None,None,None])
+        page_ids.append(len(objects)+4)
+        objects.append(None)
+    # Rebuild deterministic object list: catalog, pages, font, then content/page pairs.
+    objs=[None,None,None]
+    kids=[]
+    for page in page_lines:
+        content="BT /F1 10 Tf 42 750 Td 14 TL "
+        for n,line in enumerate(page):
+            if n: content+="T* "
+            content+="("+pdf_escape(line)+") Tj "
+        content+=" ET"
+        stream=content.encode("latin-1","replace")
+        content_obj=len(objs)+1; objs.append(("stream",stream))
+        page_obj=len(objs)+1; objs.append(("page",content_obj))
+        kids.append(page_obj)
+    objs[0]=("catalog",None); objs[1]=("pages",kids); objs[2]=("font",None)
+    out=bytearray(b"%PDF-1.4\\n%\\xe2\\xe3\\xcf\\xd3\\n"); offsets=[0]
+    for num,obj in enumerate(objs,1):
+        offsets.append(len(out)); out.extend(("%d 0 obj\\n"%num).encode())
+        if obj[0]=="catalog": out.extend(b"<< /Type /Catalog /Pages 2 0 R >>\\n")
+        elif obj[0]=="pages": out.extend(("<< /Type /Pages /Kids [%s] /Count %d >>\\n"%(" ".join("%d 0 R"%x for x in obj[1]),len(obj[1]))).encode())
+        elif obj[0]=="font": out.extend(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\\n")
+        elif obj[0]=="stream": out.extend(("<< /Length %d >>\\nstream\\n"%len(obj[1])).encode()); out.extend(obj[1]); out.extend(b"\\nendstream\\n")
+        elif obj[0]=="page": out.extend(("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents %d 0 R >>\\n"%obj[1]).encode())
+        out.extend(b"endobj\\n")
+    xref=len(out); out.extend(("xref\\n0 %d\\n"%(len(objs)+1)).encode()); out.extend(b"0000000000 65535 f \\n")
+    for off in offsets[1:]: out.extend(("%010d 00000 n \\n"%off).encode())
+    out.extend(("trailer\\n<< /Size %d /Root 1 0 R >>\\nstartxref\\n%d\\n%%%%EOF\\n"%(len(objs)+1,xref)).encode())
+    return bytes(out)
+
 def report_metric_sql(alias="e"):
     return """COALESCE(SUM(CASE WHEN %s.event='click' THEN 1 ELSE 0 END),0) clicks,
 COALESCE(SUM(CASE WHEN %s.event='form_action' THEN 1 ELSE 0 END),0) actions,
