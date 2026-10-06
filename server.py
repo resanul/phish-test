@@ -165,6 +165,12 @@ def db():
         from_name TEXT,
         from_email TEXT NOT NULL,
         reply_to TEXT,
+        auth_method TEXT DEFAULT 'password',
+        oauth_token_enc TEXT,
+        oauth_refresh_token_enc TEXT,
+        oauth_token_url TEXT,
+        oauth_client_id TEXT,
+        oauth_scopes TEXT,
         enabled INTEGER DEFAULT 1,
         created_at TEXT,
         updated_at TEXT
@@ -226,6 +232,10 @@ def db():
     ON landing_page_versions(landing_page_id,version);
 
     """)
+    cols_smtp={row[1] for row in c.execute("PRAGMA table_info(smtp_profiles)").fetchall()}
+    for col,definition in (("auth_method","TEXT DEFAULT 'password'"),("oauth_token_enc","TEXT"),("oauth_refresh_token_enc","TEXT"),("oauth_token_url","TEXT"),("oauth_client_id","TEXT"),("oauth_scopes","TEXT")):
+        if col not in cols_smtp: c.execute("ALTER TABLE smtp_profiles ADD COLUMN %s %s"%(col,definition))
+
     cols_template={row[1] for row in c.execute("PRAGMA table_info(template_library)").fetchall()}
     if "version" not in cols_template: c.execute("ALTER TABLE template_library ADD COLUMN version INTEGER DEFAULT 1")
 
