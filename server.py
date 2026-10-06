@@ -225,6 +225,20 @@ BOT_UA_RE=re.compile(r"(bot|crawler|spider|scanner|proofpoint|mimecast|barracuda
 def is_bot_user_agent(ua):
     return bool(BOT_UA_RE.search(ua or ""))
 
+LANDING_BLOCKED_PATTERNS=(
+    r'(?is)<input[^>]+(?:type\\s*=\\s*["\\\']?password|name\\s*=\\s*["\\\']?(?:password|passwd|passcode))',
+    r'(?is)(?:name|id)\\s*=\\s*["\\\']?(?:otp|one[-_ ]?time[-_ ]?password|pin|cvv|cvc|card[-_ ]?number)',
+    r'(?is)(?:otp|one[-_ ]?time[-_ ]?password|cvv|cvc|card[-_ ]?number)\\s*[:=]'
+)
+
+def validate_landing_html(body):
+    if len(body)>500000:
+        return False,"Landing page HTML exceeds the 500 KB limit."
+    for pattern in LANDING_BLOCKED_PATTERNS:
+        if re.search(pattern,body or ""):
+            return False,"Blocked field policy: passwords, OTPs, PINs, CVV/CVC or card-number collection is not allowed."
+    return True,""
+
 def create_tracking_token(campaign_id,recipient_id):
     token=secrets.token_urlsafe(32)
     c=db()
