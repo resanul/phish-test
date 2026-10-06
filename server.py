@@ -277,6 +277,20 @@ LANDING_BLOCKED_PATTERNS=(
     r'(?is)(?:name|id)\s*=\s*["\\\']?(?:otp|one[-_ ]?time[-_ ]?password|pin|cvv|cvc|card[-_ ]?number)',
     r'(?is)(?:otp|one[-_ ]?time[-_ ]?password|cvv|cvc|card[-_ ]?number)\s*[:=]'
 )
+TEMPLATE_BLOCKED_PATTERNS=(
+    r'(?is)<input[^>]+(?:type\s*=\s*["\\\']?password|name\s*=\s*["\\\']?(?:password|passwd|passcode))',
+    r'(?is)(?:name|id)\s*=\s*["\\\']?(?:otp|one[-_ ]?time[-_ ]?password|pin|cvv|cvc|card[-_ ]?number)',
+    r'(?is)(?:otp|one[-_ ]?time[-_ ]?password|cvv|cvc|card[-_ ]?number)\s*[:=]'
+)
+
+def validate_template_html(body):
+    if len(body or "")>500000:
+        return False,"Template HTML exceeds the 500 KB limit."
+    for pattern in TEMPLATE_BLOCKED_PATTERNS:
+        if re.search(pattern,body or ""):
+            return False,"Blocked field policy: passwords, OTPs, PINs, CVV/CVC or card-number collection is not allowed."
+    return True,""
+
 def validate_landing_html(body):
     if len(body)>500000:
         return False,"Landing page HTML exceeds the 500 KB limit."
@@ -1401,6 +1415,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             text_body=form.get("text_body",[""])[0][:10000]
             if not name or not html_body:
                 return self.sendbody(400,"Template name and HTML body are required","text/plain")
+            ok,msg=validate_template_html(html_body)
+            if not ok: return self.sendbody(400,msg,"text/plain")
             fn=os.path.join(TEMPLATES,tid+".html")
             with open(fn,"w",encoding="utf-8") as tf: tf.write(html_body)
             c=db()
