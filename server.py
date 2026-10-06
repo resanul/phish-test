@@ -537,6 +537,26 @@ def queue_campaign(campaign_id):
     c.close()
     return len(recipients)
 
+SAFE_TEMPLATE_VARIABLES=("name","email","employee_id","department","designation","location","manager","language","timezone","campaign_name","tracking_link","report_link","qr_link")
+
+def render_template_variables(body,recipient,campaign,links):
+    values={
+        "name":recipient["name"] or "",
+        "email":recipient["email"] or "",
+        "employee_id":recipient["employee_id"] or "",
+        "department":recipient["department"] or "",
+        "designation":recipient["designation"] or "",
+        "location":recipient["location"] or "",
+        "manager":recipient["manager"] or "",
+        "language":recipient["language"] or "",
+        "timezone":recipient["timezone"] or "",
+        "campaign_name":campaign["name"] or "",
+        "tracking_link":links["tracking_link"],
+        "report_link":links["report_link"],
+        "qr_link":links["qr_link"]
+    }
+    return re.sub(r"\{\{\s*([a-z_]+)\s*\}\}",lambda m:esc(str(values.get(m.group(1),m.group(0)))),body or "")
+
 def _send_campaign_recipient(campaign,rec,queue_id):
     c=db()
     c.execute("UPDATE campaign_queue SET status='Sending',attempts=attempts+1,updated_at=? WHERE id=?",(now(),queue_id))
