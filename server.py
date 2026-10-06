@@ -757,9 +757,11 @@ class Handler(BaseHTTPRequestHandler):
         s=c.get("admin_session")
         session=SESSIONS.get(s.value) if s else None
         if not session: return False
-        if time.time()-session["created_at"]>28800:
+        now_ts=time.time()
+        if now_ts-session["created_at"]>28800 or now_ts-session.get("last_seen",session["created_at"])>1800:
             SESSIONS.pop(s.value,None)
             return False
+        session["last_seen"]=now_ts
         return True
 
     def current_admin(self):
@@ -1352,7 +1354,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 valid=True
             if valid:
                 LOGIN_ATTEMPTS.pop(self.client_address[0],None)
-                sid=secrets.token_urlsafe(32); SESSIONS[sid]={"username":username,"role":admin["role"] if admin else "Administrator","created_at":time.time()}
+                sid=secrets.token_urlsafe(32); SESSIONS[sid]={"username":username,"role":admin["role"] if admin else "Administrator","created_at":time.time(),"last_seen":time.time()}
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"
                 if self.headers.get("X-Forwarded-Proto","").lower()=="https": ck["admin_session"]["Secure"]=True
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
