@@ -129,11 +129,11 @@ Current:
 - [x] Subject, preheader, HTML, plain text
 - [x] Category, difficulty, language, brand, industry, tags
 - [x] Preview
-- [ ] From-name/from-email/reply-to metadata at template level
-- [ ] Test-send from template
+- [x] From-name/from-email/reply-to metadata at template level
+- [x] Test-send from template
 - [x] Version history
-- [ ] Ownership/status/archiving
-- [ ] Safe reusable variable/token system
+- [x] Ownership/status/archiving
+- [x] Safe reusable variable/token system
 
 ## Landing Page System
 - [x] Landing-page registry and template mapping
@@ -224,4 +224,4 @@ PhishGuard is enterprise-ready for the internal simulation use case when SMTP, c
 ## Current Repository Snapshot
 The repository already contains foundations for Trust PhishGuard UI, SQLite runtime data, SMTP profiles/encrypted secrets, SMTP test sending, campaigns, recipients/groups, immediate/scheduled delivery, campaign tracking/reporting, risk foundation, training foundation, template builder, CSV export, audit logging, and deployment/update/rollback scripts.
 
-**Current implementation milestone:** Landing Page Editor is implemented with editable HTML/plain-text content, version history, preview, size limits, and a safety field-policy validator that blocks credential collection fields. Campaign Scheduler/Throttling remains implemented with timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Phase 2 campaign-engine controls are complete, including pre-launch validation and non-tracked SMTP test-send. Executive Reporting core views are now implemented: campaign comparison, department reporting, monthly reporting, executive dashboard, risk/resilience trends, and date-range filters. Phase 7 is complete: executive PDF export and scheduled PDF email reports are implemented. Security hardening now includes security response headers, same-origin CSRF protection, login rate limiting, hashed admin credentials, least-privilege admin roles, role-based module enforcement, active-account controls, hardened session cookies, and idle/absolute session timeouts. Next: template-builder test-send/ownership/status/archiving and safe reusable variables, then SMTP connectivity diagnostics/OAuth, followed by documentation and deployment acceptance.
+**Current implementation milestone:** Landing Page Editor is implemented with editable HTML/plain-text content, version history, preview, size limits, and a safety field-policy validator that blocks credential collection fields. Campaign Scheduler/Throttling remains implemented with timezone-safe validation, business-day scheduling, sending windows, rate limiting, batch queueing, retry/backoff, pause/resume/cancel controls, and send-by enforcement. Phase 2 campaign-engine controls are complete, including pre-launch validation and non-tracked SMTP test-send. Executive Reporting core views are now implemented: campaign comparison, department reporting, monthly reporting, executive dashboard, risk/resilience trends, and date-range filters. Phase 7 is complete: executive PDF export and scheduled PDF email reports are implemented. Security hardening now includes security response headers, same-origin CSRF protection, login rate limiting, hashed admin credentials, least-privilege admin roles, role-based module enforcement, active-account controls, hardened session cookies, and idle/absolute session timeouts. Template Builder completion is implemented: sender metadata, non-tracked test-send, version history, ownership/status/archiving, and safe reusable variables are complete. Next: SMTP connectivity diagnostics (DNS → TCP → TLS → AUTH → send), OAuth abstraction, then documentation and deployment acceptance.
