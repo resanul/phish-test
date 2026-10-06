@@ -1004,6 +1004,25 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
             return self.sendbody(401,self.login_page("Invalid username or password"))
+        if p.path=="/admin/landing-pages/save":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            lid=form.get("id",[""])[0]
+            name=form.get("name",[""])[0].strip()[:150]
+            status=form.get("status",["Enabled"])[0]
+            html_body=form.get("html_body",[""])[0]
+            text_body=form.get("text_body",[""])[0][:200000]
+            if status not in ("Enabled","Disabled"): status="Enabled"
+            if not name: return self.sendbody(400,"Landing page name is required","text/plain")
+            ok,msg=validate_landing_html(html_body)
+            if not ok: return self.sendbody(400,msg,"text/plain")
+            c=db(); row=c.execute("SELECT * FROM landing_pages WHERE id=?",(lid,)).fetchone()
+            if not row: c.close(); return self.sendbody(404,"Landing page not found","text/plain")
+            next_version=(c.execute("SELECT COALESCE(MAX(version),0)+1 n FROM landing_page_versions WHERE landing_page_id=?",(lid,)).fetchone()["n"])
+            c.execute("UPDATE landing_pages SET name=?,status=?,html_body=?,text_body=?,version=?,updated_at=? WHERE id=?",(name,status,html_body,text_body,next_version,now(),lid))
+            c.execute("INSERT INTO landing_page_versions(landing_page_id,version,html_body,text_body,created_at,created_by) VALUES(?,?,?,?,?,?)",(lid,next_version,html_body,text_body,now(),ADMIN_USERNAME))
+            c.commit(); c.close()
+            audit(ADMIN_USERNAME,"LANDING_PAGE_UPDATE",f"landing_page={lid} version={next_version}",ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/landing-pages?id="+str(lid)})
         if p.path=="/admin/templates/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             tid=form.get("template",[""])[0][:20]
