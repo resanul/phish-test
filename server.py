@@ -1285,7 +1285,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if secrets.compare_digest(username,ADMIN_USERNAME) and secrets.compare_digest(password,ADMIN_PASSWORD):
                 LOGIN_ATTEMPTS.pop(self.client_address[0],None)
                 sid=secrets.token_urlsafe(32); SESSIONS.add(sid)
-                ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"
+                ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"
+                if self.headers.get("X-Forwarded-Proto","").lower()=="https": ck["admin_session"]["Secure"]=True
                 return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":ck["admin_session"].OutputString()})
             self.login_failed()
             return self.sendbody(401,self.login_page("Invalid username or password"))
