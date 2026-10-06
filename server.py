@@ -689,8 +689,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.admin_shell("Templates",'<h1>Email Templates & Payloads</h1><p>Enterprise-style simulation payload metadata, HTML/plain-text content and preview.</p><p><a class="btn primary" href="/admin/templates?id=1">Open Template Builder</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Category</th><th>Difficulty</th><th>Language</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Templates")
         if path=="/admin/landing-pages":
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td><a class="btn" target="_blank" href="/%s.html">Preview</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),esc(r["template"])) for r in rows)
-            return self.admin_shell("Landing Pages",'<h1>Landing Pages</h1><p>Template-to-landing-page mapping.</p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Landing Pages")
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>v%s</td><td><a class="btn" href="/admin/landing-pages?id=%s">Edit</a> <a class="btn" target="_blank" href="/admin/landing-pages/preview?id=%s">Preview</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),r["version"] or 1,r["id"],r["id"]) for r in rows)
+            return self.admin_shell("Landing Pages",'<h1>Landing Pages</h1><p>Simulation-safe landing page editor with version history and field-policy validation.</p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Status</th><th>Version</th><th></th></tr>'+table+'</table></div>',"Landing Pages")
         if path=="/admin/smtp":
             rows=c.execute("SELECT id,name,provider,host,port,security,username,from_name,from_email,reply_to,enabled,updated_at FROM smtp_profiles ORDER BY id DESC").fetchall(); c.close()
             table="".join('<tr><td>%s</td><td>%s</td><td>%s:%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/smtp?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"Enabled" if r["enabled"] else "Disabled",r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
@@ -929,6 +929,14 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(200,self.template_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/landing-pages" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.landing_page_form(parse_qs(p.query).get("id",[None])[0]))
+        if path=="/admin/landing-pages/preview":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            lid=parse_qs(p.query).get("id",[""])[0]
+            c=db(); row=c.execute("SELECT * FROM landing_pages WHERE id=?",(lid,)).fetchone(); c.close()
+            if not row: return self.sendbody(404,"Landing page not found","text/plain")
+            ok,msg=validate_landing_html(row["html_body"] or "")
+            if not ok: return self.sendbody(400,msg,"text/plain")
+            return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>")
             return self.sendbody(200,self.feature_page(path))
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
