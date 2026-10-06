@@ -629,6 +629,21 @@ DASH_CSS="""
 @media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.hero{align-items:flex-start;gap:15px;flex-direction:column}}@media(max-width:520px){.wrap{padding:18px}.stats{grid-template-columns:1fr 1fr}.topbar{padding:0 16px}.top-actions span{display:none}}
 """
 
+def report_window(query):
+    end_s=(query.get("end",[""])[0] or "").strip()
+    start_s=(query.get("start",[""])[0] or "").strip()
+    now_utc=datetime.now(timezone.utc)
+    end_dt=datetime.fromisoformat(end_s).replace(tzinfo=timezone.utc)+timedelta(days=1) if end_s else now_utc+timedelta(days=1)
+    start_dt=datetime.fromisoformat(start_s).replace(tzinfo=timezone.utc) if start_s else end_dt-timedelta(days=30)
+    if start_dt>=end_dt:
+        raise ValueError("Start date must be before end date.")
+    return start_dt.isoformat(),end_dt.isoformat(),start_dt.date().isoformat(),(end_dt-timedelta(days=1)).date().isoformat()
+
+def report_metric_sql(alias="e"):
+    return """COALESCE(SUM(CASE WHEN %s.event='click' THEN 1 ELSE 0 END),0) clicks,
+COALESCE(SUM(CASE WHEN %s.event='form_action' THEN 1 ELSE 0 END),0) actions,
+COALESCE(SUM(CASE WHEN %s.event='report' THEN 1 ELSE 0 END),0) reports"""%(alias,alias,alias)
+
 class Handler(BaseHTTPRequestHandler):
     def sendbody(self,code,body,ctype="text/html; charset=utf-8",extra=None):
         b=body.encode() if isinstance(body,str) else body
