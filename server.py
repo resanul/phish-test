@@ -585,7 +585,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]; clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]; subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]; c.close(); rate=subs/clicks*100 if clicks else 0
             return self.admin_shell("Exports",'<h1>Exports</h1><p>Download measured simulation telemetry. SMTP passwords and encrypted secrets are excluded.</p><div class="card"><h3>Events</h3><p>Total: %s · Clicks: %s · Actions: %s · Action rate: %.1f%%</p><a class="btn primary" href="/admin.csv">Export Event CSV</a></div>'%(total,clicks,subs,rate),"Exports")
         if path=="/admin/settings":
-            c.close(); return self.admin_shell("Settings",'<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div>',"Settings")
+            cfg=risk_settings(c); c.close()
+            body='<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'%(cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
+            return self.admin_shell("Settings",body,"Settings")
         c.close(); return None
 
     def campaign_report(self,cid):
@@ -833,6 +835,16 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.commit(); c.close()
             audit(ADMIN_USERNAME,"TEMPLATE_UPDATE","template=%s name=%s"%(tid,name),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/templates"})
+        if p.path=="/admin/risk/settings":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            try:
+                vals={"click_weight":max(0,min(100,float(form.get("click_weight",["20"])[0]))),"form_action_weight":max(0,min(100,float(form.get("form_action_weight",["35"])[0]))),"report_bonus":max(-100,min(0,float(form.get("report_bonus",["-10"])[0]))),"repeat_bonus":max(0,min(100,float(form.get("repeat_bonus",["15"])[0]))),"lookback_days":max(1,min(3650,int(form.get("lookback_days",["180"])[0]))),"high_threshold":max(1,min(100,float(form.get("high_threshold",["70"])[0]))),"medium_threshold":max(1,min(100,float(form.get("medium_threshold",["40"])[0])))}
+            except (ValueError,TypeError): return self.sendbody(400,"Invalid risk settings","text/plain")
+            if vals["medium_threshold"]>=vals["high_threshold"]: return self.sendbody(400,"Medium threshold must be lower than High threshold","text/plain")
+            c=db()
+            for k,v in vals.items(): c.execute("INSERT INTO risk_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(k,str(v)))
+            c.commit(); c.close(); risk_recalculate(); audit(ADMIN_USERNAME,"RISK_SETTINGS_UPDATE","risk scoring configuration updated",ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/settings"})
         if p.path=="/admin/smtp/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:100]; provider=form.get("provider",["Custom SMTP"])[0]
