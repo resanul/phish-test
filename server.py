@@ -258,6 +258,21 @@ def db():
 
     """)
 
+    permission_seed=[
+        ("campaign","view","View campaigns","View campaign configuration and status."),("campaign","create","Create campaigns","Create new simulation campaigns."),("campaign","edit","Edit campaigns","Modify campaign configuration before launch."),("campaign","launch","Launch campaigns","Start an authorized simulation campaign."),("campaign","delete","Delete campaigns","Delete campaigns when allowed by lifecycle rules."),
+        ("template","view","View templates","View reusable email template definitions."),("template","create","Create templates","Create reusable simulation email templates."),("template","edit","Edit templates","Modify reusable simulation email templates."),("template","archive","Archive templates","Archive reusable email templates."),
+        ("landing_page","view","View landing pages","View simulation landing-page definitions."),("landing_page","create","Create landing pages","Create authorized simulation landing pages."),("landing_page","edit","Edit landing pages","Modify authorized simulation landing pages."),
+        ("recipient","view","View recipients","View recipient and organizational metadata."),("recipient","create","Create recipients","Create recipient records for simulations."),("recipient","edit","Edit recipients","Modify recipient metadata."),("recipient","import","Import recipients","Import recipient metadata from approved sources."),
+        ("group","view","View groups","View recipient groups and departments."),("group","manage","Manage groups","Create, update, and organize recipient groups."),
+        ("training","view","View training","View training courses and assignments."),("training","manage","Manage training","Create and manage awareness training content."),("training","assign","Assign training","Assign approved training to recipients."),
+        ("report","view","View reports","View campaign, risk, and training reports."),("report","export","Export reports","Export authorized reporting data."),("report","schedule","Schedule reports","Create and manage scheduled reports."),
+        ("risk","view","View risk","View risk scores, trends, and history."),("risk","manage","Manage risk","Modify risk settings and remediation controls."),
+        ("smtp","view","View SMTP","View SMTP provider configuration metadata."),("smtp","manage","Manage SMTP","Create and modify SMTP provider profiles."),("smtp","diagnostics","Run SMTP diagnostics","Run SMTP connectivity diagnostics."),
+        ("audit","view","View audit log","View administrative audit events."),
+        ("admin","view","View administrators","View administrator accounts and access status."),("admin","create","Create administrators","Create administrator accounts."),("admin","edit","Edit administrators","Modify administrator roles and account settings."),("admin","disable","Disable administrators","Disable administrator accounts."),
+        ("role","view","View roles","View built-in and custom roles."),("role","create","Create roles","Create custom administrative roles."),("role","edit","Edit roles","Modify custom role definitions."),("role","delete","Delete roles","Delete custom roles when no longer referenced."),
+    ]
+    c.executemany("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",[(resource,action,label,description,"normal") for resource,action,label,description in permission_seed])
     cols_admin={row[1] for row in c.execute("PRAGMA table_info(admins)").fetchall()}
     if "role" not in cols_admin: c.execute('ALTER TABLE admins ADD COLUMN role TEXT DEFAULT "Administrator"')
     if "password_hash" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN password_hash TEXT")
