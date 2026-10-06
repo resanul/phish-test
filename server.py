@@ -72,7 +72,10 @@ def db():
     CREATE INDEX IF NOT EXISTS idx_events_recipient_event ON events(recipient_id,event);
     """)
     c.executescript("""
-    CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, created_at TEXT);
+    CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, role TEXT DEFAULT "Administrator", created_at TEXT);
+    cols_admin={row[1] for row in c.execute("PRAGMA table_info(admins)").fetchall()}
+    if "role" not in cols_admin: c.execute('ALTER TABLE admins ADD COLUMN role TEXT DEFAULT "Administrator"')
+    c.execute("INSERT OR IGNORE INTO admins(username,role,created_at) VALUES(?,?,?)",(ADMIN_USERNAME,"Administrator",now()))
     CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);
     CREATE TABLE IF NOT EXISTS groups_tbl(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,department TEXT,created_at TEXT);
