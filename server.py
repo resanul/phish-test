@@ -1238,8 +1238,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
 </div>
 <label>HTML Body<textarea name="html_body" rows="22" style="width:100%%;font-family:Consolas,monospace;padding:12px;border:1px solid #ccd9d4;border-radius:8px" required>%s</textarea></label>
 <label>Plain Text Body<textarea name="text_body" rows="8" style="width:100%%;padding:12px;border:1px solid #ccd9d4;border-radius:8px">%s</textarea></label>
-<div style="display:flex;gap:8px"><button class="btn primary">Save Template</button><a class="btn" target="_blank" href="/%s.html">Preview</a><a class="btn" href="/admin/templates">Cancel</a></div>
-</form></div><div class="card" style="margin-top:15px"><h3>Version History</h3><table class="table"><tr><th>Version</th><th>Created</th><th>Created By</th></tr>%s</table></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("from_name"),val("from_email"),val("reply_to"),val("owner"),"selected" if (r["status"] or "Active")=="Active" else "","selected" if (r["status"] or "Active")=="Archived" else "",val("html_body"),val("text_body"),val("template"),version_rows)
+<div style="display:flex;gap:8px"><button class="btn primary">Save Template</button><a class="btn" href="/admin/templates/test-send?id=%s">Test Send</a><a class="btn" target="_blank" href="/%s.html">Preview</a><a class="btn" href="/admin/templates">Cancel</a></div>
+</form></div><div class="card" style="margin-top:15px"><h3>Version History</h3><table class="table"><tr><th>Version</th><th>Created</th><th>Created By</th></tr>%s</table></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("from_name"),val("from_email"),val("reply_to"),val("owner"),"selected" if (r["status"] or "Active")=="Active" else "","selected" if (r["status"] or "Active")=="Archived" else "",val("html_body"),val("text_body"),val("template"),val("template"),version_rows)
         return self.admin_shell("Template Builder",body,"Templates")
 
     def campaign_form(self,cid=None):
@@ -1531,7 +1531,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             finally:
                 smtp.quit()
             audit(admin["username"],"TEMPLATE_TEST_SEND","template=%s to=%s smtp_profile=%s"%(tid,to_email,smtp_id),ip)
-            return self.sendbody(302,b"",extra={"Location":"/admin/templates?id="+urlencode({"x":tid})["x"]})
+            return self.sendbody(302,b"",extra={"Location":"/admin/templates?id="+tid})
         if p.path=="/admin/reports/scheduled/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             name=form.get("name",[""])[0].strip()[:120]
