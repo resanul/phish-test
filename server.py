@@ -1188,10 +1188,12 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(str(tid),f"Template {tid}","Security Awareness Simulation","Authorized security-awareness simulation","General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,"This is an authorized security-awareness simulation.",now()))
                 c.commit()
                 r=c.execute("SELECT * FROM template_library WHERE template=?",(str(tid),)).fetchone()
+        versions=c.execute("SELECT version,created_at,created_by FROM template_versions WHERE template=? ORDER BY version DESC LIMIT 20",(str(tid),)).fetchall() if r else []
         c.close()
         if not r:
             return self.admin_shell("Template","<h1>Template not found</h1><p><a class='btn' href='/admin/templates'>Back</a></p>","Templates")
         def val(k): return esc(r[k] or "")
+        version_rows="".join("<tr><td>v%s</td><td>%s</td><td>%s</td></tr>"%(v["version"],esc(v["created_at"]),esc(v["created_by"])) for v in versions) or "<tr><td colspan='3'>No saved versions yet.</td></tr>"
         cats=["General","Credential Awareness","Malware Awareness","QR Awareness","Finance","HR","IT","Executive","Seasonal"]
         diffs=["Easy","Medium","Hard"]
         langs=["English","Bangla","Bengali-English","Arabic","Hindi"]
@@ -1218,7 +1220,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
 <label>HTML Body<textarea name="html_body" rows="22" style="width:100%%;font-family:Consolas,monospace;padding:12px;border:1px solid #ccd9d4;border-radius:8px" required>%s</textarea></label>
 <label>Plain Text Body<textarea name="text_body" rows="8" style="width:100%%;padding:12px;border:1px solid #ccd9d4;border-radius:8px">%s</textarea></label>
 <div style="display:flex;gap:8px"><button class="btn primary">Save Template</button><a class="btn" target="_blank" href="/%s.html">Preview</a><a class="btn" href="/admin/templates">Cancel</a></div>
-</form></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("html_body"),val("text_body"),val("template"))
+</form></div><div class="card" style="margin-top:15px"><h3>Version History</h3><table class="table"><tr><th>Version</th><th>Created</th><th>Created By</th></tr>%s</table></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("html_body"),val("text_body"),val("template"),version_rows)
         return self.admin_shell("Template Builder",body,"Templates")
 
     def campaign_form(self,cid=None):
