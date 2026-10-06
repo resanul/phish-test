@@ -467,7 +467,7 @@ Never record:
 - [x] Add Administrator creation backend
 - [x] Add Administrator workflow
 - [x] Administrator profile/access preview
-- [ ] Existing-role assignment
+- [x] Existing-role assignment
 - [ ] Administrator status controls
 - [ ] Safe self/last-admin protection
 - [ ] Mark milestone
@@ -571,9 +571,9 @@ Current status:
 - [ ] Phase E — Governance/hardening
 - [ ] Phase F — Resource scoping
 
-**Completed task:** Phase A — administrator creation workflow now includes the administrator creation backend and UI using the existing hashed-password model and built-in roles.
+**Completed task:** Phase A — existing-role assignment is now validated through the existing administrator save workflow, preserving the five built-in roles and auditing role changes.
 
-**Next task:** Phase A — Existing-role assignment.
+**Next task:** Phase A — Administrator status controls.
 
 ---
 
