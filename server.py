@@ -168,6 +168,16 @@ def db():
     for col,definition in (("result","TEXT"),("trigger_campaign_id","INTEGER"),("remediation_campaign_id","INTEGER"),("result_at","TEXT")):
         if col not in cols_training:
             c.execute("ALTER TABLE training_assignments ADD COLUMN %s %s"%(col,definition))
+    cols_landing={row[1] for row in c.execute("PRAGMA table_info(landing_pages)").fetchall()}
+    for col,definition in (("html_body","TEXT"),("text_body","TEXT"),("version","INTEGER DEFAULT 1"),("updated_at","TEXT")):
+        if col not in cols_landing:
+            c.execute("ALTER TABLE landing_pages ADD COLUMN %s %s"%(col,definition))
+    c.execute("""UPDATE landing_pages
+                 SET html_body=COALESCE(html_body,''),
+                     text_body=COALESCE(text_body,''),
+                     version=COALESCE(version,1),
+                     updated_at=COALESCE(updated_at,created_at)
+                 WHERE html_body IS NULL OR text_body IS NULL OR version IS NULL OR updated_at IS NULL""")
     cols_recipient={row[1] for row in c.execute("PRAGMA table_info(recipients)").fetchall()}
     for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'")):
         if col not in cols_recipient:
