@@ -272,7 +272,29 @@ def db():
         ("admin","view","View administrators","View administrator accounts and access status."),("admin","create","Create administrators","Create administrator accounts."),("admin","edit","Edit administrators","Modify administrator roles and account settings."),("admin","disable","Disable administrators","Disable administrator accounts."),
         ("role","view","View roles","View built-in and custom roles."),("role","create","Create roles","Create custom administrative roles."),("role","edit","Edit roles","Modify custom role definitions."),("role","delete","Delete roles","Delete custom roles when no longer referenced."),
     ]
-    c.executemany("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",[(resource,action,label,description,"normal") for resource,action,label,description in permission_seed])
+    risk_levels={
+        ("campaign","launch"):"elevated",
+        ("campaign","delete"):"elevated",
+        ("template","archive"):"elevated",
+        ("recipient","import"):"elevated",
+        ("group","manage"):"elevated",
+        ("training","manage"):"elevated",
+        ("training","assign"):"elevated",
+        ("report","schedule"):"elevated",
+        ("smtp","diagnostics"):"elevated",
+        ("report","export"):"privileged",
+        ("risk","manage"):"privileged",
+        ("smtp","manage"):"privileged",
+        ("admin","create"):"privileged",
+        ("admin","edit"):"privileged",
+        ("admin","disable"):"privileged",
+        ("role","create"):"privileged",
+        ("role","edit"):"privileged",
+        ("role","delete"):"privileged",
+    }
+    c.executemany("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",[(resource,action,label,description,risk_levels.get((resource,action),"normal")) for resource,action,label,description in permission_seed])
+    for (resource,action),risk in risk_levels.items():
+        c.execute("UPDATE rbac_permissions SET risk_level=? WHERE resource=? AND action=?",(risk,resource,action))
     cols_admin={row[1] for row in c.execute("PRAGMA table_info(admins)").fetchall()}
     if "role" not in cols_admin: c.execute('ALTER TABLE admins ADD COLUMN role TEXT DEFAULT "Administrator"')
     if "password_hash" not in cols_admin: c.execute("ALTER TABLE admins ADD COLUMN password_hash TEXT")
