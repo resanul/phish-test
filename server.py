@@ -1283,7 +1283,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 custom_rows=c=db()
                 custom_roles=c.execute("SELECT id,name,description,active,created_at FROM rbac_roles WHERE built_in=0 ORDER BY name").fetchall()
                 c.close()
-                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">%s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Save Changes</button><button class="btn" type="submit" formaction="/admin/roles/duplicate">Duplicate</button></div></form></div>'%(r["id"],esc(r["name"]),("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or "")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
+                custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">%s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Save Changes</button><button class="btn" type="submit" formaction="/admin/roles/duplicate">Duplicate</button><button class="btn" type="submit" formaction="/admin/roles/delete" formmethod="post" onclick="return confirm(&quot;Delete this custom role? This cannot be undone.&quot;)">Delete</button></div></form></div>'%(r["id"],esc(r["name"]),("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or "")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
                 body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Create Custom Role</h3><p class="sub">Create a named custom role for future granular permission assignment.</p><form class="form" method="post" action="/admin/roles/create"><label>Role name<input name="name" maxlength="80" placeholder="e.g. Training Coordinator" required></label><label>Description<textarea name="description" maxlength="500" rows="3" placeholder="Describe the intended access scope"></textarea></label><button class="btn primary" type="submit">Create Custom Role</button></form></div><div class="card" style="margin-top:15px"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div><div class="card" style="margin-top:15px"><h3>Custom Roles</h3><p class="sub">Custom roles are persisted independently from the protected built-in roles. Permission assignment will be added in the permission phase.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%(role_cards,custom_cards)
                 return self.admin_shell("Admin Users",body,"Admin Users")
             rows=c.execute("SELECT id,username,role,active,created_at FROM admins ORDER BY id").fetchall()
@@ -1844,6 +1844,32 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.commit()
             c.close()
             audit(admin["username"],"ROLE_CREATE","source_role_id=%s duplicated_role_id=%s name=%s slug=%s"%(rid,new_id,name,slug),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
+
+        if p.path=="/admin/roles/delete":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            rid=form.get("id",[""])[0]
+            if not rid.isdigit():
+                return self.sendbody(400,"Invalid custom role","text/plain")
+            c=db()
+            row=c.execute("SELECT id,name,built_in FROM rbac_roles WHERE id=?",(int(rid),)).fetchone()
+            if not row:
+                c.close()
+                return self.sendbody(404,"Custom role not found","text/plain")
+            if row["built_in"]:
+                c.close()
+                return self.sendbody(400,"Built-in roles are protected","text/plain")
+            admin_use=c.execute("SELECT COUNT(*) AS n FROM admins WHERE role=?",(row["name"],)).fetchone()["n"]
+            permission_use=c.execute("SELECT COUNT(*) AS n FROM rbac_role_permissions WHERE role_id=?",(int(rid),)).fetchone()["n"]
+            if admin_use or permission_use:
+                c.close()
+                return self.sendbody(409,"Custom role is still referenced and cannot be deleted","text/plain")
+            c.execute("DELETE FROM rbac_roles WHERE id=?",(int(rid),))
+            c.commit()
+            c.close()
+            audit(admin["username"],"ROLE_DELETE","role_id=%s name=%s"%(rid,row["name"]),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
 
         if p.path=="/admin/roles/save":
