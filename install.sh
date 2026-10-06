@@ -36,7 +36,7 @@ Type=simple
 WorkingDirectory=/opt/phish-simulation
 ExecStart=/usr/bin/python3 /opt/phish-simulation/server.py
 Environment=PORT=8080
-Environment=ADMIN_PASSWORD=CHANGE_ME
+EnvironmentFile=-/etc/phish-simulation.env
 Restart=always
 RestartSec=3
 
@@ -58,5 +58,6 @@ fi
 
 echo
 echo "Installation/service setup successful."
-echo "IMPORTANT: Set ADMIN_PASSWORD in /etc/systemd/system/$SERVICE.service"
-echo "Then run: systemctl daemon-reload && systemctl restart $SERVICE"
+echo "IMPORTANT: Configure ADMIN_PASSWORD in /etc/phish-simulation.env (mode 600)."
+echo "Example: printf 'ADMIN_PASSWORD=%s\\n' '<strong-random-password>' > /etc/phish-simulation.env"
+echo "Then run: chmod 600 /etc/phish-simulation.env && systemctl daemon-reload && systemctl restart $SERVICE"
