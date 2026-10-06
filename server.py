@@ -1771,11 +1771,15 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(400,"Invalid administrator settings","text/plain")
             c=db(); row=c.execute("SELECT username,role,active FROM admins WHERE id=?",(int(aid),)).fetchone()
             if not row: c.close(); return self.sendbody(404,"Administrator not found","text/plain")
-            if row["username"]==admin["username"] and active=="0":
-                c.close(); return self.sendbody(400,"You cannot disable your current administrator account","text/plain")
+            if row["username"]==admin["username"] and (active=="0" or role!="Administrator"):
+                c.close(); return self.sendbody(400,"You cannot disable or demote your current administrator account","text/plain")
             old_role=row["role"] or "Administrator"
             old_active=bool(row["active"])
             new_active=(active=="1")
+            if old_role=="Administrator" and old_active and (role!="Administrator" or not new_active):
+                remaining=c.execute("SELECT COUNT(*) AS n FROM admins WHERE id<>? AND role=? AND active=1",(int(aid),"Administrator")).fetchone()["n"]
+                if remaining==0:
+                    c.close(); return self.sendbody(400,"You cannot disable or demote the last active administrator account","text/plain")
             c.execute("UPDATE admins SET role=?,active=? WHERE id=?",(role,int(new_active),int(aid))); c.commit(); c.close()
             if role!=old_role:
                 audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s role=%s"%(row["username"],role),ip)
