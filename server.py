@@ -108,6 +108,12 @@ def db():
     CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,admin TEXT,action TEXT,details TEXT,ip TEXT);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
     CREATE TABLE IF NOT EXISTS campaign_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,recipient_id INTEGER,status TEXT,attempted_at TEXT,sent_at TEXT,error TEXT);
+    CREATE TABLE IF NOT EXISTS campaign_queue(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER NOT NULL,recipient_id INTEGER NOT NULL,status TEXT DEFAULT 'Pending',
+        attempts INTEGER DEFAULT 0,next_attempt_at TEXT,last_error TEXT,queued_at TEXT,updated_at TEXT,
+        UNIQUE(campaign_id,recipient_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_campaign_queue_due ON campaign_queue(campaign_id,status,next_attempt_at);
     CREATE TABLE IF NOT EXISTS smtp_profiles(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
