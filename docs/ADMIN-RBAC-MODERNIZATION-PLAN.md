@@ -643,6 +643,8 @@ Current status:
 
 **Completed follow-up:** Access Preview now exposes active resource-scope assignments using the same resolver-backed, non-secret preview model. Scope rows include only permission key, scope kind, and scope value; inactive permissions/scopes are excluded. The preview now also requires the scope's permission to remain explicitly assigned to the role, preventing stale scope rows from appearing as effective access.
 
+**Completed follow-up:** Access Preview regression coverage now explicitly verifies that inactive scope assignments are excluded from the effective scope list.
+
 ---
 
 ## 15. External UX Research References

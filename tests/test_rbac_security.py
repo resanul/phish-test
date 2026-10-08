@@ -71,6 +71,8 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
         c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
                   (role_id,permission_id,"campaign","123",ts,ts))
+        c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,0,?,?)",
+                  (role_id,permission_id,"campaign","999",ts,ts))
         c.commit()
         c.close()
         preview=self.handler.resolve_role_access_preview("Preview Scope Reviewer")
