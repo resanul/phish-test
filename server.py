@@ -969,6 +969,69 @@ def report_metric_sql(alias="e"):
 COALESCE(SUM(CASE WHEN %s.event='form_action' THEN 1 ELSE 0 END),0) actions,
 COALESCE(SUM(CASE WHEN %s.event='report' THEN 1 ELSE 0 END),0) reports"""%(alias,alias,alias)
 
+RBAC_ROUTE_PERMISSION_MAP={
+    "GET":{
+        "/admin/campaigns":"campaign.view",
+        "/admin/templates":"template.view",
+        "/admin/landing-pages":"landing_page.view",
+        "/admin/smtp":"smtp.view",
+        "/admin/training":"training.view",
+        "/admin/recipients":"recipient.view",
+        "/admin/groups":"group.view",
+        "/admin/users":"admin.view",
+        "/admin/reports":"report.view",
+        "/admin/reports.pdf":"report.export",
+        "/admin/risk":"risk.view",
+        "/admin/exports":"report.export",
+        "/admin/audit":"audit.view",
+        "/admin/admins":"admin.view",
+        "/admin/landing-pages/preview":"landing_page.view",
+        "/admin/smtp/diagnostics":"smtp.diagnostics",
+        "/admin/smtp/new":"smtp.manage",
+        "/admin/training/new":"training.assign",
+        "/admin/training/course/new":"training.manage",
+        "/admin/recipients/import":"recipient.import",
+        "/admin/groups/new":"group.manage",
+        "/admin/templates/test-send":"template.edit",
+        "/admin/campaigns/test-send":"campaign.launch",
+        "/admin/campaigns/launch":"campaign.launch",
+    },
+    "POST":{
+        "/admin/landing-pages/save":{"create":"landing_page.create","edit":"landing_page.edit"},
+        "/admin/templates/save":{"create":"template.create","edit":"template.edit"},
+        "/admin/reports/scheduled/save":"report.schedule",
+        "/admin/admins/create":"admin.create",
+        "/admin/roles/permissions":"role.edit",
+        "/admin/roles/create":"role.create",
+        "/admin/roles/duplicate":"role.create",
+        "/admin/roles/delete":"role.delete",
+        "/admin/roles/save":{"create":"role.create","edit":"role.edit"},
+        "/admin/admins/save":"admin.edit",
+        "/admin/risk/settings":"risk.manage",
+        "/admin/smtp/save":"smtp.manage",
+        "/admin/smtp/diagnostics":"smtp.diagnostics",
+        "/admin/smtp/test":"smtp.diagnostics",
+        "/admin/training/update":"training.manage",
+        "/admin/training/course/save":"training.manage",
+        "/admin/training/assign":"training.assign",
+        "/admin/recipients/save":{"create":"recipient.create","edit":"recipient.edit"},
+        "/admin/recipients/import":"recipient.import",
+        "/admin/groups/save":"group.manage",
+        "/admin/campaigns/control":"campaign.edit",
+        "/admin/campaigns/test-send":"campaign.launch",
+        "/admin/campaigns/launch":"campaign.launch",
+        "/admin/campaigns/save":{"create":"campaign.create","edit":"campaign.edit"},
+    },
+}
+
+def route_permission(path,method,form=None):
+    mapping=RBAC_ROUTE_PERMISSION_MAP.get((method or "").upper(),{})
+    value=mapping.get(path)
+    if isinstance(value,dict):
+        record_id=(form or {}).get("id",[""])[0].strip()
+        return value["edit"] if record_id else value["create"]
+    return value
+
 class Handler(BaseHTTPRequestHandler):
     def sendbody(self,code,body,ctype="text/html; charset=utf-8",extra=None):
         b=body.encode() if isinstance(body,str) else body

@@ -245,6 +245,7 @@ Progress:
 - [x] Permission catalog and matrix
 - [x] Role-permission persistence
 - [x] Permission resolver
+- [x] Route/action permission mapping
 - [ ] Granular role-permission enforcement
 - [ ] RBAC governance and security hardening
 - [ ] Optional resource-level scoping

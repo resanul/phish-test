@@ -596,7 +596,9 @@ Current status:
 
 **Completed task:** Phase D — Permission resolver is complete for persisted custom-role assignments, with inactive-role and inactive-permission filtering. Route/action enforcement remains a separate Phase D task.
 
-**Next task:** Phase D — Route/action permission mapping.
+**Completed task:** Phase D — Route/action permission mapping is now defined for the current admin GET/POST routes, including create/edit distinctions for shared save handlers. The mapping is declarative only; compatibility and enforcement remain separate Phase D tasks.
+
+**Next task:** Phase D — Compatibility layer for current roles.
 
 ---
 
