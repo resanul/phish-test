@@ -397,8 +397,7 @@ def db():
     for i in range(1,11):
         c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
         fn=os.path.join(TEMPLATES,str(i)+".html")
-        existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()
-        if not existing:
+        existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()        if not existing:
             body=""
             try:
                 with open(fn,"r",encoding="utf-8") as tf: body=tf.read()
@@ -797,8 +796,7 @@ def campaign_prelaunch_validation(campaign):
     group=campaign["group_name"] or ""
     recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(group,group)).fetchone()["n"]
     c.close()
-    if not smtp: errors.append("Enabled SMTP provider is required.")
-    if not landing: errors.append("Enabled landing page is required.")
+    if not smtp: errors.append("Enabled SMTP provider is required.")    if not landing: errors.append("Enabled landing page is required.")
     if template and (template["status"] or "Active")!="Active": errors.append("Selected template is archived.")
     if template:
         ok,msg=validate_template_html(template["html_body"] or "")
@@ -1197,8 +1195,7 @@ class Handler(BaseHTTPRequestHandler):
             ).fetchall()
         c.close()
 
-        permissions=[
-            {
+        permissions=[            {
                 "key":"%s.%s"%(row["resource"],row["action"]),
                 "resource":row["resource"],
                 "action":row["action"],
@@ -1235,18 +1232,109 @@ class Handler(BaseHTTPRequestHandler):
         }
         return any(path==prefix or path.startswith(prefix+"/") for prefix in permissions.get(role,()))
 
-    def permission_allowed(self,path,method,form=None):
-        """Evaluate a mapped route against the effective RBAC permission set.
+    def scope_context(self,path,method,form=None,query=""):
+        """Return request values used by resource-scope evaluation.
 
-        Unmapped legacy admin routes retain the existing role gate so the
-        migration can be introduced without changing unrelated behavior.
+        Scope values are intentionally derived from explicit request context;
+        no credential or secret fields are considered.
         """
+        form=form or {}
+        params=parse_qs(query or "")
+        def first(*names):
+            for name in names:
+                value=form.get(name,[""])[0].strip()
+                if not value:
+                    value=params.get(name,[""])[0].strip()
+                if value:
+                    return value
+            return ""
+        if path.startswith("/admin/campaigns"):
+            return {
+                "campaign": first("id","campaign_id"),
+                "campaign_group": first("group_name","group_id"),
+                "campaign_type": first("campaign_type","type"),
+            }
+        if path.startswith("/admin/recipients"):
+            return {
+                "department": first("department"),
+                "organizational_unit": first("organizational_unit","org_unit"),
+            }
+        if path.startswith("/admin/groups"):
+            return {
+                "campaign_group": first("name","group_name","id","group_id"),
+                "department": first("department"),
+                "organizational_unit": first("organizational_unit","org_unit"),
+            }
+        if path.startswith("/admin/templates"):
+            return {"campaign_type": first("campaign_type","type","category")}
+        return {
+            "department": first("department"),
+            "organizational_unit": first("organizational_unit","org_unit"),
+            "campaign_type": first("campaign_type","type"),
+            "campaign_group": first("group_name","group_id"),
+            "campaign": first("campaign_id"),
+        }
+
+    def scoped_permission_allowed(self,role_name,permission_key,path,method,form=None,query=""):
+        """Evaluate assigned resource scopes for one permission.
+
+        No scope rows preserve legacy permission behavior. Once a permission
+        has active scopes, every assigned scope kind must match the request;
+        multiple values within the same kind are alternatives. Wildcard '*'
+        matches any non-empty request value.
+        """
+        if role_name=="Administrator":
+            return True
+        c=db()
+        row=c.execute("SELECT id,built_in,active FROM rbac_roles WHERE name=?",(role_name,)).fetchone()
+        if not row or row["built_in"] or not row["active"]:
+            c.close()
+            return False
+        try:
+            resource,action=permission_key.split(".",1)
+        except ValueError:
+            c.close()
+            return False
+        permission=c.execute(
+            "SELECT id FROM rbac_permissions WHERE resource=? AND action=? AND active=1",
+            (resource,action)
+        ).fetchone()
+        if not permission:
+            c.close()
+            return False
+        rows=c.execute(
+            """SELECT scope_kind,scope_value
+               FROM rbac_resource_scopes
+               WHERE role_id=? AND permission_id=? AND active=1
+               ORDER BY scope_kind,scope_value""",
+            (row["id"],permission["id"])
+        ).fetchall()
+        c.close()
+        if not rows:
+            return True
+        context=self.scope_context(path,method,form,query)
+        grouped={}
+        for item in rows:
+            grouped.setdefault(item["scope_kind"],set()).add(item["scope_value"])
+        for kind,values in grouped.items():
+            actual=context.get(kind,"")
+            if not actual or (actual not in values and "*" not in values):
+                return False
+        return True
+
+    def permission_allowed(self,path,method,form=None,query=""):
+        """Evaluate route permission and any assigned resource scope."""
         if not self.current_admin():
             return False
         required=route_permission(path,method,form)
         if not required:
             return self.role_allowed(path)
-        return required in self.resolve_role_permissions()
+        permissions=self.resolve_role_permissions()
+        if required not in permissions:
+            return False
+        return self.scoped_permission_allowed(
+            self.current_admin().get("role"),required,path,method,form,query
+        )
 
     def login_page(self,error=""):
         err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
@@ -1597,8 +1685,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ) or "<li>No active permissions resolved.</li>"
                 high_risk="".join(
                     "<li><b>%s</b> <span class=\"sub\">(%s)</span></li>"%
-                    (esc(item["label"]),esc(item["risk_level"]))
-                    for item in access_preview["high_risk_permissions"]
+                    (esc(item["label"]),esc(item["risk_level"]))                    for item in access_preview["high_risk_permissions"]
                 ) or "<li>None</li>"
                 risk_counts=access_preview["risk_counts"]
                 modules=", ".join(esc(module) for module in access_preview["modules"]) or "None"
@@ -1765,7 +1852,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         p=urlparse(self.path); path=p.path; ip=self.client_address[0]; ua=self.headers.get("User-Agent","")
         if path.startswith("/admin/") and path not in ("/admin/login",):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            if path!="/admin/logout" and not self.permission_allowed(path,"GET"): return self.sendbody(403,"Insufficient role permission","text/plain")
+            if path!="/admin/logout" and not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
         if path=="/admin":
             if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(200,self.dashboard())
@@ -1783,7 +1870,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            if not self.permission_allowed(path,"GET"): return self.sendbody(403,"Insufficient role permission","text/plain")
+            if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/reports" and parse_qs(p.query).get("campaign_id",[None])[0]:
@@ -1918,7 +2005,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(401,self.login_page("Invalid username or password"))
         if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.csrf_origin_ok():
             return self.sendbody(403,"CSRF validation failed","text/plain")
-        if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.permission_allowed(p.path,"POST",form):
+        if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.permission_allowed(p.path,"POST",form,p.query):
             return self.sendbody(403,"Insufficient role permission","text/plain")
         if p.path=="/admin/landing-pages/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -1997,8 +2084,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(400,"Invalid test-send parameters","text/plain")
             c=db()
             tpl=c.execute("SELECT * FROM template_library WHERE template=?",(tid,)).fetchone()
-            profile=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(int(smtp_id),)).fetchone()
-            c.close()
+            profile=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(int(smtp_id),)).fetchone()            c.close()
             if not tpl: return self.sendbody(404,"Template not found","text/plain")
             if not profile: return self.sendbody(400,"SMTP profile is unavailable","text/plain")
             if (tpl["status"] or "Active")!="Active": return self.sendbody(400,"Archived templates cannot be test-sent","text/plain")
@@ -2397,8 +2483,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
                 return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
         if p.path=="/admin/training/update":
-            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            aid=form.get("id",[""])[0]
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")            aid=form.get("id",[""])[0]
             try:
                 completion=max(0,min(100,float(form.get("completion",["0"])[0]))); raw=form.get("score",[""])[0].strip(); score=None if raw=="" else max(0,min(100,float(raw)))
             except (ValueError,TypeError): return self.sendbody(400,"Invalid completion or score","text/plain")
