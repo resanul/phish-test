@@ -606,6 +606,8 @@ Current status:
 
 **Completed milestone:** Phase D — True RBAC Enforcement is complete, including custom-role permission persistence, effective permission resolution, declarative route/action mapping, built-in compatibility, granular mapped-route enforcement, and the non-secret access-preview resolver.
 
+**Completed task:** Phase E — Privileged-permission confirmation is now enforced for custom-role permission assignments. The UI requires explicit confirmation when privileged permissions are selected, and the backend rejects unconfirmed privileged grants. A first-time privileged grant also records a non-secret PRIVILEGED_PERMISSION_GRANT audit event.
+
 **Next task:** Phase E — Role-change audit events.
 
 ---
