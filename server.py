@@ -120,6 +120,23 @@ def db():
     ON rbac_role_permissions(role_id);
     CREATE INDEX IF NOT EXISTS idx_rbac_role_permissions_permission
     ON rbac_role_permissions(permission_id);
+    CREATE TABLE IF NOT EXISTS rbac_resource_scopes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role_id INTEGER NOT NULL,
+        permission_id INTEGER NOT NULL,
+        scope_kind TEXT NOT NULL,
+        scope_value TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(role_id,permission_id,scope_kind,scope_value),
+        FOREIGN KEY(role_id) REFERENCES rbac_roles(id) ON DELETE CASCADE,
+        FOREIGN KEY(permission_id) REFERENCES rbac_permissions(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_rbac_resource_scopes_role
+    ON rbac_resource_scopes(role_id);
+    CREATE INDEX IF NOT EXISTS idx_rbac_resource_scopes_permission
+    ON rbac_resource_scopes(permission_id);
     CREATE TABLE IF NOT EXISTS admins(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, role TEXT DEFAULT "Administrator", password_hash TEXT, created_at TEXT);
     CREATE TABLE IF NOT EXISTS campaigns(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,template TEXT,status TEXT NOT NULL DEFAULT 'Draft',targeted INTEGER DEFAULT 0,created_at TEXT,updated_at TEXT);
     CREATE TABLE IF NOT EXISTS recipients(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,email TEXT,name TEXT,employee_id TEXT,department TEXT,group_name TEXT,status TEXT DEFAULT 'Pending',created_at TEXT);

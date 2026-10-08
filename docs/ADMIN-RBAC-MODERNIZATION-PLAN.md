@@ -356,6 +356,19 @@ Recommended tables:
 - permission_id
 - created_at
 
+### `rbac_resource_scopes`
+
+- id
+- role_id
+- permission_id
+- scope_kind
+- scope_value
+- active
+- created_at
+- updated_at
+
+The initial model supports generic scope kinds without changing permission resolution or enforcement yet. Planned values include campaign, campaign group, campaign type, department, and organizational unit; `scope_value` carries the selected resource identifier or a documented wildcard such as `*`.
+
 ### Administrator migration
 
 Existing administrator records must remain compatible during migration.
@@ -515,7 +528,7 @@ Never record:
 
 ### Phase F — Optional Resource Scoping
 
-- [ ] Resource scope model
+- [x] Resource scope model
 - [ ] Scope assignment UI
 - [ ] Scoped permission evaluation
 - [ ] Scope audit events
@@ -620,7 +633,9 @@ Current status:
 
 **Completed milestone:** Phase E — Governance & Hardening is complete, covering privileged-permission confirmation, role-change audit metadata, last-super-admin protection, effective-permission view, access review workflow, and security regression tests.
 
-**Next task:** Phase F — Optional Resource Scoping.
+**Completed task:** Phase F — Resource scope model is now persisted through `rbac_resource_scopes`, linking roles and permissions to a generic scope kind/value with active state and audit-friendly timestamps. Scope assignment and enforcement remain separate tasks.
+
+**Next task:** Phase F — Scope assignment UI.
 
 ---
 
