@@ -246,6 +246,7 @@ Progress:
 - [x] Role-permission persistence
 - [x] Permission resolver
 - [x] Route/action permission mapping
+- [x] Compatibility layer for current roles
 - [ ] Granular role-permission enforcement
 - [ ] RBAC governance and security hardening
 - [ ] Optional resource-level scoping

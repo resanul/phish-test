@@ -1087,11 +1087,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def resolve_role_permissions(self, role_name=None):
         """
-        Resolve the effective permission keys assigned to a role.
+        Resolve the effective permission keys for the current role model.
 
         Custom roles use persisted rbac_role_permissions assignments.
-        Built-in roles retain their current compatibility mapping until the
-        separate compatibility/enforcement tasks are completed.
+        Built-in roles use a compatibility mapping that mirrors the existing
+        module-level role_allowed() behavior. This resolver does not enforce
+        access; enforcement remains a separate Phase D task.
         """
         admin=self.current_admin()
         role=role_name or (admin.get("role") if admin else None)
@@ -1112,8 +1113,25 @@ class Handler(BaseHTTPRequestHandler):
             c.close()
             return {"%s.%s"%(x["resource"],x["action"]) for x in rows}
 
+        if role=="Administrator":
+            rows=c.execute("SELECT resource,action FROM rbac_permissions WHERE active=1 ORDER BY resource,action").fetchall()
+            c.close()
+            return {"%s.%s"%(x["resource"],x["action"]) for x in rows}
+
+        compatibility_resources={
+            "Campaign Manager":{"campaign","template","landing_page","recipient","group","training"},
+            "Reporting Analyst":{"report","risk"},
+            "SMTP Manager":{"smtp"},
+            "Security Auditor":{"audit"},
+        }
+        resources=compatibility_resources.get(role,set())
+        if not resources:
+            c.close()
+            return set()
+        placeholders=",".join("?" for _ in resources)
+        rows=c.execute("SELECT resource,action FROM rbac_permissions WHERE active=1 AND resource IN (%s) ORDER BY resource,action"%placeholders,tuple(sorted(resources))).fetchall()
         c.close()
-        return set()
+        return {"%s.%s"%(x["resource"],x["action"]) for x in rows}
 
     def role_allowed(self,path):
         admin=self.current_admin()

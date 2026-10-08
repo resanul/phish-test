@@ -598,7 +598,7 @@ Current status:
 
 **Completed task:** Phase D — Route/action permission mapping is now defined for the current admin GET/POST routes, including create/edit distinctions for shared save handlers. The mapping is declarative only; compatibility and enforcement remain separate Phase D tasks.
 
-**Next task:** Phase D — Compatibility layer for current roles.
+**Completed task:** Phase D — Compatibility layer for current roles is complete. Built-in roles now resolve to permission keys that mirror their existing module-level access, while custom roles continue using persisted assignments. Enforcement remains a separate Phase D task.\n\n**Next task:** Phase D — Granular enforcement.
 
 ---
 
