@@ -518,10 +518,10 @@ Never record:
 
 ### Phase E — Governance & Hardening
 
-- [ ] Role-change audit events
-- [ ] Privileged-permission confirmation
-- [ ] Last-super-admin protection
-- [ ] Effective-permission view
+- [x] Role-change audit events
+- [x] Privileged-permission confirmation
+- [x] Last-super-admin protection
+- [x] Effective-permission view
 - [x] Access review workflow
 - [x] Security regression tests
 - [x] Mark milestone
