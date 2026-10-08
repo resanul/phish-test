@@ -500,7 +500,7 @@ Never record:
 - [x] Route/action permission mapping
 - [x] Compatibility layer for current roles
 - [x] Granular enforcement
-- [ ] Access-preview resolver
+- [x] Access-preview resolver
 - [ ] Mark milestone
 
 ### Phase E — Governance & Hardening
@@ -600,7 +600,9 @@ Current status:
 
 **Completed task:** Phase D — Compatibility layer for current roles is complete. Built-in roles now resolve to permission keys that mirror their existing module-level access, while custom roles continue using persisted assignments. Enforcement remains a separate Phase D task.\n\n**Completed task:** Phase D — Granular enforcement is complete. Mapped admin routes now enforce the effective permission set resolved from built-in compatibility roles or persisted custom-role assignments, while unmapped legacy admin routes retain the existing role gate during migration.
 
-**Next task:** Phase D — Access-preview resolver.
+**Completed task:** Phase D — Access-preview resolver is complete. The backend now exposes a read-only structured preview derived from the same effective-permission resolver used by enforcement, including modules, permission count, permission metadata, risk counts, and elevated/privileged permissions. No credentials, secrets, or mutable account state are included.
+
+**Next task:** Phase D — Mark milestone.
 
 ---
 

@@ -1135,6 +1135,61 @@ class Handler(BaseHTTPRequestHandler):
         c.close()
         return {"%s.%s"%(x["resource"],x["action"]) for x in rows}
 
+    def resolve_role_access_preview(self, role_name=None):
+        """
+        Return a structured, non-secret preview of effective RBAC access.
+
+        The preview is derived from the same permission resolver used for
+        enforcement. It is read-only and intentionally excludes credentials,
+        secrets and mutable account data so it can be reused by future admin
+        UI flows without creating a second authorization model.
+        """
+        admin=self.current_admin()
+        role=role_name or (admin.get("role") if admin else None)
+        if not role:
+            return {"role":None,"permission_count":0,"modules":[],"permissions":[],"high_risk_permissions":[],"risk_counts":{"normal":0,"elevated":0,"privileged":0}}
+
+        keys=self.resolve_role_permissions(role)
+        c=db()
+        rows=[]
+        if keys:
+            pairs=[key.split(".",1) for key in keys if "." in key]
+            clauses=[]
+            params=[]
+            for resource,action in pairs:
+                clauses.append("(resource=? AND action=?)")
+                params.extend((resource,action))
+            rows=c.execute(
+                "SELECT resource,action,label,description,risk_level FROM rbac_permissions WHERE active=1 AND ("+" OR ".join(clauses)+") ORDER BY resource,action",
+                tuple(params)
+            ).fetchall()
+        c.close()
+
+        permissions=[
+            {
+                "key":"%s.%s"%(row["resource"],row["action"]),
+                "resource":row["resource"],
+                "action":row["action"],
+                "label":row["label"],
+                "description":row["description"] or "",
+                "risk_level":row["risk_level"]
+            }
+            for row in rows
+        ]
+        risk_counts={"normal":0,"elevated":0,"privileged":0}
+        for item in permissions:
+            risk_counts[item["risk_level"]]=risk_counts.get(item["risk_level"],0)+1
+        high_risk=[item for item in permissions if item["risk_level"] in ("elevated","privileged")]
+        modules=sorted({item["resource"] for item in permissions})
+        return {
+            "role":role,
+            "permission_count":len(permissions),
+            "modules":modules,
+            "permissions":permissions,
+            "high_risk_permissions":high_risk,
+            "risk_counts":risk_counts
+        }
+
     def role_allowed(self,path):
         admin=self.current_admin()
         if not admin: return False
