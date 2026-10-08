@@ -2228,7 +2228,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if old_role=="Administrator" and old_active and (role!="Administrator" or not new_active):
                 remaining=c.execute("SELECT COUNT(*) AS n FROM admins WHERE id<>? AND role=? AND active=1",(int(aid),"Administrator")).fetchone()["n"]
                 if remaining==0:
-                    c.close(); return self.sendbody(400,"You cannot disable or demote the last active administrator account","text/plain")
+                    c.close()
+                    audit(admin["username"],"ADMIN_LAST_SUPERADMIN_BLOCKED","username=%s attempted_role=%s attempted_active=%s reason=last_active_administrator"%(row["username"],role,new_active),ip)
+                    return self.sendbody(400,"You cannot disable or demote the last active administrator account","text/plain")
             c.execute("UPDATE admins SET role=?,active=? WHERE id=?",(role,int(new_active),int(aid))); c.commit(); c.close()
             if role!=old_role:
                 audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s old_role=%s new_role=%s"%(row["username"],old_role,role),ip)

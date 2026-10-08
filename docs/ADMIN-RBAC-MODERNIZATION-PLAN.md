@@ -610,7 +610,11 @@ Current status:
 
 **Completed task:** Phase E — Role-change audit events now record both the previous and new role/status values for administrator changes, while retaining non-secret actor, target, timestamp, and IP metadata.
 
-**Next task:** Phase E — Last-super-admin protection.
+**Completed task:** Phase E — Last-super-admin protection is enforced for demotion/disable attempts, and blocked attempts now create a non-secret ADMIN_LAST_SUPERADMIN_BLOCKED audit event.
+
+**Completed task:** Phase E — Effective-permission view is complete through the resolver-backed Access Preview UI, which displays the same effective permission set used by enforcement.
+
+**Next task:** Phase E — Access review workflow.
 
 ---
 
