@@ -44,6 +44,13 @@ else
   fail "credential-safety enforcement could not be verified"
 fi
 
+if [ -f "$APP/tests/test_rbac_security.py" ]; then
+  python3 -m unittest "$APP/tests/test_rbac_security.py"
+  pass "RBAC security regression suite passes"
+else
+  fail "RBAC security regression suite is missing"
+fi
+
 echo
 echo "Acceptance baseline passed."
 echo "Manual acceptance remains required for SMTP, authentication/roles, campaign lifecycle,"
