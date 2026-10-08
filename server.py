@@ -155,6 +155,20 @@ def db():
     );
     CREATE INDEX IF NOT EXISTS idx_training_assignments_recipient ON training_assignments(recipient_id,status);
     CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,ts TEXT,admin TEXT,action TEXT,details TEXT,ip TEXT);
+    CREATE TABLE IF NOT EXISTS access_reviews(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        target_admin_id INTEGER NOT NULL,
+        target_username TEXT NOT NULL,
+        target_role TEXT NOT NULL,
+        target_active INTEGER NOT NULL,
+        permission_count INTEGER NOT NULL,
+        normal_count INTEGER NOT NULL,
+        elevated_count INTEGER NOT NULL,
+        privileged_count INTEGER NOT NULL,
+        reviewed_by TEXT NOT NULL,
+        reviewed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_access_reviews_target_time ON access_reviews(target_admin_id,reviewed_at);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
     CREATE TABLE IF NOT EXISTS campaign_deliveries(id INTEGER PRIMARY KEY AUTOINCREMENT,campaign_id INTEGER,recipient_id INTEGER,status TEXT,attempted_at TEXT,sent_at TEXT,error TEXT);
     CREATE TABLE IF NOT EXISTS campaign_queue(
@@ -999,6 +1013,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/reports/scheduled":"report.schedule",
     },
     "POST":{
+        "/admin/admins/review":"admin.view",
         "/admin/landing-pages/save":{"create":"landing_page.create","edit":"landing_page.edit"},
         "/admin/templates/save":{"create":"template.create","edit":"template.edit"},
         "/admin/reports/scheduled/save":"report.schedule",
@@ -1542,6 +1557,12 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             preview=""
             if selected:
                 access_preview=self.resolve_role_access_preview(selected["role"])
+                review_db=db()
+                latest_review=review_db.execute(
+                    "SELECT reviewed_by,reviewed_at,permission_count,normal_count,elevated_count,privileged_count,target_role,target_active FROM access_reviews WHERE target_admin_id=? ORDER BY id DESC LIMIT 1",
+                    (int(selected["id"]),)
+                ).fetchone()
+                review_db.close()
                 status="Active" if selected["active"] else "Disabled"
                 permission_rows="".join(
                     "<li><b>%s</b> <span class=\"sub\">(%s · %s)</span><br><span class=\"sub\">%s</span></li>"%
@@ -1555,7 +1576,11 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ) or "<li>None</li>"
                 risk_counts=access_preview["risk_counts"]
                 modules=", ".join(esc(module) for module in access_preview["modules"]) or "None"
-                preview='<div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px"><div><h3>Access Preview</h3><p class="sub">%s · %s</p></div><a class="btn" href="/admin/admins">Close</a></div><div style="margin-top:12px;padding:14px;background:#f7faf8;border-radius:10px"><b>%s</b><div class="sub" style="margin-top:5px">Account ID %s · Status: %s</div><div class="sub" style="margin-top:8px">Modules: %s · Permissions: %s</div><div class="sub" style="margin-top:5px">Risk: %s normal · %s elevated · %s privileged</div><div style="margin-top:12px"><b>Permissions</b><ul style="margin:8px 0 0 18px;line-height:1.7;font-size:12px">%s</ul></div><div style="margin-top:12px"><b>Elevated / privileged</b><ul style="margin:8px 0 0 18px;line-height:1.7;font-size:12px">%s</ul></div></div><p class="sub" style="margin-top:12px">Preview is derived from the same effective-permission resolver used by RBAC enforcement. No credentials, secrets, or mutable account state are exposed.</p></div>'%(esc(selected["username"]),esc(selected["role"]),esc(selected["role"]),selected["id"],status,modules,access_preview["permission_count"],risk_counts["normal"],risk_counts["elevated"],risk_counts["privileged"],permission_rows,high_risk)
+                preview='<div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px"><div><h3>Access Preview</h3><p class="sub">%s · %s</p></div><a class="btn" href="/admin/admins">Close</a></div><div style="margin-top:12px;padding:14px;background:#f7faf8;border-radius:10px"><b>%s</b><div class="sub" style="margin-top:5px">Account ID %s · Status: %s</div><div class="sub" style="margin-top:8px">Modules: %s · Permissions: %s</div><div class="sub" style="margin-top:5px">Risk: %s normal · %s elevated · %s privileged</div><div style="margin-top:12px"><b>Permissions</b><ul style="margin:8px 0 0 18px;line-height:1.7;font-size:12px">%s</ul></div><div style="margin-top:12px"><b>Elevated / privileged</b><ul style="margin:8px 0 0 18px;line-height:1.7;font-size:12px">%s</ul></div></div><p class="sub" style="margin-top:12px">Preview is derived from the same effective-permission resolver used by RBAC enforcement. No credentials, secrets, or mutable account state are exposed.</p><div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2ebe7"><b>Access review</b><p class="sub">Record a non-secret review acknowledgment for this current access snapshot.</p><form method="post" action="/admin/admins/review" style="margin-top:8px"><input type="hidden" name="id" value="%s"><button class="btn primary" type="submit">Mark access reviewed</button></form>%s</div></div>'%(esc(selected["username"]),esc(selected["role"]),esc(selected["role"]),selected["id"],status,modules,access_preview["permission_count"],risk_counts["normal"],risk_counts["elevated"],risk_counts["privileged"],permission_rows,high_risk,selected["id"],(
+                    '<p class="sub" style="margin-top:8px">Last reviewed by <b>%s</b> at %s · snapshot: %s permissions (%s normal / %s elevated / %s privileged).</p>'%
+                    (esc(latest_review["reviewed_by"]),esc(latest_review["reviewed_at"]),latest_review["permission_count"],latest_review["normal_count"],latest_review["elevated_count"],latest_review["privileged_count"])
+                    if latest_review else '<p class="sub" style="margin-top:8px">No access review recorded yet.</p>'
+                ))
             elif selected_id:
                 preview='<div class="card" style="margin-top:15px"><h3>Administrator not found</h3><p class="sub">The requested administrator account does not exist.</p></div>'
             body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts and assign the existing least-privilege roles. Passwords are hashed and never displayed.</p><p><a class="btn primary" href="#add-admin">+ Add Administrator</a></p><div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.85fr);gap:15px;align-items:start"><div class="card"><h3>Administrators</h3><p class="sub">Create, assign and disable administrative access.</p><div class="table-wrap"><table class="table" style="min-width:760px"><tr><th>ID</th><th>Administrator</th><th>Role / Status</th></tr>%s</table></div></div><div class="card" id="add-admin"><h3>Add Administrator</h3><p class="sub">Create an active administrator account using the existing RBAC role set.</p><form class="form" method="post" action="/admin/admins/create"><label>Email / Username<input type="email" name="username" autocomplete="username" maxlength="254" placeholder="admin@example.com" required></label><label>Temporary password<input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="256" placeholder="Minimum 12 characters" required></label><label>Role<select name="role" required>%s</select></label><button class="btn primary" type="submit">Create Administrator</button></form><div style="margin-top:12px;padding:11px 12px;background:#edf8f4;border-radius:9px;font-size:11px;color:#2b6554;line-height:1.5">Password policy: 12–256 characters. Do not use line breaks. The password is stored only as a secure hash and is never shown in the administrator list or audit log.</div></div></div><div class="card" style="margin-top:15px"><h3>Current role access</h3><p><b>Administrator:</b> full control · <b>Campaign Manager:</b> campaigns, templates, landing pages, recipients, groups, training · <b>Reporting Analyst:</b> reports, risk, exports · <b>SMTP Manager:</b> SMTP profiles · <b>Security Auditor:</b> audit log.</p><p class="sub">Custom roles and granular permission assignment are planned for the next RBAC phase.</p></div>'+preview%(table,role_opts("Campaign Manager"))
@@ -1998,6 +2023,38 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c.close()
             audit(ADMIN_USERNAME,"SCHEDULED_REPORT_CREATE","name=%s frequency=%s"%(name,frequency),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/reports/scheduled"})
+        if p.path=="/admin/admins/review":
+            admin=self.current_admin()
+            if not admin or admin.get("role")!="Administrator":
+                return self.sendbody(403,"Administrator role required","text/plain")
+            aid=form.get("id",[""])[0]
+            if not aid.isdigit():
+                return self.sendbody(400,"Invalid administrator account","text/plain")
+            c=db()
+            target=c.execute("SELECT id,username,role,active FROM admins WHERE id=?",(int(aid),)).fetchone()
+            if not target:
+                c.close()
+                return self.sendbody(404,"Administrator not found","text/plain")
+            access_preview=self.resolve_role_access_preview(target["role"])
+            counts=access_preview["risk_counts"]
+            c.execute(
+                """INSERT INTO access_reviews(
+                    target_admin_id,target_username,target_role,target_active,
+                    permission_count,normal_count,elevated_count,privileged_count,
+                    reviewed_by,reviewed_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    target["id"],target["username"],target["role"],int(target["active"]),
+                    access_preview["permission_count"],counts["normal"],counts["elevated"],counts["privileged"],
+                    admin["username"],now()
+                )
+            )
+            c.commit()
+            c.close()
+            audit(admin["username"],"ADMIN_ACCESS_REVIEW","target_username=%s target_role=%s target_active=%s permission_count=%s normal=%s elevated=%s privileged=%s"%
+                  (target["username"],target["role"],bool(target["active"]),access_preview["permission_count"],counts["normal"],counts["elevated"],counts["privileged"]),ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/admins?id=%s"%aid})
+
         if p.path=="/admin/admins/create":
             admin=self.current_admin()
             if not admin or admin.get("role")!="Administrator":

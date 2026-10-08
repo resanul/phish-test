@@ -509,7 +509,7 @@ Never record:
 - [ ] Privileged-permission confirmation
 - [ ] Last-super-admin protection
 - [ ] Effective-permission view
-- [ ] Access review workflow
+- [x] Access review workflow
 - [ ] Security regression tests
 - [ ] Mark milestone
 
@@ -614,7 +614,9 @@ Current status:
 
 **Completed task:** Phase E — Effective-permission view is complete through the resolver-backed Access Preview UI, which displays the same effective permission set used by enforcement.
 
-**Next task:** Phase E — Access review workflow.
+**Completed task:** Phase E — Access review workflow is complete. Administrators can record a non-secret review snapshot for a selected account, including reviewer, timestamp, role/status, effective permission count, and risk-level counts; the review is also audit logged.
+
+**Next task:** Phase E — Security regression tests.
 
 ---
 
