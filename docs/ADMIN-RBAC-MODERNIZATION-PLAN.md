@@ -531,7 +531,7 @@ Never record:
 - [x] Resource scope model
 - [x] Scope assignment UI
 - [x] Scoped permission evaluation
-- [ ] Scope audit events
+- [x] Scope audit events
 - [ ] Regression tests
 - [ ] Mark milestone
 
@@ -635,7 +635,9 @@ Current status:
 
 **Completed tasks:** Phase F — Resource scope model, scope assignment UI, and scoped permission evaluation are now implemented. Custom-role permissions with active scope assignments are evaluated against explicit request context; multiple values within a scope kind are alternatives, multiple scope kinds are cumulative, wildcard `*` matches any non-empty context value, and missing scope context fails closed.
 
-**Next task:** Phase F — Scope audit events.
+**Completed task:** Phase F — Scope audit events are now recorded for non-secret scope assignment updates and scope-based access denials; scope values are limited to explicit RBAC context and no credential material is logged.
+
+**Next task:** Phase F — Regression tests.
 
 ---
 

@@ -1319,6 +1319,13 @@ class Handler(BaseHTTPRequestHandler):
         for kind,values in grouped.items():
             actual=context.get(kind,"")
             if not actual or (actual not in values and "*" not in values):
+                audit(
+                    self.current_admin().get("username"),
+                    "RBAC_SCOPE_ACCESS_DENIED",
+                    "role=%s permission=%s path=%s method=%s scope_kind=%s actual=%s allowed=%s"
+                    %(role_name,permission_key,path,method,kind,actual,",".join(sorted(values))),
+                    self.client_address[0]
+                )
                 return False
         return True
 
@@ -2266,6 +2273,14 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 return self.sendbody(500,"Unable to save role permissions","text/plain")
             c.close()
             audit(admin["username"],"ROLE_PERMISSION_UPDATE","role_id=%s permission_count=%s"%(role_id,len(permission_ids)),ip)
+            if scope_assignments:
+                scope_summary=";".join("%s=%s"%(kind,value) for _,_,kind,value in sorted(scope_assignments,key=lambda item:(item[2],item[3])))
+                audit(
+                    admin["username"],
+                    "RBAC_SCOPE_ASSIGNMENT_UPDATE",
+                    "role_id=%s scope_count=%s scopes=%s"%(role_id,len(scope_assignments),scope_summary[:2000]),
+                    ip
+                )
             if selected_privileged and not old_privileged:
                 audit(admin["username"],"PRIVILEGED_PERMISSION_GRANT","role_id=%s privileged_permission_count=%s"%(role_id,selected_privileged),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins?tab=roles"})
