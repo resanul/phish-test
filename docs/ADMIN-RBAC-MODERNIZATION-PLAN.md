@@ -594,7 +594,9 @@ Current status:
 
 **Completed task:** Phase D — Role-permission persistence is complete for custom roles, including validated permission assignment persistence, replacement semantics, built-in/inactive protection, and ROLE_PERMISSION_UPDATE audit logging. Authorization resolution and enforcement remain separate Phase D tasks.
 
-**Completed task:** Phase D — Permission resolver is complete for persisted custom-role assignments, with inactive-role and inactive-permission filtering. Route/action enforcement remains a separate Phase D task.\n\n**Next task:** Phase D — Route/action permission mapping.
+**Completed task:** Phase D — Permission resolver is complete for persisted custom-role assignments, with inactive-role and inactive-permission filtering. Route/action enforcement remains a separate Phase D task.
+
+**Next task:** Phase D — Route/action permission mapping.
 
 ---
 

@@ -244,7 +244,8 @@ Progress:
 - [x] Roles management and custom role lifecycle
 - [x] Permission catalog and matrix
 - [x] Role-permission persistence
-- [x] Permission resolver\n- [ ] Granular role-permission enforcement
+- [x] Permission resolver
+- [ ] Granular role-permission enforcement
 - [ ] RBAC governance and security hardening
 - [ ] Optional resource-level scoping
 
