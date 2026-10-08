@@ -2231,9 +2231,9 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                     c.close(); return self.sendbody(400,"You cannot disable or demote the last active administrator account","text/plain")
             c.execute("UPDATE admins SET role=?,active=? WHERE id=?",(role,int(new_active),int(aid))); c.commit(); c.close()
             if role!=old_role:
-                audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s role=%s"%(row["username"],role),ip)
+                audit(admin["username"],"ADMIN_ROLE_UPDATE","username=%s old_role=%s new_role=%s"%(row["username"],old_role,role),ip)
             if new_active!=old_active:
-                audit(admin["username"],"ADMIN_ENABLE" if new_active else "ADMIN_DISABLE","username=%s"%(row["username"]),ip)
+                audit(admin["username"],"ADMIN_ENABLE" if new_active else "ADMIN_DISABLE","username=%s old_active=%s new_active=%s"%(row["username"],old_active,new_active),ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/admins"})
         if p.path=="/admin/risk/settings":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")

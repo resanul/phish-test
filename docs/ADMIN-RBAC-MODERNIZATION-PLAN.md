@@ -608,7 +608,9 @@ Current status:
 
 **Completed task:** Phase E — Privileged-permission confirmation is now enforced for custom-role permission assignments. The UI requires explicit confirmation when privileged permissions are selected, and the backend rejects unconfirmed privileged grants. A first-time privileged grant also records a non-secret PRIVILEGED_PERMISSION_GRANT audit event.
 
-**Next task:** Phase E — Role-change audit events.
+**Completed task:** Phase E — Role-change audit events now record both the previous and new role/status values for administrator changes, while retaining non-secret actor, target, timestamp, and IP metadata.
+
+**Next task:** Phase E — Last-super-admin protection.
 
 ---
 
