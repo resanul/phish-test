@@ -995,6 +995,8 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/templates/test-send":"template.edit",
         "/admin/campaigns/test-send":"campaign.launch",
         "/admin/campaigns/launch":"campaign.launch",
+        "/admin/campaigns/new":"campaign.create",
+        "/admin/reports/scheduled":"report.schedule",
     },
     "POST":{
         "/admin/landing-pages/save":{"create":"landing_page.create","edit":"landing_page.edit"},
@@ -1145,6 +1147,19 @@ class Handler(BaseHTTPRequestHandler):
             "Security Auditor":("/admin/audit",)
         }
         return any(path==prefix or path.startswith(prefix+"/") for prefix in permissions.get(role,()))
+
+    def permission_allowed(self,path,method,form=None):
+        """Evaluate a mapped route against the effective RBAC permission set.
+
+        Unmapped legacy admin routes retain the existing role gate so the
+        migration can be introduced without changing unrelated behavior.
+        """
+        if not self.current_admin():
+            return False
+        required=route_permission(path,method,form)
+        if not required:
+            return self.role_allowed(path)
+        return required in self.resolve_role_permissions()
 
     def login_page(self,error=""):
         err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
@@ -1639,7 +1654,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         p=urlparse(self.path); path=p.path; ip=self.client_address[0]; ua=self.headers.get("User-Agent","")
         if path.startswith("/admin/") and path not in ("/admin/login",):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            if path!="/admin/logout" and not self.role_allowed(path): return self.sendbody(403,"Insufficient role permission","text/plain")
+            if path!="/admin/logout" and not self.permission_allowed(path,"GET"): return self.sendbody(403,"Insufficient role permission","text/plain")
         if path=="/admin":
             if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(200,self.dashboard())
@@ -1657,7 +1672,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            if not self.role_allowed(path): return self.sendbody(403,"Insufficient role permission","text/plain")
+            if not self.permission_allowed(path,"GET"): return self.sendbody(403,"Insufficient role permission","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/reports" and parse_qs(p.query).get("campaign_id",[None])[0]:
@@ -1792,7 +1807,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(401,self.login_page("Invalid username or password"))
         if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.csrf_origin_ok():
             return self.sendbody(403,"CSRF validation failed","text/plain")
-        if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.role_allowed(p.path):
+        if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.permission_allowed(p.path,"POST",form):
             return self.sendbody(403,"Insufficient role permission","text/plain")
         if p.path=="/admin/landing-pages/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
