@@ -510,7 +510,7 @@ Never record:
 - [ ] Last-super-admin protection
 - [ ] Effective-permission view
 - [x] Access review workflow
-- [ ] Security regression tests
+- [x] Security regression tests
 - [ ] Mark milestone
 
 ### Phase F — Optional Resource Scoping
@@ -616,7 +616,9 @@ Current status:
 
 **Completed task:** Phase E — Access review workflow is complete. Administrators can record a non-secret review snapshot for a selected account, including reviewer, timestamp, role/status, effective permission count, and risk-level counts; the review is also audit logged.
 
-**Next task:** Phase E — Security regression tests.
+**Completed task:** Phase E — Security regression tests are now covered by an isolated temporary-DB regression suite for custom-role resolution, access-review route authorization, privileged-grant auditing, last-super-admin protection auditing, and access-review auditing.
+
+**Next task:** Phase E — Mark milestone.
 
 ---
 
