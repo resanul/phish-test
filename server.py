@@ -1177,7 +1177,7 @@ class Handler(BaseHTTPRequestHandler):
         admin=self.current_admin()
         role=role_name or (admin.get("role") if admin else None)
         if not role:
-            return {"role":None,"permission_count":0,"modules":[],"permissions":[],"high_risk_permissions":[],"risk_counts":{"normal":0,"elevated":0,"privileged":0}}
+            return {"role":None,"permission_count":0,"modules":[],"permissions":[],"high_risk_permissions":[],"risk_counts":{"normal":0,"elevated":0,"privileged":0},"scopes":[]}
 
         keys=self.resolve_role_permissions(role)
         c=db()
@@ -1193,8 +1193,25 @@ class Handler(BaseHTTPRequestHandler):
                 "SELECT resource,action,label,description,risk_level FROM rbac_permissions WHERE active=1 AND ("+" OR ".join(clauses)+") ORDER BY resource,action",
                 tuple(params)
             ).fetchall()
+        scope_rows=c.execute(
+            """SELECT p.resource,p.action,s.scope_kind,s.scope_value
+               FROM rbac_resource_scopes s
+               JOIN rbac_permissions p ON p.id=s.permission_id
+               JOIN rbac_roles r ON r.id=s.role_id
+               WHERE r.name=? AND r.active=1 AND s.active=1 AND p.active=1
+               ORDER BY p.resource,p.action,s.scope_kind,s.scope_value""",
+            (role,)
+        ).fetchall()
         c.close()
 
+        scopes=[
+            {
+                "permission":"%s.%s"%(row["resource"],row["action"]),
+                "scope_kind":row["scope_kind"],
+                "scope_value":row["scope_value"]
+            }
+            for row in scope_rows
+        ]
         permissions=[            {
                 "key":"%s.%s"%(row["resource"],row["action"]),
                 "resource":row["resource"],
@@ -1216,7 +1233,8 @@ class Handler(BaseHTTPRequestHandler):
             "modules":modules,
             "permissions":permissions,
             "high_risk_permissions":high_risk,
-            "risk_counts":risk_counts
+            "risk_counts":risk_counts,
+            "scopes":scopes
         }
 
     def role_allowed(self,path):
