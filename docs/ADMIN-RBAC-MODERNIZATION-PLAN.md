@@ -497,9 +497,9 @@ Never record:
 
 - [x] Role-permission persistence
 - [x] Permission resolver
-- [ ] Route/action permission mapping
-- [ ] Compatibility layer for current roles
-- [ ] Granular enforcement
+- [x] Route/action permission mapping
+- [x] Compatibility layer for current roles
+- [x] Granular enforcement
 - [ ] Access-preview resolver
 - [ ] Mark milestone
 
@@ -598,7 +598,9 @@ Current status:
 
 **Completed task:** Phase D — Route/action permission mapping is now defined for the current admin GET/POST routes, including create/edit distinctions for shared save handlers. The mapping is declarative only; compatibility and enforcement remain separate Phase D tasks.
 
-**Completed task:** Phase D — Compatibility layer for current roles is complete. Built-in roles now resolve to permission keys that mirror their existing module-level access, while custom roles continue using persisted assignments. Enforcement remains a separate Phase D task.\n\n**Next task:** Phase D — Granular enforcement.
+**Completed task:** Phase D — Compatibility layer for current roles is complete. Built-in roles now resolve to permission keys that mirror their existing module-level access, while custom roles continue using persisted assignments. Enforcement remains a separate Phase D task.\n\n**Completed task:** Phase D — Granular enforcement is complete. Mapped admin routes now enforce the effective permission set resolved from built-in compatibility roles or persisted custom-role assignments, while unmapped legacy admin routes retain the existing role gate during migration.
+
+**Next task:** Phase D — Access-preview resolver.
 
 ---
 
