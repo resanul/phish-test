@@ -1539,18 +1539,23 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 c=db()
                 selected=c.execute("SELECT id,username,role,active,created_at FROM admins WHERE id=?",(int(selected_id),)).fetchone()
                 c.close()
-            access={
-                "Administrator":["Full administration access","Campaigns, templates, landing pages, recipients and groups","Training, reports, risk and exports","SMTP and audit administration"],
-                "Campaign Manager":["Campaigns and campaign delivery","Templates and landing pages","Recipients and groups","Training workflows"],
-                "Reporting Analyst":["Reports and executive views","Risk and trend analytics","Report exports"],
-                "SMTP Manager":["SMTP provider profiles","SMTP diagnostics and delivery settings"],
-                "Security Auditor":["Audit log and security activity review"]
-            }
             preview=""
             if selected:
-                perms="".join("<li>%s</li>"%esc(x) for x in access.get(selected["role"],[]))
+                access_preview=self.resolve_role_access_preview(selected["role"])
                 status="Active" if selected["active"] else "Disabled"
-                preview='<div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px"><div><h3>Access Preview</h3><p class="sub">%s · %s</p></div><a class="btn" href="/admin/admins">Close</a></div><div style="margin-top:12px;padding:14px;background:#f7faf8;border-radius:10px"><b>%s</b><div class="sub" style="margin-top:5px">Account ID %s · Status: %s</div><ul style="margin:12px 0 0 18px;line-height:1.8;font-size:12px">%s</ul></div><p class="sub" style="margin-top:12px">Preview reflects the current built-in role model. Granular custom permissions will be introduced in the RBAC permission phase.</p></div>'%(esc(selected["username"]),esc(selected["role"]),esc(selected["role"]),selected["id"],status,perms)
+                permission_rows="".join(
+                    "<li><b>%s</b> <span class=\"sub\">(%s · %s)</span><br><span class=\"sub\">%s</span></li>"%
+                    (esc(item["label"]),esc(item["key"]),esc(item["risk_level"]),esc(item["description"]))
+                    for item in access_preview["permissions"]
+                ) or "<li>No active permissions resolved.</li>"
+                high_risk="".join(
+                    "<li><b>%s</b> <span class=\"sub\">(%s)</span></li>"%
+                    (esc(item["label"]),esc(item["risk_level"]))
+                    for item in access_preview["high_risk_permissions"]
+                ) or "<li>None</li>"
+                risk_counts=access_preview["risk_counts"]
+                modules=", ".join(esc(module) for module in access_preview["modules"]) or "None"
+                preview='<div class="card" style="margin-top:15px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:15px"><div><h3>Access Preview</h3><p class="sub">%s · %s</p></div><a class="btn" href="/admin/admins">Close</a></div><div style="margin-top:12px;padding:14px;background:#f7faf8;border-radius:10px"><b>%s</b><div class="sub" style="margin-top:5px">Account ID %s · Status: %s</div><div class="sub" style="margin-top:8px">Modules: %s · Permissions: %s</div><div class="sub" style="margin-top:5px">Risk: %s normal · %s elevated · %s privileged</div><div style="margin-top:12px"><b>Permissions</b><ul style="margin:8px 0 0 18px;line-height:1.7;font-size:12px">%s</ul></div><div style="margin-top:12px"><b>Elevated / privileged</b><ul style="margin:8px 0 0 18px;line-height:1.7;font-size:12px">%s</ul></div></div><p class="sub" style="margin-top:12px">Preview is derived from the same effective-permission resolver used by RBAC enforcement. No credentials, secrets, or mutable account state are exposed.</p></div>'%(esc(selected["username"]),esc(selected["role"]),esc(selected["role"]),selected["id"],status,modules,access_preview["permission_count"],risk_counts["normal"],risk_counts["elevated"],risk_counts["privileged"],permission_rows,high_risk)
             elif selected_id:
                 preview='<div class="card" style="margin-top:15px"><h3>Administrator not found</h3><p class="sub">The requested administrator account does not exist.</p></div>'
             body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts and assign the existing least-privilege roles. Passwords are hashed and never displayed.</p><p><a class="btn primary" href="#add-admin">+ Add Administrator</a></p><div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.85fr);gap:15px;align-items:start"><div class="card"><h3>Administrators</h3><p class="sub">Create, assign and disable administrative access.</p><div class="table-wrap"><table class="table" style="min-width:760px"><tr><th>ID</th><th>Administrator</th><th>Role / Status</th></tr>%s</table></div></div><div class="card" id="add-admin"><h3>Add Administrator</h3><p class="sub">Create an active administrator account using the existing RBAC role set.</p><form class="form" method="post" action="/admin/admins/create"><label>Email / Username<input type="email" name="username" autocomplete="username" maxlength="254" placeholder="admin@example.com" required></label><label>Temporary password<input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="256" placeholder="Minimum 12 characters" required></label><label>Role<select name="role" required>%s</select></label><button class="btn primary" type="submit">Create Administrator</button></form><div style="margin-top:12px;padding:11px 12px;background:#edf8f4;border-radius:9px;font-size:11px;color:#2b6554;line-height:1.5">Password policy: 12–256 characters. Do not use line breaks. The password is stored only as a secure hash and is never shown in the administrator list or audit log.</div></div></div><div class="card" style="margin-top:15px"><h3>Current role access</h3><p><b>Administrator:</b> full control · <b>Campaign Manager:</b> campaigns, templates, landing pages, recipients, groups, training · <b>Reporting Analyst:</b> reports, risk, exports · <b>SMTP Manager:</b> SMTP profiles · <b>Security Auditor:</b> audit log.</p><p class="sub">Custom roles and granular permission assignment are planned for the next RBAC phase.</p></div>'+preview%(table,role_opts("Campaign Manager"))
