@@ -56,6 +56,93 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertIn('"PRIVILEGED_PERMISSION_GRANT"',source)
         self.assertIn('"ADMIN_LAST_SUPERADMIN_BLOCKED"',source)
         self.assertIn('"ADMIN_ACCESS_REVIEW"',source)
+        self.assertIn('"RBAC_SCOPE_ASSIGNMENT_UPDATE"',source)
+        self.assertIn('"RBAC_SCOPE_ACCESS_DENIED"',source)
+
+    def test_scoped_permission_allows_matching_context_and_denies_mismatch(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Scoped Reviewer","scoped-reviewer","Scope regression role",0,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Scoped Reviewer'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+                  ("campaign","view","View campaigns","Scope regression permission","normal"))
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                  (role_id,permission_id,"campaign","123",ts,ts))
+        c.commit()
+        c.close()
+        self.handler.client_address=("127.0.0.1",12345)
+        self.assertTrue(self.handler.scoped_permission_allowed(
+            "Scoped Reviewer","campaign.view","/admin/campaigns","GET",query="id=123"
+        ))
+        self.assertFalse(self.handler.scoped_permission_allowed(
+            "Scoped Reviewer","campaign.view","/admin/campaigns","GET",query="id=999"
+        ))
+
+    def test_scoped_permission_combines_scope_kinds_and_wildcard(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Multi Scope Reviewer","multi-scope-reviewer","Multi-scope regression role",0,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Multi Scope Reviewer'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+                  ("campaign","edit","Edit campaigns","Multi-scope regression permission","normal"))
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='edit'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        scopes=[
+            (role_id,permission_id,"campaign","123",1,ts,ts),
+            (role_id,permission_id,"department","Finance",1,ts,ts),
+            (role_id,permission_id,"campaign_type","*",1,ts,ts)
+        ]
+        c.executemany("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",scopes)
+        c.commit()
+        c.close()
+        self.handler.client_address=("127.0.0.1",12345)
+        self.assertTrue(self.handler.scoped_permission_allowed(
+            "Multi Scope Reviewer","campaign.edit","/admin/campaigns","POST",
+            form={"id":["123"],"department":["Finance"],"campaign_type":["awareness"]}
+        ))
+        self.assertFalse(self.handler.scoped_permission_allowed(
+            "Multi Scope Reviewer","campaign.edit","/admin/campaigns","POST",
+            form={"id":["123"],"department":["HR"],"campaign_type":["awareness"]}
+        ))
+        self.assertFalse(self.handler.scoped_permission_allowed(
+            "Multi Scope Reviewer","campaign.edit","/admin/campaigns","POST",
+            form={"id":["123"],"department":["Finance"]}
+        ))
+
+    def test_scope_denial_is_audited_without_secret_fields(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Audit Scope Reviewer","audit-scope-reviewer","Audit regression role",0,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Audit Scope Reviewer'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+                  ("recipient","view","View recipients","Audit scope regression permission","normal"))
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='recipient' AND action='view'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                  (role_id,permission_id,"department","Finance",ts,ts))
+        c.commit()
+        c.close()
+        self.handler.client_address=("127.0.0.1",12345)
+        self.assertFalse(self.handler.scoped_permission_allowed(
+            "Audit Scope Reviewer","recipient.view","/admin/recipients","GET",query="department=HR&password=redacted"
+        ))
+        c=self.server.db()
+        audit_row=c.execute(
+            "SELECT action,details FROM audit_logs WHERE action='RBAC_SCOPE_ACCESS_DENIED' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        c.close()
+        self.assertIsNotNone(audit_row)
+        self.assertIn("scope_kind=department",audit_row["details"])
+        self.assertIn("actual=HR",audit_row["details"])
+        self.assertNotIn("password",audit_row["details"])
 
 if __name__=="__main__":
     unittest.main(verbosity=2)

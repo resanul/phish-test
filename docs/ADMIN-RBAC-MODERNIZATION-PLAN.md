@@ -532,8 +532,8 @@ Never record:
 - [x] Scope assignment UI
 - [x] Scoped permission evaluation
 - [x] Scope audit events
-- [ ] Regression tests
-- [ ] Mark milestone
+- [x] Regression tests
+- [x] Mark milestone
 
 ---
 
@@ -637,7 +637,9 @@ Current status:
 
 **Completed task:** Phase F — Scope audit events are now recorded for non-secret scope assignment updates and scope-based access denials; scope values are limited to explicit RBAC context and no credential material is logged.
 
-**Next task:** Phase F — Regression tests.
+**Completed milestone:** Phase F — Resource Scoping is complete. Resource scope persistence, assignment UI, scoped permission evaluation, scope audit events, and regression coverage are implemented.
+
+**Next task:** Continue with the next enterprise roadmap workstream outside RBAC modernization.
 
 ---
 
