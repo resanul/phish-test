@@ -641,7 +641,7 @@ Current status:
 
 **Next task:** Continue with the next enterprise roadmap workstream outside RBAC modernization.
 
-**Completed follow-up:** Access Preview now exposes active resource-scope assignments using the same resolver-backed, non-secret preview model. Scope rows include only permission key, scope kind, and scope value; inactive permissions/scopes are excluded.
+**Completed follow-up:** Access Preview now exposes active resource-scope assignments using the same resolver-backed, non-secret preview model. Scope rows include only permission key, scope kind, and scope value; inactive permissions/scopes are excluded. The preview now also requires the scope's permission to remain explicitly assigned to the role, preventing stale scope rows from appearing as effective access.
 
 ---
 

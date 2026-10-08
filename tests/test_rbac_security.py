@@ -75,6 +75,11 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.close()
         preview=self.handler.resolve_role_access_preview("Preview Scope Reviewer")
         self.assertEqual(preview["scopes"],[{"permission":"campaign.view","scope_kind":"campaign","scope_value":"123"}])
+        c=self.server.db()
+        c.execute("DELETE FROM rbac_role_permissions WHERE role_id=? AND permission_id=?",(role_id,permission_id))
+        c.commit()
+        c.close()
+        self.assertEqual(self.handler.resolve_role_access_preview("Preview Scope Reviewer")["scopes"],[])
 
     def test_scoped_permission_allows_matching_context_and_denies_mismatch(self):
         c=self.server.db()
