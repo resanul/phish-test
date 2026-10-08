@@ -501,7 +501,7 @@ Never record:
 - [x] Compatibility layer for current roles
 - [x] Granular enforcement
 - [x] Access-preview resolver
-- [ ] Mark milestone
+- [x] Mark milestone
 
 ### Phase E — Governance & Hardening
 
@@ -602,7 +602,9 @@ Current status:
 
 **Completed task:** Phase D — Access-preview resolver is complete. The backend now exposes a read-only structured preview derived from the same effective-permission resolver used by enforcement, including modules, permission count, permission metadata, risk counts, and elevated/privileged permissions. No credentials, secrets, or mutable account state are included.
 
-**Next task:** Phase D — Mark milestone.
+**Completed milestone:** Phase D — True RBAC Enforcement is complete, including custom-role permission persistence, effective permission resolution, declarative route/action mapping, built-in compatibility, granular mapped-route enforcement, and the non-secret access-preview resolver.
+
+**Next task:** Phase E — Role-change audit events.
 
 ---
 
