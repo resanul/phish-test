@@ -529,7 +529,7 @@ Never record:
 ### Phase F — Optional Resource Scoping
 
 - [x] Resource scope model
-- [ ] Scope assignment UI
+- [x] Scope assignment UI
 - [ ] Scoped permission evaluation
 - [ ] Scope audit events
 - [ ] Regression tests
@@ -633,9 +633,9 @@ Current status:
 
 **Completed milestone:** Phase E — Governance & Hardening is complete, covering privileged-permission confirmation, role-change audit metadata, last-super-admin protection, effective-permission view, access review workflow, and security regression tests.
 
-**Completed task:** Phase F — Resource scope model is now persisted through `rbac_resource_scopes`, linking roles and permissions to a generic scope kind/value with active state and audit-friendly timestamps. Scope assignment and enforcement remain separate tasks.
+**Completed tasks:** Phase F — Resource scope model and scope assignment UI are now implemented. Administrators can assign one or more generic scope kind/value entries to selected custom-role permissions; the data is persisted in `rbac_resource_scopes`. Scope assignment does not change authorization evaluation yet.
 
-**Next task:** Phase F — Scope assignment UI.
+**Next task:** Phase F — Scoped permission evaluation.
 
 ---
 

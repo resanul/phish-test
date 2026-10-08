@@ -1552,10 +1552,19 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 for ar in assigned_rows:
                     assigned_by_role.setdefault(ar["role_id"],set()).add(ar["permission_id"])
                 c.close()
+                scope_rows=c.execute("SELECT role_id,permission_id,scope_kind,scope_value FROM rbac_resource_scopes WHERE active=1 ORDER BY role_id,permission_id,scope_kind,scope_value").fetchall()
+                scopes_by_role={}
+                for sr in scope_rows:
+                    scopes_by_role.setdefault((sr["role_id"],sr["permission_id"]),[]).append("%s=%s"%(sr["scope_kind"],sr["scope_value"]))
+                c.close()
                 permission_controls={}
+                scope_kinds=("campaign","campaign_group","campaign_type","department","organizational_unit")
                 for role in custom_roles:
                     checked=assigned_by_role.get(role["id"],set())
-                    controls="".join('<label style="display:flex;gap:8px;align-items:center;font-size:12px;margin:4px 0"><input type="checkbox" name="permission_ids" value="%s"%s> %s <span class="sub">(%s · %s)</span></label>'%(p["id"]," checked" if p["id"] in checked else "",esc(p["label"]),esc(p["resource"]+"."+p["action"]),esc(p["risk_level"])) for p in permission_rows)
+                    def permission_control(p):
+                        existing_scopes="\n".join(scopes_by_role.get((role["id"],p["id"]),[]))
+                        return '<div style="margin:4px 0 8px"><label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" name="permission_ids" value="%s"%s> %s <span class="sub">(%s · %s)</span></label><label style="display:block;margin-left:24px;font-size:11px;color:#71817b">Optional scopes (one per line: kind=value)<textarea name="scope_assignments_%s" rows="2" maxlength="2000" placeholder="campaign=123&#10;department=Finance" style="width:100%%;margin-top:4px;padding:7px;border:1px solid #ccd9d4;border-radius:7px;font-size:11px">%s</textarea></label></div>'%(p["id"]," checked" if p["id"] in checked else "",esc(p["label"]),esc(p["resource"]+"."+p["action"]),esc(p["risk_level"]),p["id"],esc(existing_scopes))
+                    controls="".join(permission_control(p) for p in permission_rows)
                     permission_controls[role["id"]]=controls or '<p class="sub">No active permissions are available.</p>'
                 custom_cards="".join('<div class="card"><form class="form" method="post" action="/admin/roles/save"><input type="hidden" name="id" value="%s"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start"><div><h3>Custom Role</h3><span class="sub">%s</span></div><span class="sub">Administrators: %s · %s</span></div><label>Role name<input name="name" maxlength="80" value="%s" required></label><label>Description<textarea name="description" maxlength="500" rows="3">%s</textarea></label><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">Save Changes</button><button class="btn" type="submit" formaction="/admin/roles/duplicate">Duplicate</button><button class="btn" type="submit" formaction="/admin/roles/delete" formmethod="post" onclick="return confirm(&quot;Delete this custom role? This cannot be undone.&quot;)">Delete</button></div></form><div style="margin-top:14px;padding-top:12px;border-top:1px solid #e2ebe7"><h4>Permissions</h4><p class="sub">Persist the permissions assigned to this custom role. Authorization enforcement is a separate Phase D task.</p><form class="form" method="post" action="/admin/roles/permissions"><input type="hidden" name="role_id" value="%s"><div style="max-height:360px;overflow:auto;padding:8px 4px">%s</div><label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-top:10px"><input type="checkbox" name="confirm_privileged" value="1"> I understand that selecting any <b>privileged</b> permission grants elevated administrative capability and I explicitly approve this assignment.</label><button class="btn primary" type="submit">Save Permissions</button></form></div></div>'%(r["id"],esc(r["name"]),r["admin_count"],("Active" if r["active"] else "Disabled"),esc(r["name"]),esc(r["description"] or ""),r["id"],permission_controls.get(r["id"],"")) for r in custom_roles) or '<div class="card"><p class="sub">No custom roles created yet.</p></div>'
                 body='<h1>Admin Users & Roles</h1><p>Manage administrator accounts, roles and access policies.</p><div style="display:flex;gap:8px;margin:15px 0"><a class="btn" href="/admin/admins">Administrators</a><a class="btn primary" href="/admin/admins?tab=roles">Roles</a></div><div class="card"><h3>Create Custom Role</h3><p class="sub">Create a named custom role for granular permission assignment.</p><form class="form" method="post" action="/admin/roles/create"><label>Role name<input name="name" maxlength="80" placeholder="e.g. Training Coordinator" required></label><label>Description<textarea name="description" maxlength="500" rows="3" placeholder="Describe the intended access scope"></textarea></label><button class="btn primary" type="submit">Create Custom Role</button></form></div><div class="card" style="margin-top:15px"><h3>Built-in Roles</h3><p class="sub">Protected roles currently supported by the administration model.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div><div class="card" style="margin-top:15px"><h3>Custom Roles</h3><p class="sub">Custom roles can now persist granular permission assignments. Enforcement remains a separate Phase D task.</p></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px;margin-top:15px">%s</div>'%(role_cards,custom_cards)
@@ -2128,6 +2137,23 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 "SELECT COUNT(*) AS n FROM rbac_permissions WHERE active=1 AND risk_level='privileged' AND id IN (%s)"%
                 (",".join("?" for _ in permission_ids) or "NULL"),tuple(permission_ids)
             ).fetchone()["n"] if permission_ids else 0
+            scope_kinds={"campaign","campaign_group","campaign_type","department","organizational_unit"}
+            scope_assignments=[]
+            for permission_id in permission_ids:
+                raw_scope=form.get("scope_assignments_%s"%permission_id,[""])[0]
+                for line in raw_scope.splitlines():
+                    line=line.strip()
+                    if not line: continue
+                    if "=" not in line:
+                        c.close()
+                        return self.sendbody(400,"Invalid scope entry. Use kind=value.","text/plain")
+                    scope_kind,scope_value=line.split("=",1)
+                    scope_kind=scope_kind.strip()
+                    scope_value=scope_value.strip()
+                    if scope_kind not in scope_kinds or not scope_value or len(scope_value)>200 or "\r" in scope_value or "\n" in scope_value:
+                        c.close()
+                        return self.sendbody(400,"Invalid scope entry. Allowed kinds: campaign, campaign_group, campaign_type, department, organizational_unit.","text/plain")
+                    scope_assignments.append((int(role_id),permission_id,scope_kind,scope_value))
             privileged_confirmed=form.get("confirm_privileged",[""])[0]=="1"
             if selected_privileged and not privileged_confirmed:
                 c.close()
@@ -2141,8 +2167,12 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             try:
                 c.execute("BEGIN")
                 c.execute("DELETE FROM rbac_role_permissions WHERE role_id=?",(int(role_id),))
+                c.execute("DELETE FROM rbac_resource_scopes WHERE role_id=?",(int(role_id),))
                 if permission_ids:
                     c.executemany("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",[(int(role_id),pid,now()) for pid in permission_ids])
+                if scope_assignments:
+                    c.executemany("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                                  [(rid,pid,kind,value,now(),now()) for rid,pid,kind,value in scope_assignments])
                 c.commit()
             except Exception:
                 c.rollback()
