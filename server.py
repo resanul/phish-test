@@ -1022,6 +1022,36 @@ class Handler(BaseHTTPRequestHandler):
     def login_failed(self):
         LOGIN_ATTEMPTS.setdefault(self.client_address[0],[]).append(time.time())
 
+    def resolve_role_permissions(self, role_name=None):
+        """
+        Resolve the effective permission keys assigned to a role.
+
+        Custom roles use persisted rbac_role_permissions assignments.
+        Built-in roles retain their current compatibility mapping until the
+        separate compatibility/enforcement tasks are completed.
+        """
+        admin=self.current_admin()
+        role=role_name or (admin.get("role") if admin else None)
+        if not role:
+            return set()
+
+        c=db()
+        row=c.execute("SELECT id,built_in,active FROM rbac_roles WHERE name=?",(role,)).fetchone()
+        if row and row["built_in"]==0:
+            if not row["active"]:
+                c.close()
+                return set()
+            rows=c.execute("""SELECT p.resource,p.action
+                              FROM rbac_role_permissions rp
+                              JOIN rbac_permissions p ON p.id=rp.permission_id
+                              WHERE rp.role_id=? AND p.active=1
+                              ORDER BY p.resource,p.action""",(row["id"],)).fetchall()
+            c.close()
+            return {"%s.%s"%(x["resource"],x["action"]) for x in rows}
+
+        c.close()
+        return set()
+
     def role_allowed(self,path):
         admin=self.current_admin()
         if not admin: return False
