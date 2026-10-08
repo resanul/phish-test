@@ -511,7 +511,7 @@ Never record:
 - [ ] Effective-permission view
 - [x] Access review workflow
 - [x] Security regression tests
-- [ ] Mark milestone
+- [x] Mark milestone
 
 ### Phase F — Optional Resource Scoping
 
@@ -618,7 +618,9 @@ Current status:
 
 **Completed task:** Phase E — Security regression tests are now covered by an isolated temporary-DB regression suite for custom-role resolution, access-review route authorization, privileged-grant auditing, last-super-admin protection auditing, and access-review auditing.
 
-**Next task:** Phase E — Mark milestone.
+**Completed milestone:** Phase E — Governance & Hardening is complete, covering privileged-permission confirmation, role-change audit metadata, last-super-admin protection, effective-permission view, access review workflow, and security regression tests.
+
+**Next task:** Phase F — Optional Resource Scoping.
 
 ---
 
