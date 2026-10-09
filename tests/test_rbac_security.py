@@ -261,7 +261,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
                   (role_id,permission_id,ts))
         scopes=[
             (role_id,permission_id,"campaign","123",1,ts,ts),
-            (role_id,permission_id,"department","Finance",1,ts,ts),
+            (role_id,permission_id,"campaign_group","Finance",1,ts,ts),
             (role_id,permission_id,"campaign_type","*",1,ts,ts)
         ]
         c.executemany("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",scopes)
@@ -270,15 +270,15 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.handler.client_address=("127.0.0.1",12345)
         self.assertTrue(self.handler.scoped_permission_allowed(
             "Multi Scope Reviewer","campaign.edit","/admin/campaigns","POST",
-            form={"id":["123"],"department":["Finance"],"campaign_type":["awareness"]}
+            form={"id":["123"],"group_name":["Finance"],"campaign_type":["awareness"]}
         ))
         self.assertFalse(self.handler.scoped_permission_allowed(
             "Multi Scope Reviewer","campaign.edit","/admin/campaigns","POST",
-            form={"id":["123"],"department":["HR"],"campaign_type":["awareness"]}
+            form={"id":["123"],"group_name":["HR"],"campaign_type":["awareness"]}
         ))
         self.assertFalse(self.handler.scoped_permission_allowed(
             "Multi Scope Reviewer","campaign.edit","/admin/campaigns","POST",
-            form={"id":["123"],"department":["Finance"]}
+            form={"id":["123"],"group_name":["Finance"]}
         ))
 
     def test_access_preview_scope_markup_is_escaped_and_has_empty_state(self):
