@@ -797,7 +797,8 @@ def campaign_prelaunch_validation(campaign):
     group=campaign["group_name"] or ""
     recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(group,group)).fetchone()["n"]
     c.close()
-    if not smtp: errors.append("Enabled SMTP provider is required.")    if not landing: errors.append("Enabled landing page is required.")
+    if not smtp: errors.append("Enabled SMTP provider is required.")
+    if not landing: errors.append("Enabled landing page is required.")
     if template and (template["status"] or "Active")!="Active": errors.append("Selected template is archived.")
     if template:
         ok,msg=validate_template_html(template["html_body"] or "")
@@ -1714,7 +1715,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 ) or "<li>No active permissions resolved.</li>"
                 high_risk="".join(
                     "<li><b>%s</b> <span class=\"sub\">(%s)</span></li>"%
-                    (esc(item["label"]),esc(item["risk_level"]))                    for item in access_preview["high_risk_permissions"]
+                    (esc(item["label"]),esc(item["risk_level"]))
+                    for item in access_preview["high_risk_permissions"]
                 ) or "<li>None</li>"
                 scope_rows="".join(
                     '<li><b>%s</b> <span class="sub">(%s=%s)</span></li>'%
