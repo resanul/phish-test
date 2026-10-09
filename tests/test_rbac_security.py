@@ -43,8 +43,8 @@ class RBACSecurityRegressionTests(unittest.TestCase):
 
     def test_admin_create_email_validation_accepts_normal_email_addresses(self):
         source=SERVER.read_text(encoding="utf-8")
-        self.assertIn('re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+",username)',source)
-        email_pattern=r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+"
+        self.assertIn('re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",username)',source)
+        email_pattern=r"[^@\s]+@[^@\s]+\.[^@\s]+"
         for address in ("resanul2@protonmail.com","security@example.com"):
             self.assertIsNotNone(self.server.re.fullmatch(email_pattern,address),address)
         for address in ("not-an-email","user@localhost","user name@example.com"):
