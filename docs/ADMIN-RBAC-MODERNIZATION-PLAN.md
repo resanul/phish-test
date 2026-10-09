@@ -659,6 +659,8 @@ Current status:
 
 **Completed follow-up:** Deployment acceptance now checks that the deployed `server.py` contains the Access Preview resolver, resource-scope empty state, and non-secret exposure contract.
 
+**Completed follow-up:** RBAC regression coverage now locks the Access Preview snapshot schema to non-secret access metadata only, preventing credential/session fields from being added to the preview contract accidentally.
+
 ---
 
 ## 15. External UX Research References
