@@ -577,7 +577,7 @@ def sanitize_audit_details(details):
     """Redact authentication secrets if a caller accidentally includes them."""
     text=str(details or "")
     secret_key=r"(?:password(?:_hash|_enc)?|otp|pin|cvv|card(?:_number)?|token|secret|authorization|api[_ -]?key|client[_ -]?secret)"
-    pattern=re.compile(r"(?i)\\b("+secret_key+r")\\s*([=:])\\s*(\"[^\"]*\"|'[^']*'|[^\\s,;&]+)")
+    pattern=re.compile(r"(?i)\b("+secret_key+r")\s*([=:])\s*(\"[^\"]*\"|'[^']*'|[^\s,;&]+)")
     return pattern.sub(lambda match: match.group(1)+match.group(2)+"[REDACTED]",text)
 
 def audit(admin,action,details,ip):
