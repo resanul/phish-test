@@ -573,9 +573,17 @@ def smtp_send_test(profile,to_email):
             if profile["username"]: smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
             smtp.send_message(msg)
 
+def sanitize_audit_details(details):
+    """Redact authentication secrets if a caller accidentally includes them."""
+    text=str(details or "")
+    secret_key=r"(?:password(?:_hash|_enc)?|otp|pin|cvv|card(?:_number)?|token|secret|authorization|api[_ -]?key|client[_ -]?secret)"
+    pattern=re.compile(r"(?i)\\b("+secret_key+r")\\s*([=:])\\s*(\"[^\"]*\"|'[^']*'|[^\\s,;&]+)")
+    return pattern.sub(lambda match: match.group(1)+match.group(2)+"[REDACTED]",text)
+
 def audit(admin,action,details,ip):
     c=db()
-    c.execute("INSERT INTO audit_logs(ts,admin,action,details,ip) VALUES(?,?,?,?,?)",(now(),admin,action,details,ip))
+    safe_details=sanitize_audit_details(details)
+    c.execute("INSERT INTO audit_logs(ts,admin,action,details,ip) VALUES(?,?,?,?,?)",(now(),admin,action,safe_details,ip))
     c.commit(); c.close()
 
 def smtp_diagnostics(profile,to_email=""):
