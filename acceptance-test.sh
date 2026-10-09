@@ -44,6 +44,14 @@ else
   fail "credential-safety enforcement could not be verified"
 fi
 
+if grep -q 'def resolve_role_access_preview' "$APP/server.py" \
+   && grep -q 'No active resource scopes assigned.' "$APP/server.py" \
+   && grep -q 'No credentials, secrets, or mutable account state are exposed.' "$APP/server.py"; then
+  pass "Access Preview contract is present"
+else
+  fail "Access Preview contract is missing or incomplete"
+fi
+
 if [ -f "$APP/tests/test_rbac_security.py" ]; then
   python3 -m unittest "$APP/tests/test_rbac_security.py"
   pass "RBAC security regression suite passes"

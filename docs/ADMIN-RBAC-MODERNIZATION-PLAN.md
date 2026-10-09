@@ -657,6 +657,8 @@ Current status:
 
 **Completed follow-up:** Access Review regression coverage now guards that review snapshots derive their permission/risk counts from the same Access Preview resolver.
 
+**Completed follow-up:** Deployment acceptance now checks that the deployed `server.py` contains the Access Preview resolver, resource-scope empty state, and non-secret exposure contract.
+
 ---
 
 ## 15. External UX Research References
