@@ -54,6 +54,9 @@ class RBACSecurityRegressionTests(unittest.TestCase):
                   (role_id,permission_id,ts))
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,0)",
                   ("admin","disable","Disable admins","Disabled regression permission","privileged"))
+        # The seeded catalog may already contain this key as active; force the
+        # fixture into the inactive state rather than relying on INSERT OR IGNORE.
+        c.execute("UPDATE rbac_permissions SET active=0 WHERE resource='admin' AND action='disable'")
         inactive_permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='admin' AND action='disable'").fetchone()["id"]
         c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,inactive_permission_id,ts))
