@@ -57,6 +57,125 @@ os.makedirs(TEMPLATES,exist_ok=True)
 os.makedirs(DATA,exist_ok=True)
 os.makedirs(LOGS,exist_ok=True)
 
+LINKSEC_BRAND_MAP = {
+    "amazon-web-services-aws": ("Amazon Web Services (AWS)", "Cloud Services & Infrastructure", "AWS Security Team", "aws-alerts@amazon-security.com", "Medium"),
+    "bluejeans": ("BlueJeans", "Communication & Collaboration", "BlueJeans Support", "support@bluejeans-meetings.com", "Easy"),
+    "cisco": ("Cisco Webex", "Communication & Collaboration", "Cisco Webex Team", "messenger@cisco-webex.com", "Medium"),
+    "google-cloud-platform-gcp": ("Google Cloud Platform (GCP)", "Cloud Services & Infrastructure", "Google Cloud Security", "cloud-security@google-alerts.com", "Hard"),
+    "google-workspace": ("Google Workspace", "Communication & Collaboration", "Google Workspace Team", "no-reply@workspace-google.com", "Medium"),
+    "gotomeeting": ("GoToMeeting", "Communication & Collaboration", "GoToMeeting Alerts", "notifications@gotomeeting-secure.com", "Easy"),
+    "ibm-cloud": ("IBM Cloud", "Cloud Services & Infrastructure", "IBM Cloud Operations", "support@ibmcloud-security.com", "Medium"),
+    "microsoft-azure": ("Microsoft Azure", "Cloud Services & Infrastructure", "Microsoft Azure Security", "azure-alerts@microsoft-security.com", "Hard"),
+    "microsoft-office-365": ("Microsoft Office 365", "Communication & Collaboration", "Microsoft 365 Security", "security@office365-verify.com", "Medium"),
+    "microsoft-teams": ("Microsoft Teams", "Communication & Collaboration", "Microsoft Teams Alerts", "alerts@teams-notifications.com", "Medium"),
+    "oracle-cloud": ("Oracle Cloud", "Cloud Services & Infrastructure", "Oracle Cloud Identity", "oraclecloud@oracle-identity.com", "Hard"),
+    "ringcentral": ("RingCentral", "Communication & Collaboration", "RingCentral Service", "service@ringcentral-messaging.com", "Easy"),
+    "skype-for-business": ("Skype for Business", "Communication & Collaboration", "Skype Security Team", "security@skype-connect.com", "Easy"),
+    "slack": ("Slack", "Communication & Collaboration", "Slack Technologies", "notification@slack-workspaces.com", "Medium"),
+    "zoom": ("Zoom", "Communication & Collaboration", "Zoom Security", "noreply@zoomsecurity.com", "Medium"),
+}
+
+LINKSEC_KNOWN_TITLES = {
+    "zoom-urgent-account-update-required": ("Zoom - Urgent Account Update Required", "Urgent: Immediate Action Required to Prevent Zoom Account Suspension", "Hard"),
+    "zoom-urgent-zoom-account-security-alert": ("Zoom - Urgent Security Alert", "Zoom - Urgent Security Alert: Unusual Login Detected", "Medium"),
+    "zoom-zoom-pro-subscription-offer": ("Zoom - Free Pro Subscription Offer", "Congratulations: Claim Your Complimentary 1-Year Zoom Pro Plan", "Easy"),
+    "amazon-web-services-aws-aws-account-verification-request": ("AWS - Account Verification Request", "Action Required: Verify Your Amazon Web Services Account", "Medium"),
+    "bluejeans-free-bluejeans-premium-subscription-offer": ("BlueJeans - Free Premium Subscription", "Claim Your Free BlueJeans Premium Subscription", "Easy"),
+    "bluejeans-urgent-account-verification-request": ("BlueJeans - Urgent Account Verification", "Urgent: BlueJeans Account Verification Required", "Medium"),
+    "microsoft-teams-exclusive-microsoft-365-upgrade-offer": ("Microsoft Teams - Exclusive 365 Upgrade Offer", "Special Invitation: Claim Your Microsoft 365 Premium Upgrade", "Easy"),
+    "microsoft-teams-microsoft-teams-free-upgrade-offer": ("Microsoft Teams - Free Feature Upgrade Alert", "New Features Available: Free Microsoft Teams Upgrade", "Easy"),
+    "oracle-cloud-urgent-account-update-request": ("Oracle Cloud - Urgent Account Update Request", "Urgent: Immediate Oracle Cloud Account Verification", "Hard"),
+    "skype-for-business-urgent-password-reset-reminder": ("Skype - Password Reset Reminder", "Security Notice: Reset Your Skype for Business Password", "Medium"),
+    "slack-enticing-gift-card-phishing-template": ("Slack - Employee Reward Gift Card", "Special Gift: You have Received a Slack Community Gift Card", "Easy"),
+}
+
+_LINKSEC_CATALOG_CACHE = None
+
+def get_linksec_catalog():
+    global _LINKSEC_CATALOG_CACHE
+    if _LINKSEC_CATALOG_CACHE is not None:
+        return _LINKSEC_CATALOG_CACHE
+
+    candidates = [
+        os.path.join(TEMPLATES, "email"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "email"),
+        r"C:\opt\phish-simulation\templates\email"
+    ]
+    email_dir = next((d for d in candidates if os.path.isdir(d)), None)
+    if not email_dir:
+        _LINKSEC_CATALOG_CACHE = []
+        return []
+
+    items = []
+    for brand_dir in sorted(os.listdir(email_dir)):
+        b_path = os.path.join(email_dir, brand_dir)
+        if not os.path.isdir(b_path): continue
+        for f in sorted(os.listdir(b_path)):
+            if not f.endswith(".html"): continue
+            p = os.path.join(b_path, f)
+            try:
+                with open(p, "r", encoding="utf-8", errors="ignore") as fp:
+                    html_content = fp.read()
+            except Exception:
+                continue
+            slug = f.replace("-modified.html", "").replace(".html", "")
+            b_meta = LINKSEC_BRAND_MAP.get(brand_dir, (brand_dir.replace("-", " ").title(), "General", "Security Team", "noreply@security.local", "Medium"))
+            
+            m_t = re.search(r"<title>(.*?)</title>", html_content, re.I)
+            raw_title = m_t.group(1).strip() if m_t else ""
+            
+            if slug in LINKSEC_KNOWN_TITLES:
+                name, subject, diff = LINKSEC_KNOWN_TITLES[slug]
+            else:
+                diff = b_meta[4]
+                name = raw_title or slug.replace("-", " ").title()
+                subject = raw_title or f"Important Notice regarding your {b_meta[0]} account"
+            
+            tags = list(set(re.findall(r'data-name=[\'"]([^\'"]+)[\'"]', html_content)))
+            tag_str = ", ".join(tags) if tags else "Call to action, Visual Imitation"
+            reply_to = b_meta[3].replace("@", "@reply.")
+            
+            items.append({
+                "template": slug,
+                "name": name,
+                "subject": subject,
+                "preheader": f"Security notification regarding your {b_meta[0]} account.",
+                "category": b_meta[1],
+                "difficulty": diff,
+                "language": "English",
+                "brand": b_meta[0],
+                "industry": "Cloud & Enterprise",
+                "tags": tag_str,
+                "html_body": html_content,
+                "text_body": f"Hello {{name}},\n\n{subject}\n\nPlease review this notification:\n{{tracking_link}}\n\nThis is an authorized security-awareness simulation.",
+                "from_name": b_meta[2],
+                "from_email": b_meta[3],
+                "reply_to": reply_to,
+                "owner": "LinkSec Awareness Library",
+                "status": "Active"
+            })
+    _LINKSEC_CATALOG_CACHE = items
+    return items
+
+def seed_linksec_templates(c):
+    catalog = get_linksec_catalog()
+    for item in catalog:
+        existing = c.execute("SELECT id FROM template_library WHERE template=?", (item["template"],)).fetchone()
+        if not existing:
+            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,from_name,from_email,reply_to,owner,status,updated_at)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (item["template"], item["name"], item["subject"], item["preheader"],
+                       item["category"], item["difficulty"], item["language"], item["brand"],
+                       item["industry"], item["tags"], item["html_body"], item["text_body"],
+                       item["from_name"], item["from_email"], item["reply_to"], item["owner"],
+                       item["status"], now()))
+            c.execute("""INSERT OR IGNORE INTO template_versions(template,version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,created_at,created_by)
+                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                      (item["template"], 1, item["name"], item["subject"], item["preheader"],
+                       item["category"], item["difficulty"], item["language"], item["brand"],
+                       item["industry"], item["tags"], item["html_body"], item["text_body"],
+                       now(), ADMIN_USERNAME))
+
 def db():
     c=sqlite3.connect(DB)
     c.row_factory=sqlite3.Row
@@ -409,6 +528,7 @@ def db():
                       (str(i),f"Template {i}","Security Awareness Simulation","Authorized security-awareness simulation",
                        "General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,
                        "This is an authorized security-awareness simulation.",now()))
+    seed_linksec_templates(c)
     c.commit()
     return c
 
@@ -759,22 +879,41 @@ def queue_campaign(campaign_id):
 SAFE_TEMPLATE_VARIABLES=("name","email","employee_id","department","designation","location","manager","language","timezone","campaign_name","tracking_link","report_link","qr_link")
 
 def render_template_variables(body,recipient,campaign,links):
+    rec=recipient or {}
+    name=(rec.get("name") if isinstance(rec,dict) else getattr(rec,"name","")) or ""
+    first_name=name.split()[0] if name else "Colleague"
+    last_name=name.split()[-1] if len(name.split())>1 else ""
+    email=(rec.get("email") if isinstance(rec,dict) else getattr(rec,"email","")) or ""
+    cname=(campaign.get("name") if isinstance(campaign,dict) else getattr(campaign,"name","")) or "Security Awareness Simulation"
+    cbrand=(campaign.get("brand") if isinstance(campaign,dict) else getattr(campaign,"brand","")) or "Trust PhishGuard"
+    trk=links.get("tracking_link","") if links else ""
+    rep=links.get("report_link","") if links else ""
+    qr=links.get("qr_link","") if links else ""
+
     values={
-        "name":recipient["name"] or "",
-        "email":recipient["email"] or "",
-        "employee_id":recipient["employee_id"] or "",
-        "department":recipient["department"] or "",
-        "designation":recipient["designation"] or "",
-        "location":recipient["location"] or "",
-        "manager":recipient["manager"] or "",
-        "language":recipient["language"] or "",
-        "timezone":recipient["timezone"] or "",
-        "campaign_name":campaign["name"] or "",
-        "tracking_link":links["tracking_link"],
-        "report_link":links["report_link"],
-        "qr_link":links["qr_link"]
+        "name":name or "Colleague",
+        "first_name":first_name,
+        "last_name":last_name,
+        "FirstName":first_name,
+        "LastName":last_name,
+        "email":email,
+        "Email":email,
+        "URL":trk,
+        "url":trk,
+        "tracking_link":trk,
+        "report_link":rep,
+        "qr_link":qr,
+        "company_name":cbrand,
+        "campaign_name":cname,
+        "employee_id":(rec.get("employee_id") if isinstance(rec,dict) else getattr(rec,"employee_id","")) or "",
+        "department":(rec.get("department") if isinstance(rec,dict) else getattr(rec,"department","")) or "",
+        "designation":(rec.get("designation") if isinstance(rec,dict) else getattr(rec,"designation","")) or "",
+        "location":(rec.get("location") if isinstance(rec,dict) else getattr(rec,"location","")) or "",
+        "manager":(rec.get("manager") if isinstance(rec,dict) else getattr(rec,"manager","")) or "",
+        "language":(rec.get("language") if isinstance(rec,dict) else getattr(rec,"language","")) or "",
+        "timezone":(rec.get("timezone") if isinstance(rec,dict) else getattr(rec,"timezone","")) or "",
     }
-    return re.sub(r"\{\{\s*([a-z_]+)\s*\}\}",lambda m:esc(str(values.get(m.group(1),m.group(0)))),body or "")
+    return re.sub(r"\{\{\s*\.?([a-zA-Z0-9_]+)\s*\}\}",lambda m:esc(str(values.get(m.group(1),m.group(0)))),body or "")
 
 def _send_campaign_recipient(campaign,rec,queue_id):
     c=db()
@@ -847,7 +986,7 @@ def campaign_prelaunch_validation(campaign):
         if not ok: errors.append(msg)
     if not recipient_count: errors.append("No eligible recipients are available.")
     if not (campaign["subject"] or "").strip(): errors.append("Campaign subject is required.")
-    if not re.fullmatch(r"\d+",str(campaign["template"] or "")): errors.append("Template selection is invalid.")
+    if not re.fullmatch(r"[a-zA-Z0-9_\-]+",str(campaign["template"] or "")): errors.append("Template selection is invalid.")
     ok,msg=validate_landing_html(landing["html_body"] if landing else "")
     if landing and not ok: errors.append(msg)
     try:
@@ -1063,6 +1202,63 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .form input:focus,.form select:focus,.form textarea:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
 @media(max-width:960px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.side{display:flex;flex-direction:row;overflow-x:auto;padding:10px}.side-group-title{display:none}.side a{white-space:nowrap}}
 @media(max-width:540px){.stats{grid-template-columns:1fr}.main{padding:18px}.topbar{padding:0 16px}.top-role-badge{display:none}}
+/* LinkSec Modern 3-Column Email Template Catalog & Live Preview */
+.ls-browser{display:grid;grid-template-columns:230px 370px 1fr;background:#ffffff;border:1px solid #e1ece6;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 18px rgba(7,28,21,0.04);min-height:740px;height:calc(100vh - 210px);margin-top:14px}
+.ls-sidebar{background:#f9fbf9;border-right:1px solid #e6f0eb;padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.ls-group-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#527365;padding:4px 8px;margin-bottom:2px}
+.ls-nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;font-size:12px;font-weight:600;color:#243e32;cursor:pointer;transition:all 0.15s ease;user-select:none}
+.ls-nav-item:hover{background:#edf5f0;color:#087b59}
+.ls-nav-item.active{background:#e6f7f0;color:#087b59;font-weight:750}
+.ls-badge-count{font-size:10.5px;background:#e1ece6;color:#3b5a4d;padding:2px 7px;border-radius:999px;font-weight:700}
+.ls-nav-item.active .ls-badge-count{background:#087b59;color:#fff}
+.ls-catalog{background:#ffffff;border-right:1px solid #e6f0eb;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.ls-catalog-header{padding:12px 14px;border-bottom:1px solid #e6f0eb;background:#fbfdfc;display:flex;flex-direction:column;gap:8px}
+.ls-search-wrap{position:relative;display:flex;align-items:center}
+.ls-search-icon{position:absolute;left:10px;font-size:12px;color:#8da49a;pointer-events:none}
+.ls-search-input{width:100%;padding:8px 10px 8px 30px;border:1.5px solid #d5e5dc;border-radius:8px;font-size:12px;outline:none;background:#fff;transition:border-color 0.15s ease}
+.ls-search-input:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.1)}
+.ls-tags-bar{display:flex;gap:5px;overflow-x:auto;padding-bottom:3px;scrollbar-width:thin}
+.ls-tag-pill{font-size:10.5px;font-weight:650;padding:3px 9px;border-radius:999px;background:#edf4f0;color:#3b5a4d;white-space:nowrap;cursor:pointer;border:1px solid #d8e8df;transition:all 0.15s ease;user-select:none}
+.ls-tag-pill:hover{background:#e1efe8;color:#087b59}
+.ls-tag-pill.active{background:#087b59;color:#fff;border-color:#087b59}
+.ls-cards-list{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.ls-card{padding:11px 12px;border-radius:10px;border:1.5px solid #e5ede8;background:#fbfdfc;cursor:pointer;transition:all 0.15s ease;display:flex;flex-direction:column;gap:5px}
+.ls-card:hover{border-color:#b7d6c6;background:#ffffff;box-shadow:0 2px 8px rgba(7,28,21,0.03)}
+.ls-card.active{border-color:#087b59;background:#f4faf7;box-shadow:0 3px 12px rgba(8,123,89,0.08)}
+.ls-card-top{display:flex;justify-content:space-between;align-items:center;font-size:11px}
+.ls-card-sender{font-weight:700;color:#12281e;display:flex;align-items:center;gap:6px}
+.ls-dot{width:6px;height:6px;border-radius:50%;background:#2563eb;display:inline-block}
+.ls-card-time{font-size:10px;color:#6d887d}
+.ls-card-subject{font-size:12px;font-weight:700;color:#0d1e16;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ls-card-name{font-size:11px;color:#557265;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ls-card-badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+.ls-chip{font-size:9.5px;font-weight:700;padding:2px 6px;border-radius:4px;background:#eef5f1;color:#3b5a4d}
+.ls-chip.brand{background:#e0f2fe;color:#0369a1}
+.ls-chip.diff-Easy{background:#dcfce7;color:#15803d}
+.ls-chip.diff-Medium{background:#fef3c7;color:#b45309}
+.ls-chip.diff-Hard{background:#fee2e2;color:#b91c1c}
+.ls-chip.technique{background:#f3e8ff;color:#7e22ce}
+.ls-preview-pane{background:#f4f7f5;display:flex;flex-direction:column;height:100%;overflow:hidden}
+.ls-preview-toolbar{padding:10px 16px;background:#ffffff;border-bottom:1px solid #e3ede7;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ls-toolbar-left{display:flex;align-items:center;gap:8px}
+.ls-toolbar-right{display:flex;align-items:center;gap:6px}
+.ls-toggle-mode{display:inline-flex;align-items:center;background:#edf5f1;border:1px solid #d4e6dc;border-radius:7px;padding:2px;gap:2px}
+.ls-toggle-btn{padding:4px 9px;border-radius:5px;border:none;background:transparent;font-size:11px;font-weight:700;color:#557265;cursor:pointer;transition:all 0.15s ease}
+.ls-toggle-btn.active{background:#087b59;color:#ffffff;box-shadow:0 1px 3px rgba(8,123,89,0.2)}
+.ls-envelope{padding:14px 18px;background:#ffffff;border-bottom:1px solid #e7eee9;display:flex;align-items:flex-start;gap:12px}
+.ls-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#087b59,#10b981);color:#fff;display:grid;place-items:center;font-weight:850;font-size:15px;text-transform:uppercase;flex-shrink:0;box-shadow:0 2px 6px rgba(8,123,89,0.15)}
+.ls-envelope-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ls-meta-row-from{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ls-sender-name{font-size:13px;font-weight:800;color:#10241b}
+.ls-sender-email{font-size:11.5px;color:#60796f;margin-left:4px;font-family:monospace}
+.ls-meta-date{font-size:11px;color:#7b968b;flex-shrink:0}
+.ls-meta-subject{font-size:13.5px;font-weight:800;color:#0b1a13;margin-top:2px}
+.ls-meta-subline{font-size:11px;color:#648074;display:flex;gap:10px;flex-wrap:wrap}
+.ls-frame-container{flex:1;padding:14px 18px;overflow-y:auto;display:flex;justify-content:center;background:#edf3f0}
+.ls-frame-card{width:100%;max-width:820px;background:#ffffff;border-radius:10px;border:1px solid #dce8e1;box-shadow:0 3px 14px rgba(7,28,21,0.04);overflow:hidden;display:flex;flex-direction:column}
+.ls-iframe{width:100%;height:680px;border:none;background:#ffffff}
+@media(max-width:1200px){.ls-browser{grid-template-columns:200px 320px 1fr}}
+@media(max-width:960px){.ls-browser{grid-template-columns:1fr;height:auto;min-height:0}.ls-sidebar{display:none}}
 """
 
 
@@ -1155,6 +1351,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/audit":"audit.view",
         "/admin/admins":"admin.view",
         "/admin/landing-pages/preview":"landing_page.view",
+        "/admin/templates/preview":"template.view",
         "/admin/landing-pages/new":"landing_page.create",
         "/admin/smtp/diagnostics":"smtp.diagnostics",
         "/admin/smtp/new":"smtp.manage",
@@ -1603,7 +1800,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             ("Simulation Suite",[
                 ("Overview","/admin","📊"),
                 ("Campaigns","/admin/campaigns","🎯"),
-                ("Templates","/admin/templates","✉️"),
+                ("Email Templates","/admin/templates","✉️"),
                 ("Landing Pages","/admin/landing-pages","🌐"),
             ]),
             ("Audience & Relay",[
@@ -1628,7 +1825,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         for gname,items in nav_groups:
             links_parts.append(f'<div class="side-group-title">{gname}</div>')
             for n,u,ico in items:
-                act="active" if (n==active or (active=="Overview" and n=="Overview") or (active=="Dashboard" and n=="Overview")) else ""
+                act="active" if (n==active or (active in ("Templates","Email Templates") and n=="Email Templates") or (active=="Overview" and n=="Overview") or (active=="Dashboard" and n=="Overview")) else ""
                 links_parts.append(f'<a href="{u}" class="{act}"><span class="side-ico">{ico}</span><span>{n}</span></a>')
         links="".join(links_parts)
         css=DASH_CSS
@@ -1698,49 +1895,283 @@ function filterCampTable(){{const q=document.getElementById('qCamp').value.toLow
 </script>'''
             return self.admin_shell("Campaigns",body,"Campaigns")
         if path=="/admin/templates":
-            rows=c.execute("SELECT * FROM template_library ORDER BY CAST(template AS INTEGER)").fetchall(); c.close()
+            rows=c.execute("""SELECT * FROM template_library
+                              ORDER BY CASE
+                                WHEN brand='Zoom' THEN 0
+                                WHEN brand='Microsoft Office 365' THEN 1
+                                WHEN brand='Google Workspace' THEN 2
+                                WHEN brand='Amazon Web Services (AWS)' THEN 3
+                                WHEN brand='Slack' THEN 4
+                                ELSE 5 END, brand, name""").fetchall()
+            c.close()
             total_t=len(rows)
-            categories=len({r["category"] for r in rows if r["category"]})
-            table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#10221a">%s</div><div class="sub" style="font-size:11px">%s</div></td><td><span class="pill" style="background:#eaf4ef;color:#087b59">%s</span></td><td><span class="pill %s">%s</span></td><td>%s</td><td><span class="camp-status-badge status-active">Enabled</span></td><td style="text-align:right"><a class="btn primary" href="/admin/templates?id=%s">✏️ Edit</a> <a class="btn" target="_blank" href="/%s.html">👁️ Preview</a></td></tr>'%
-                         (esc(r["template"]),esc(r["name"]),esc(r["subject"] or ""),esc(r["category"]),
-                          "click" if r["difficulty"]=="Easy" else ("submitted" if r["difficulty"]=="Hard" else "report"),
-                          esc(r["difficulty"]),esc(r["language"]),esc(r["template"]),esc(r["template"])) for r in rows) or '<tr><td colspan="7">No templates configured.</td></tr>'
+            categories_map={}
+            brands_map={}
+            for r in rows:
+                cat=r["category"] or "General"
+                categories_map[cat]=categories_map.get(cat,0)+1
+                b=r["brand"] or "General"
+                brands_map[b]=brands_map.get(b,0)+1
+
+            cat_keys=sorted(categories_map.keys())
+            brand_keys=sorted(brands_map.keys(), key=lambda x: (0 if x=="Zoom" else 1 if x=="Microsoft Office 365" else 2 if x=="Google Workspace" else 3 if x=="Amazon Web Services (AWS)" else 4, x))
+
+            sel_param=parse_qs(query).get("select",[""])[0] if query else ""
+            default_row=next((r for r in rows if r["template"]==sel_param), rows[0] if rows else None)
+            default_id=default_row["template"] if default_row else "1"
+
+            cat_items='<div class="ls-nav-item active" data-cat="" onclick="lsFilterCat(\'\')"><span>📁 All Categories</span><span class="ls-badge-count">%d</span></div>'%total_t
+            for k in cat_keys:
+                cat_items+='<div class="ls-nav-item" data-cat="%s" onclick="lsFilterCat(\'%s\')"><span>📁 %s</span><span class="ls-badge-count">%d</span></div>'%(esc(k),esc(k),esc(k),categories_map[k])
+
+            brand_items='<div class="ls-nav-item active" data-brand="" onclick="lsFilterBrand(\'\')"><span>✉️ All Brands</span><span class="ls-badge-count">%d</span></div>'%total_t
+            for b in brand_keys:
+                brand_items+='<div class="ls-nav-item" data-brand="%s" onclick="lsFilterBrand(\'%s\')"><span>✉️ %s</span><span class="ls-badge-count">%d</span></div>'%(esc(b),esc(b),esc(b),brands_map[b])
+
+            techniques=["All","Call to action","Visual Imitation","Generic details","Personalized Information","Urgency","FOMO","Emotional Appeal","Authority Figures","Technical Jargon"]
+            tech_pills="".join('<span class="ls-tag-pill%s" data-tech="%s" onclick="lsFilterTech(\'%s\')">%s</span>'%(" active" if t=="All" else "",esc(t),esc(t),esc(t)) for t in techniques)
+
+            cards_list=[]
+            tpl_json_map={}
+            for r in rows:
+                tid=esc(r["template"])
+                tname=esc(r["name"])
+                tsubj=esc(r["subject"] or "")
+                tbrand=esc(r["brand"] or "General")
+                tcat=esc(r["category"] or "General")
+                tdiff=esc(r["difficulty"] or "Medium")
+                tfrom_email=esc(r["from_email"] or "noreply@security.local")
+                tfrom_name=esc(r["from_name"] or "Security Team")
+                treply_to=esc(r["reply_to"] or tfrom_email)
+                ttags=esc(r["tags"] or "")
+                is_active=" active" if tid==default_id else ""
+
+                raw_tags=[x.strip() for x in (r["tags"] or "").split(",") if x.strip()]
+                badge_tags="".join('<span class="ls-chip technique">%s</span>'%esc(x) for x in raw_tags[:3])
+
+                cards_list.append(f'''<div class="ls-card{is_active}" id="card-{tid}" data-id="{tid}" data-brand="{tbrand}" data-cat="{tcat}" data-tags="{ttags}" onclick="selectTemplate('{tid}')">
+  <div class="ls-card-top">
+    <div class="ls-card-sender"><span class="ls-dot"></span> {tfrom_email}</div>
+    <div class="ls-card-time"><span class="ls-chip diff-{tdiff}">{tdiff}</span></div>
+  </div>
+  <div class="ls-card-subject">{tsubj}</div>
+  <div class="ls-card-name">{tname}</div>
+  <div class="ls-card-badges">
+    <span class="ls-chip brand">{tbrand}</span>
+    {badge_tags}
+  </div>
+</div>''')
+
+                tpl_json_map[r["template"]]={
+                    "id":r["template"],
+                    "name":r["name"],
+                    "subject":r["subject"] or "",
+                    "brand":r["brand"] or "General",
+                    "category":r["category"] or "General",
+                    "from_name":r["from_name"] or "Security Team",
+                    "from_email":r["from_email"] or "noreply@security.local",
+                    "reply_to":r["reply_to"] or "noreply@security.local",
+                    "difficulty":r["difficulty"] or "Medium",
+                    "tags":r["tags"] or "",
+                }
+
+            cards_html="".join(cards_list) or '<div style="padding:20px;text-align:center;color:#6d887d">No templates found.</div>'
+            json_blob=json.dumps(tpl_json_map)
+
+            def_from_name=esc(default_row["from_name"] if default_row else "Zoom Security")
+            def_from_email=esc(default_row["from_email"] if default_row else "noreply@zoomsecurity.com")
+            def_subject=esc(default_row["subject"] if default_row else "Urgent: Security Verification Required")
+            def_reply_to=esc(default_row["reply_to"] if default_row else "noreplyzoomsecurity-com@linksec.io")
+            def_brand=esc(default_row["brand"] if default_row else "Zoom")
+            def_initial=def_from_name[:1].upper() if def_from_name else "Z"
+
             body=f'''<div class="camp-header">
   <div>
-    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Templates</span></div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Email Templates</span></div>
     <div class="camp-title-row">
       <h1>Email Templates &amp; Payloads</h1>
-      <span class="camp-status-badge status-active">{total_t} Payloads</span>
+      <span class="camp-status-badge status-active">{total_t} Authentic Lures</span>
     </div>
   </div>
   <div class="camp-actions">
-    <a class="btn primary" href="/admin/templates?id=1">+ Open Template Builder</a>
+    <a class="btn primary" href="/admin/templates?id=new">+ Create Custom Template</a>
+    <a class="btn" href="/admin/campaigns/new?template={default_id}" id="hdrUseBtn">🚀 Use in Campaign</a>
   </div>
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="stat-label">TOTAL TEMPLATES</div><div class="num">{total_t}</div><div class="delta">Simulation lures</div></div>
-  <div class="stat"><div class="stat-label">CATEGORIES</div><div class="num">{categories}</div><div class="delta">HR, IT, Finance, Phish</div></div>
-  <div class="stat"><div class="stat-label">SUPPORTED LANGUAGES</div><div class="num">5</div><div class="delta">Bengali, English, Arabic...</div></div>
-  <div class="stat"><div class="stat-label">POLICY STATUS</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">✓ Verified Safe</div><div class="delta">No credential forms</div></div>
+  <div class="stat"><div class="stat-label">TOTAL EMAIL TEMPLATES</div><div class="num">{total_t}</div><div class="delta">Pre-configured lures</div></div>
+  <div class="stat"><div class="stat-label">AUTHENTIC BRANDS</div><div class="num">{len(brands_map)}</div><div class="delta">Zoom, M365, AWS, GCP, Slack...</div></div>
+  <div class="stat"><div class="stat-label">CATEGORIES</div><div class="num">{len(categories_map)}</div><div class="delta">Cloud, Collab, Security, Finance</div></div>
+  <div class="stat"><div class="stat-label">COMPLIANCE POLICY</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">✓ Verified Safe</div><div class="delta">Zero-credential harvest</div></div>
 </div>
 
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-    <h3 style="margin:0">Template Catalog</h3>
-    <input id="qTpl" oninput="filterTplTable()" placeholder="Filter by name, subject, category..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12px;width:280px">
+<div class="ls-browser">
+  <!-- Column 1: Categories & Brands Sidebar -->
+  <div class="ls-sidebar">
+    <div>
+      <div class="ls-group-title">Categories</div>
+      <div id="lsCatList">{cat_items}</div>
+    </div>
+    <div>
+      <div class="ls-group-title">Brands</div>
+      <div id="lsBrandList" style="max-height:360px;overflow-y:auto">{brand_items}</div>
+    </div>
   </div>
-  <div class="table-wrap">
-    <table class="table" style="width:100%">
-      <thead><tr><th>ID</th><th>Template Name &amp; Subject</th><th>Category</th><th>Difficulty</th><th>Language</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
-      <tbody id="tplRows">{table}</tbody>
-    </table>
+
+  <!-- Column 2: Template Catalog List -->
+  <div class="ls-catalog">
+    <div class="ls-catalog-header">
+      <div class="ls-search-wrap">
+        <span class="ls-search-icon">🔍</span>
+        <input class="ls-search-input" id="lsSearch" placeholder="Search templates, subjects, brands, techniques..." oninput="lsSearchFilter()">
+      </div>
+      <div class="ls-tags-bar" id="lsTechBar">{tech_pills}</div>
+    </div>
+    <div class="ls-cards-list" id="lsCardsList">
+      {cards_html}
+    </div>
+  </div>
+
+  <!-- Column 3: Live Interactive Email Client -->
+  <div class="ls-preview-pane">
+    <div class="ls-preview-toolbar">
+      <div class="ls-toolbar-left">
+        <span style="font-size:12px;font-weight:750;color:#203c30">📧 Client Preview:</span>
+        <div class="ls-toggle-mode">
+          <button type="button" class="ls-toggle-btn active" id="btnModeReal" onclick="setPreviewMode('realistic')">Realistic View (Victim)</button>
+          <button type="button" class="ls-toggle-btn" id="btnModeTech" onclick="setPreviewMode('indicators')">Phish Indicators (Trainee)</button>
+        </div>
+      </div>
+      <div class="ls-toolbar-right">
+        <a class="btn primary" id="btnUseCamp" href="/admin/campaigns/new?template={default_id}">🚀 Use in Campaign</a>
+        <a class="btn" id="btnEditTpl" href="/admin/templates?id={default_id}">✏️ Edit HTML</a>
+        <a class="btn" id="btnTestSend" href="/admin/templates/test-send?id={default_id}">✉️ Send Test</a>
+      </div>
+    </div>
+
+    <!-- Envelope Header -->
+    <div class="ls-envelope">
+      <div class="ls-avatar" id="prevAvatar">{def_initial}</div>
+      <div class="ls-envelope-meta">
+        <div class="ls-meta-row-from">
+          <div>
+            <span class="ls-sender-name" id="prevFromName">{def_from_name}</span>
+            <span class="ls-sender-email" id="prevFromEmail">&lt;{def_from_email}&gt;</span>
+          </div>
+          <div class="ls-meta-date">Today, 10:42 AM (Simulation)</div>
+        </div>
+        <div class="ls-meta-subject" id="prevSubject">{def_subject}</div>
+        <div class="ls-meta-subline">
+          <span>To: <b>Target Employee &lt;employee@company.com&gt;</b></span>
+          <span>Reply-To: <span class="mono" id="prevReplyTo">{def_reply_to}</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email Rendered Frame Container -->
+    <div class="ls-frame-container">
+      <div class="ls-frame-card">
+        <iframe class="ls-iframe" id="lsIframe" src="/admin/templates/preview?id={default_id}&mode=realistic"></iframe>
+      </div>
+    </div>
   </div>
 </div>
+
 <script>
-function filterTplTable(){{const q=document.getElementById('qTpl').value.toLowerCase();document.querySelectorAll('#tplRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
+const TPL_MAP = {json_blob};
+let currentTplId = "{default_id}";
+let currentMode = "realistic";
+let filterCatVal = "";
+let filterBrandVal = "";
+let filterTechVal = "All";
+
+function selectTemplate(tid) {{
+  if(!TPL_MAP[tid]) return;
+  currentTplId = tid;
+  const d = TPL_MAP[tid];
+
+  document.querySelectorAll('.ls-card').forEach(c => c.classList.remove('active'));
+  const activeCard = document.getElementById('card-' + tid);
+  if(activeCard) activeCard.classList.add('active');
+
+  document.getElementById('btnUseCamp').href = '/admin/campaigns/new?template=' + encodeURIComponent(tid);
+  document.getElementById('hdrUseBtn').href = '/admin/campaigns/new?template=' + encodeURIComponent(tid);
+  document.getElementById('btnEditTpl').href = '/admin/templates?id=' + encodeURIComponent(tid);
+  document.getElementById('btnTestSend').href = '/admin/templates/test-send?id=' + encodeURIComponent(tid);
+
+  document.getElementById('prevFromName').innerText = d.from_name;
+  document.getElementById('prevFromEmail').innerText = '<' + d.from_email + '>';
+  document.getElementById('prevSubject').innerText = d.subject;
+  document.getElementById('prevReplyTo').innerText = d.reply_to;
+  document.getElementById('prevAvatar').innerText = (d.from_name || d.brand || 'P').charAt(0).toUpperCase();
+
+  refreshIframe();
+}}
+
+function setPreviewMode(mode) {{
+  currentMode = mode;
+  document.getElementById('btnModeReal').classList.toggle('active', mode === 'realistic');
+  document.getElementById('btnModeTech').classList.toggle('active', mode === 'indicators');
+  refreshIframe();
+}}
+
+function refreshIframe() {{
+  const ifr = document.getElementById('lsIframe');
+  ifr.src = '/admin/templates/preview?id=' + encodeURIComponent(currentTplId) + '&mode=' + encodeURIComponent(currentMode);
+}}
+
+function lsFilterCat(cat) {{
+  filterCatVal = cat;
+  document.querySelectorAll('#lsCatList .ls-nav-item').forEach(el => {{
+    el.classList.toggle('active', el.getAttribute('data-cat') === cat);
+  }});
+  applyFilters();
+}}
+
+function lsFilterBrand(brand) {{
+  filterBrandVal = brand;
+  document.querySelectorAll('#lsBrandList .ls-nav-item').forEach(el => {{
+    el.classList.toggle('active', el.getAttribute('data-brand') === brand);
+  }});
+  applyFilters();
+}}
+
+function lsFilterTech(tech) {{
+  filterTechVal = tech;
+  document.querySelectorAll('#lsTechBar .ls-tag-pill').forEach(el => {{
+    el.classList.toggle('active', el.getAttribute('data-tech') === tech);
+  }});
+  applyFilters();
+}}
+
+function lsSearchFilter() {{
+  applyFilters();
+}}
+
+function applyFilters() {{
+  const q = document.getElementById('lsSearch').value.toLowerCase().trim();
+  const cards = document.querySelectorAll('.ls-card');
+  let firstVisible = null;
+  cards.forEach(card => {{
+    const id = card.getAttribute('data-id');
+    const brand = (card.getAttribute('data-brand') || '').toLowerCase();
+    const cat = (card.getAttribute('data-cat') || '').toLowerCase();
+    const tags = (card.getAttribute('data-tags') || '').toLowerCase();
+    const text = card.innerText.toLowerCase();
+
+    let show = true;
+    if(filterCatVal && cat !== filterCatVal.toLowerCase()) show = false;
+    if(filterBrandVal && brand !== filterBrandVal.toLowerCase()) show = false;
+    if(filterTechVal && filterTechVal !== 'All' && !tags.includes(filterTechVal.toLowerCase())) show = false;
+    if(q && !text.includes(q)) show = false;
+
+    card.style.display = show ? '' : 'none';
+    if(show && !firstVisible) firstVisible = id;
+  }});
+}}
 </script>'''
-            return self.admin_shell("Templates",body,"Templates")
+            return self.admin_shell("Email Templates",body,"Email Templates")
         if path=="/admin/landing-pages":
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
             total_lp=len(rows)
@@ -2984,7 +3415,28 @@ updateLivePreview();
     def template_form(self,tid=None):
         c=db()
         r=c.execute("SELECT * FROM template_library WHERE template=?",(str(tid),)).fetchone() if tid else None
-        if not r and tid:
+        if not r and tid and tid=="new":
+            r={
+                "template":"custom-"+secrets.token_hex(3),
+                "name":"New Custom Email Template",
+                "subject":"Important Security Notification",
+                "preheader":"Action required within 24 hours",
+                "category":"General",
+                "difficulty":"Medium",
+                "language":"English",
+                "brand":"Internal IT",
+                "industry":"Corporate",
+                "tags":"Call to action, Visual Imitation",
+                "html_body":"<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"><title>Security Notification</title></head>\n<body style=\"font-family:sans-serif;padding:20px;background:#f9f9f9\">\n  <div style=\"max-width:600px;margin:auto;background:#fff;padding:24px;border-radius:8px\">\n    <h2>Security Notice</h2>\n    <p>Dear {{name}},</p>\n    <p>Please review your account credentials to ensure access remains active.</p>\n    <p><a href=\"{{tracking_link}}\" style=\"display:inline-block;padding:10px 18px;background:#087b59;color:#fff;text-decoration:none;border-radius:5px\">Review Account Now</a></p>\n  </div>\n</body>\n</html>",
+                "text_body":"Hello {{name}},\n\nPlease review your account notification:\n{{tracking_link}}\n\nThis is an authorized security-awareness simulation.",
+                "from_name":"IT Support",
+                "from_email":"it-support@security.local",
+                "reply_to":"it-support@security.local",
+                "owner":ADMIN_USERNAME,
+                "status":"Active",
+                "version":1
+            }
+        elif not r and tid:
             fn=os.path.join(TEMPLATES,str(tid)+".html")
             if os.path.isfile(fn):
                 with open(fn,"r",encoding="utf-8") as f: body=f.read()
@@ -2995,7 +3447,7 @@ updateLivePreview();
         versions=c.execute("SELECT version,created_at,created_by FROM template_versions WHERE template=? ORDER BY version DESC LIMIT 20",(str(tid),)).fetchall() if r else []
         c.close()
         if not r:
-            return self.admin_shell("Template","<h1>Template not found</h1><p><a class='btn' href='/admin/templates'>Back</a></p>","Templates")
+            return self.admin_shell("Email Template","<h1>Email Template not found</h1><p><a class='btn' href='/admin/templates'>Back to Email Templates</a></p>","Email Templates")
         def val(k): return esc(r[k] or "")
         version_rows="".join("<tr><td>v%s</td><td>%s</td><td>%s</td></tr>"%(v["version"],esc(v["created_at"]),esc(v["created_by"])) for v in versions) or "<tr><td colspan='3'>No saved versions yet.</td></tr>"
         cats=["General","Credential Awareness","Malware Awareness","QR Awareness","Finance","HR","IT","Executive","Seasonal"]
@@ -3007,14 +3459,14 @@ updateLivePreview();
         body=f"""<div class="camp-editor">
 <div class="camp-header">
   <div>
-    <div class="camp-crumb"><a href="/admin/templates">Templates</a> <span>/</span> <span>Edit Template #{val('template')}</span></div>
+    <div class="camp-crumb"><a href="/admin/templates">Email Templates</a> <span>/</span> <span>Edit Template #{val('template')}</span></div>
     <div class="camp-title-row">
-      <h1>Edit Simulation Template #{val('template')}</h1>
+      <h1>Edit Email Template #{val('template')}</h1>
       <span class="camp-status-badge status-active">{r['status'] or 'Active'}</span>
     </div>
   </div>
   <div class="camp-actions">
-    <a class="btn" target="_blank" href="/{val('template')}.html">👁️ Preview Tab</a>
+    <a class="btn" target="_blank" href="/admin/templates/preview?id={val('template')}">👁️ Preview Tab</a>
     <a class="btn" href="/admin/templates/test-send?id={val('template')}">✉️ Test Send</a>
     <a class="btn" href="/admin/templates">Cancel</a>
     <button class="btn primary" type="submit" form="tplForm">Save Template</button>
@@ -3170,7 +3622,7 @@ function insertTplVar(v) {{
   ed.focus();
 }}
 </script>"""
-        return self.admin_shell("Template Builder",body,"Templates")
+        return self.admin_shell("Email Template Editor",body,"Email Templates")
 
 
     def campaign_form(self,cid=None):
@@ -3180,7 +3632,7 @@ function insertTplVar(v) {{
         lands=c.execute("SELECT id,name,template,version FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
         groups=c.execute("SELECT g.name,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.name ORDER BY g.name").fetchall()
         total_recipients=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
-        templates=c.execute("SELECT template,name,category,difficulty,subject FROM template_library ORDER BY CAST(template AS INTEGER)").fetchall()
+        templates=c.execute("SELECT template,name,category,difficulty,subject,brand FROM template_library ORDER BY CASE WHEN brand='Zoom' THEN 0 WHEN brand='Microsoft Office 365' THEN 1 WHEN brand='Google Workspace' THEN 2 WHEN brand='Amazon Web Services (AWS)' THEN 3 ELSE 4 END, brand, name").fetchall()
         c.close()
 
         name=esc(r["name"]) if r else ""
@@ -3202,7 +3654,21 @@ function insertTplVar(v) {{
         retry_backoff=str(r["retry_backoff_seconds"] if r and r["retry_backoff_seconds"] is not None else 5)
 
         if templates:
-            opts="".join('<option value="%s" data-name="%s" data-diff="%s" %s>Template %s · %s (%s)</option>'%(esc(t["template"]),esc(t["name"]),esc(t["difficulty"]),"selected" if str(t["template"])==template else "",esc(t["template"]),esc(t["name"]),esc(t["difficulty"])) for t in templates)
+            by_brand={}
+            for t in templates:
+                b=t["brand"] or "General"
+                by_brand.setdefault(b,[]).append(t)
+            opts_parts=[]
+            for bname,tlist in by_brand.items():
+                opts_parts.append('<optgroup label="%s">'%esc(bname))
+                for t in tlist:
+                    sel="selected" if str(t["template"])==template else ""
+                    opts_parts.append('<option value="%s" data-name="%s" data-diff="%s" data-subject="%s" %s>%s · %s (%s)</option>'%(
+                        esc(t["template"]),esc(t["name"]),esc(t["difficulty"]),esc(t["subject"] or ""),sel,
+                        esc(t["brand"] or "General"),esc(t["name"]),esc(t["difficulty"])
+                    ))
+                opts_parts.append('</optgroup>')
+            opts="".join(opts_parts)
         else:
             opts="".join('<option value="%s" data-name="Template %s" data-diff="Medium" %s>Template %s</option>'%(i,i,"selected" if str(i)==template else "",i) for i in range(1,11))
 
@@ -3294,7 +3760,7 @@ function insertTplVar(v) {{
             {opts}
           </select>
           <div class="preview-link-wrap">
-            <a id="templatePreviewBtn" class="preview-link" target="_blank" href="/{template}.html">
+            <a id="templatePreviewBtn" class="preview-link" target="_blank" href="/admin/templates/preview?id={template}">
               <span>👁️</span> Preview Template in New Tab
             </a>
           </div>
@@ -3607,8 +4073,13 @@ function insertToken(token) {{
 function syncTemplatePreview() {{
   const sel = document.getElementById('templateSelect');
   const val = sel.value;
+  const opt = sel.options[sel.selectedIndex];
   const btn = document.getElementById('templatePreviewBtn');
-  if (btn && val) btn.href = '/' + val + '.html';
+  if (btn && val) btn.href = '/admin/templates/preview?id=' + encodeURIComponent(val);
+  const subjInput = document.getElementById('subjectInput');
+  if (opt && opt.dataset.subject && (!subjInput.value || subjInput.value === 'Security Awareness Simulation')) {{
+    subjInput.value = opt.dataset.subject;
+  }}
   syncSummary();
 }}
 
@@ -3717,6 +4188,46 @@ syncAudience();
             ok,msg=validate_landing_html(row["html_body"] or "")
             if not ok: return self.sendbody(400,msg,"text/plain")
             return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>")
+        if path=="/admin/templates/preview":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            tid=parse_qs(p.query).get("id",[""])[0]
+            mode=parse_qs(p.query).get("mode",["realistic"])[0]
+            c=db(); row=c.execute("SELECT * FROM template_library WHERE template=?",(tid,)).fetchone(); c.close()
+            if not row:
+                for cand in (os.path.join(TEMPLATES,tid+".html"), os.path.join(TEMPLATES,"email",tid+".html")):
+                    if os.path.isfile(cand):
+                        with open(cand,"r",encoding="utf-8",errors="ignore") as f:
+                            html_content=f.read()
+                        break
+                else:
+                    return self.sendbody(404,"Template not found","text/plain")
+                brand="Security Awareness"
+            else:
+                html_content=row["html_body"] or ""
+                brand=row["brand"] or "Security Awareness"
+            mock_recipient={
+                "name":"John Doe",
+                "first_name":"John",
+                "last_name":"Doe",
+                "email":"john.doe@enterprise.com",
+                "employee_id":"EMP-1042",
+                "department":"Finance & Operations",
+                "designation":"Lead Security Analyst",
+                "location":"Dhaka HQ",
+                "manager":"Jane Smith",
+                "language":"English",
+                "timezone":"Asia/Dhaka"
+            }
+            mock_campaign={"name":"Security Awareness Simulation Drill","brand":brand}
+            mock_links={
+                "tracking_link":"#preview-clicked-tracking-link",
+                "report_link":"#preview-report-phish",
+                "qr_link":"#preview-qr-scan"
+            }
+            rendered=render_template_variables(html_content,mock_recipient,mock_campaign,mock_links)
+            if mode=="realistic":
+                rendered=re.sub(r'style="background-color:\s*#[a-fA-F0-9]+;\s*outline:\s*3px solid\s*#[a-fA-F0-9]+"', 'style="background-color:transparent;outline:none"', rendered)
+            return self.sendbody(200,rendered,"text/html; charset=utf-8")
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             return self.sendbody(200,self.feature_page(path,p.query))
         if path=="/admin/smtp/diagnostics":
@@ -3759,7 +4270,7 @@ syncAudience();
             if not tpl: return self.sendbody(404,"Template not found","text/plain")
             opts="".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in profiles)
             body='<h1>Template Test Send</h1><div class="card"><p>Template: <b>%s</b> · Version %s</p><p>This sends a single non-tracked test message. No campaign recipient or tracking event is created.</p><form class="form" method="post" action="/admin/templates/test-send"><input type="hidden" name="template" value="%s"><label>Test recipient email<input type="email" name="to_email" required maxlength="254"></label><label>SMTP Profile<select name="smtp_profile_id" required>%s</select></label><button class="btn primary">Send Test Message</button></form></div>'%(esc(tpl["name"]),tpl["version"] or 1,esc(tid),opts)
-            return self.sendbody(200,self.admin_shell("Template Test Send",body,"Templates"))
+            return self.sendbody(200,self.admin_shell("Template Test Send",body,"Email Templates"))
         if path=="/admin/campaigns/test-send":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=parse_qs(p.query).get("id",[""])[0]
@@ -3868,8 +4379,8 @@ syncAudience();
                 return self.sendbody(302,b"",extra={"Location":"/admin/landing-pages?id="+str(new_id)})
         if p.path=="/admin/templates/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            tid=form.get("template",[""])[0][:20]
-            if not re.fullmatch(r"\d{1,3}",tid) or not (1 <= int(tid) <= 999):
+            tid=form.get("template",[""])[0][:64].strip()
+            if not re.fullmatch(r"[a-zA-Z0-9_\-]{1,64}",tid):
                 return self.sendbody(400,"Invalid template id","text/plain")
             name=form.get("name",[""])[0][:150]
             subject=form.get("subject",[""])[0][:250]
