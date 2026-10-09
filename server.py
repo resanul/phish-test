@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket
+import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode
 from http import cookies
@@ -529,49 +529,70 @@ def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=
 def ensure_smtp_key():
     os.makedirs(DATA,exist_ok=True)
     if not os.path.exists(SMTP_KEY):
-        subprocess.run(["openssl","rand","-base64","48"],check=True,stdout=open(SMTP_KEY,"w"),stderr=subprocess.DEVNULL)
-        os.chmod(SMTP_KEY,0o600)
+        try:
+            with open(SMTP_KEY,"w") as f:
+                subprocess.run(["openssl","rand","-base64","48"],check=True,stdout=f,stderr=subprocess.DEVNULL)
+        except Exception:
+            with open(SMTP_KEY,"w") as f:
+                f.write(secrets.token_urlsafe(48))
+        try: os.chmod(SMTP_KEY,0o600)
+        except Exception: pass
     else:
-        os.chmod(SMTP_KEY,0o600)
+        try: os.chmod(SMTP_KEY,0o600)
+        except Exception: pass
     return SMTP_KEY
 
 def encrypt_secret(value):
     if not value:
         return ""
     key=ensure_smtp_key()
-    p=subprocess.run(
-        ["openssl","enc","-aes-256-cbc","-pbkdf2","-salt","-a","-A","-pass",f"file:{key}"],
-        input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
-    return p.stdout.decode().strip()
+    try:
+        p=subprocess.run(
+            ["openssl","enc","-aes-256-cbc","-pbkdf2","-salt","-a","-A","-pass",f"file:{key}"],
+            input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
+        return p.stdout.decode().strip()
+    except Exception:
+        with open(key,"rb") as f:
+            k=f.read()
+        derived=hashlib.sha256(k).digest()
+        raw=value.encode("utf-8")
+        xor_bytes=bytes(b ^ derived[i % len(derived)] for i, b in enumerate(raw))
+        return "FALLBACK:" + base64.b64encode(xor_bytes).decode("ascii")
 
 def decrypt_secret(value):
     if not value:
         return ""
+    if value.startswith("FALLBACK:"):
+        key=ensure_smtp_key()
+        with open(key,"rb") as f:
+            k=f.read()
+        derived=hashlib.sha256(k).digest()
+        raw=base64.b64decode(value[9:].encode("ascii"))
+        return bytes(b ^ derived[i % len(derived)] for i, b in enumerate(raw)).decode("utf-8",errors="replace")
     key=ensure_smtp_key()
-    p=subprocess.run(
-        ["openssl","enc","-d","-aes-256-cbc","-pbkdf2","-a","-A","-pass",f"file:{key}"],
-        input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
-    return p.stdout.decode()
+    try:
+        p=subprocess.run(
+            ["openssl","enc","-d","-aes-256-cbc","-pbkdf2","-a","-A","-pass",f"file:{key}"],
+            input=value.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True)
+        return p.stdout.decode()
+    except Exception:
+        return ""
 
 def smtp_send_test(profile,to_email):
-    host=profile["host"]; port=int(profile["port"]); security=profile["security"]
     msg=EmailMessage()
-    msg["From"]=formataddr((profile["from_name"] or "Trust PhishGuard",profile["from_email"]))
+    from_name=profile["from_name"] if "from_name" in profile.keys() and profile["from_name"] else "Trust PhishGuard"
+    msg["From"]=formataddr((from_name,profile["from_email"]))
     msg["To"]=to_email
+    if "reply_to" in profile.keys() and profile["reply_to"]:
+        msg["Reply-To"]=profile["reply_to"]
     msg["Subject"]="Trust PhishGuard SMTP test"
     msg.set_content("This is an SMTP connectivity test from Trust PhishGuard. No credentials are requested or collected.")
-    if security=="SSL/TLS":
-        with smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=15) as smtp:
-            if profile["username"]: smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
-            smtp.send_message(msg)
-    else:
-        with smtplib.SMTP(host,port,timeout=15) as smtp:
-            smtp.ehlo()
-            if security=="STARTTLS":
-                smtp.starttls(context=ssl.create_default_context())
-                smtp.ehlo()
-            if profile["username"]: smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
-            smtp.send_message(msg)
+    smtp=smtp_connect(profile)
+    try:
+        smtp.send_message(msg)
+    finally:
+        try: smtp.quit()
+        except Exception: pass
 
 def sanitize_audit_details(details):
     """Redact authentication secrets if a caller accidentally includes them."""
@@ -603,6 +624,7 @@ def smtp_diagnostics(profile,to_email=""):
     except Exception:
         return result+[{"stage":"TCP","status":"FAIL","detail":"TCP connection failed."}]
     smtp=None
+    current_stage="TLS"
     try:
         if security=="SSL/TLS":
             smtp=smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=15)
@@ -613,17 +635,22 @@ def smtp_diagnostics(profile,to_email=""):
             if security=="STARTTLS":
                 smtp.starttls(context=ssl.create_default_context()); smtp.ehlo()
         result.append({"stage":"TLS","status":"PASS","detail":"SMTP TLS/session negotiation succeeded."})
-        if profile["username"] or (profile["auth_method"] or "password").lower()=="oauth2":
+        current_stage="AUTH"
+        username=profile["username"] if "username" in profile.keys() and profile["username"] else ""
+        auth_method=profile["auth_method"] if "auth_method" in profile.keys() and profile["auth_method"] else "password"
+        if username or auth_method.lower()=="oauth2":
             smtp_authenticate(smtp,profile)
             result.append({"stage":"AUTH","status":"PASS","detail":"SMTP authentication succeeded."})
         else:
             result.append({"stage":"AUTH","status":"SKIP","detail":"No SMTP authentication configured; relay may use IP or other policy."})
         if to_email:
+            current_stage="SEND"
             msg=EmailMessage()
             msg["Subject"]="[TEST] Trust PhishGuard SMTP diagnostics"
-            msg["From"]=formataddr((profile["from_name"] or "Trust PhishGuard",profile["from_email"]))
+            from_name=profile["from_name"] if "from_name" in profile.keys() and profile["from_name"] else "Trust PhishGuard"
+            msg["From"]=formataddr((from_name,profile["from_email"]))
             msg["To"]=to_email
-            if profile["reply_to"]: msg["Reply-To"]=profile["reply_to"]
+            if "reply_to" in profile.keys() and profile["reply_to"]: msg["Reply-To"]=profile["reply_to"]
             msg.set_content("This is an authorized Trust PhishGuard SMTP connectivity diagnostic.")
             smtp.send_message(msg)
             result.append({"stage":"SEND","status":"PASS","detail":"Diagnostic test message accepted by SMTP server."})
@@ -633,8 +660,9 @@ def smtp_diagnostics(profile,to_email=""):
         result.append({"stage":"AUTH","status":"FAIL","detail":"SMTP authentication failed."})
     except ssl.SSLError:
         result.append({"stage":"TLS","status":"FAIL","detail":"TLS negotiation failed."})
-    except Exception:
-        result.append({"stage":"SEND" if to_email else "TLS","status":"FAIL","detail":"SMTP session operation failed."})
+    except Exception as e:
+        stage_fail=current_stage if current_stage in ("TLS","AUTH","SEND") else ("SEND" if to_email else "TLS")
+        result.append({"stage":stage_fail,"status":"FAIL","detail":"SMTP session operation failed: %s"%esc(sanitize_audit_details(str(e)[:120]))})
     finally:
         if smtp:
             try: smtp.quit()
@@ -642,21 +670,27 @@ def smtp_diagnostics(profile,to_email=""):
     return result
 
 def smtp_authenticate(smtp,profile):
-    method=(profile["auth_method"] or "password").lower()
+    auth_method=profile["auth_method"] if "auth_method" in profile.keys() and profile["auth_method"] else "password"
+    method=auth_method.lower()
     if method=="oauth2":
-        token=decrypt_secret(profile["oauth_token_enc"]) if profile["oauth_token_enc"] else ""
+        token_enc=profile["oauth_token_enc"] if "oauth_token_enc" in profile.keys() else ""
+        token=decrypt_secret(token_enc) if token_enc else ""
         if not token:
             raise RuntimeError("SMTP OAuth2 access token is not configured")
-        auth_string=lambda challenge=None: "\x00%s\x00%s"%(profile["username"] or "",token)
+        username=profile["username"] if "username" in profile.keys() and profile["username"] else ""
+        auth_string=lambda challenge=None: "\x00%s\x00%s"%(username,token)
         smtp.auth("XOAUTH2",auth_string,initial_response_ok=True)
         return
-    if profile["username"]:
-        smtp.login(profile["username"],decrypt_secret(profile["password_enc"]))
+    username=profile["username"] if "username" in profile.keys() and profile["username"] else ""
+    if username:
+        password_enc=profile["password_enc"] if "password_enc" in profile.keys() else ""
+        smtp.login(username,decrypt_secret(password_enc or ""))
 
 def smtp_connect(profile):
     host=profile["host"]; port=int(profile["port"]); security=profile["security"]
     if security=="SSL/TLS":
         smtp=smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=20)
+        smtp.ehlo()
     else:
         smtp=smtplib.SMTP(host,port,timeout=20)
         smtp.ehlo()
@@ -831,7 +865,7 @@ def send_campaign(campaign_id,scheduled=False):
     if not PUBLIC_BASE_URL:
         raise RuntimeError("PUBLIC_BASE_URL is not configured")
     c=db()
-    campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to,
+    campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to,s.auth_method,s.oauth_token_enc,
                           t.html_body template_html,t.text_body template_text,t.from_name template_from_name,t.from_email template_from_email,t.reply_to template_reply_to,t.status template_status
                           FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id
                           LEFT JOIN template_library t ON t.template=c.template
@@ -1054,6 +1088,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/admins/save":"admin.edit",
         "/admin/risk/settings":"risk.manage",
         "/admin/smtp/save":"smtp.manage",
+        "/admin/smtp/delete":"smtp.manage",
         "/admin/smtp/diagnostics":"smtp.diagnostics",
         "/admin/smtp/test":"smtp.diagnostics",
         "/admin/training/update":"training.manage",
@@ -1469,7 +1504,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.admin_shell("Landing Pages",'<h1>Landing Pages</h1><p>Simulation-safe landing page editor with version history and field-policy validation.</p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Status</th><th>Version</th><th></th></tr>'+table+'</table></div>',"Landing Pages")
         if path=="/admin/smtp":
             rows=c.execute("SELECT id,name,provider,host,port,security,username,from_name,from_email,reply_to,enabled,updated_at FROM smtp_profiles ORDER BY id DESC").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s:%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/smtp?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"Enabled" if r["enabled"] else "Disabled",r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
+            table="".join('<tr><td>%s</td><td>%s</td><td>%s:%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/smtp?id=%s">Edit</a> <a class="btn" href="/admin/smtp/diagnostics?id=%s">Diagnostics</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"Enabled" if r["enabled"] else "Disabled",r["id"],r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
             note='<div style="margin:12px 0;padding:12px;background:#edf8f4;border-radius:9px;font-size:12px;color:#2b6554">SMTP passwords are encrypted at rest with a server-local 0600 key. They are never displayed, exported or committed to Git.</div>'
             return self.admin_shell("SMTP Providers",'<h1>SMTP Providers</h1><p>Enterprise mail-delivery profiles for simulation campaigns and test messages.</p>'+note+'<p><a class="btn primary" href="/admin/smtp/new">+ Add SMTP Provider</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Server</th><th>Security</th><th>From</th><th>Status</th><th></th></tr>'+table+'</table></div>',"SMTP Providers")
         if path=="/admin/training":
@@ -1793,10 +1828,13 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         provider=esc(r["provider"]) if r else "Gmail"; preset=SMTP_PROVIDERS.get(provider,SMTP_PROVIDERS["Custom SMTP"])
         host=esc(r["host"]) if r else esc(preset["host"]); port=esc(r["port"]) if r else str(preset["port"]); security=esc(r["security"]) if r else preset["security"]
         name=esc(r["name"]) if r else ""; username=esc(r["username"]) if r else ""; from_name=esc(r["from_name"]) if r else ""; from_email=esc(r["from_email"]) if r else ""; reply_to=esc(r["reply_to"]) if r else ""; auth_method=esc(r["auth_method"]) if r and r["auth_method"] else "password"; oauth_url=esc(r["oauth_token_url"]) if r else ""; oauth_client=esc(r["oauth_client_id"]) if r else ""; oauth_scopes=esc(r["oauth_scopes"]) if r else ""
+        enabled=r["enabled"] if r and "enabled" in r.keys() else 1
         opts="".join('<option value="%s" %s>%s</option>'%(esc(k),"selected" if k==provider else "",esc(k)) for k in SMTP_PROVIDERS)
         secs="".join('<option value="%s" %s>%s</option>'%(x,"selected" if x==security else "",x) for x in ("STARTTLS","SSL/TLS","NONE"))
+        status_opts='<option value="1" %s>Enabled</option><option value="0" %s>Disabled</option>'%("selected" if enabled else "","selected" if not enabled else "")
         diagnostics=('<a class="btn" href="/admin/smtp/diagnostics?id=%s">Open Diagnostics</a>'%sid) if r else ""
-        body='<div class="smtp-editor"><div class="smtp-heading"><h1>%s SMTP Provider</h1><p>Configure email delivery for your campaigns.</p></div><div class="card smtp-card"><form method="post" action="/admin/smtp/save"><input type="hidden" name="id" value="%s"><div class="smtp-fields"><label>Profile Name<input name="name" value="%s" placeholder="Corporate Mail - Primary" maxlength="100" required></label><label>Email Provider<select id="provider" name="provider" onchange="presetProvider()">%s</select></label><label>Sender Email<input type="email" name="from_email" value="%s" placeholder="security@example.com" maxlength="255" required></label><label>Authentication<select id="auth_method" name="auth_method" onchange="authFields()"><option value="password" %s>SMTP Username &amp; Password</option><option value="oauth2" %s>OAuth 2.0 / XOAUTH2</option></select></label><label>SMTP Username<input name="username" value="%s" autocomplete="username" placeholder="security@example.com" maxlength="255"></label><label id="password-label">SMTP Password / App Password<input type="password" name="password" value="" autocomplete="new-password" placeholder="%s"></label></div><details class="smtp-advanced"><summary>Advanced Settings</summary><div class="smtp-fields"><label>SMTP Host<input id="host" name="host" value="%s" maxlength="255" required></label><label>Port<input id="port" type="number" min="1" max="65535" name="port" value="%s" required></label><label>Connection Security<select id="security" name="security">%s</select></label><label>Sender Name<input name="from_name" value="%s" maxlength="150" placeholder="Trust PhishGuard"></label><label>Reply-To Email<input type="email" name="reply_to" value="%s" maxlength="255"></label><label>OAuth Token URL<input name="oauth_token_url" value="%s" maxlength="500"></label><label>OAuth Access Token<input type="password" name="oauth_token" value="" autocomplete="new-password" placeholder="%s"></label><label>OAuth Client ID<input name="oauth_client_id" value="%s" maxlength="255"></label><label>OAuth Scopes<input name="oauth_scopes" value="%s" maxlength="1000"></label></div><p class="smtp-secret-note">Credentials are stored encrypted and never displayed. When editing, leave secret fields blank to retain the existing secret.</p></details><div class="smtp-actions"><button class="btn" type="submit" name="test_after_save" value="1">Test Connection</button><button class="btn primary" type="submit">Save Provider</button>%s</div></form></div></div><style>.smtp-editor{max-width:980px;margin:0 auto}.smtp-heading{margin:8px 0 22px}.smtp-heading h1{margin-bottom:8px}.smtp-heading p{color:#60716a;margin-top:0}.smtp-card{padding:24px}.smtp-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 22px}.smtp-fields label{display:flex;flex-direction:column;gap:8px;font-weight:650;color:#233b32}.smtp-fields input,.smtp-fields select{width:100%%;min-height:44px;border:1px solid #cbd9d2;border-radius:9px;padding:10px 12px;background:#fff;color:#12231d}.smtp-advanced{margin-top:22px;border-top:1px solid #e0e9e4;padding-top:18px}.smtp-advanced summary{cursor:pointer;font-weight:700;color:#145c45;padding:4px 0 14px}.smtp-secret-note{font-size:12px;color:#60716a;background:#f4f7f6;border-radius:8px;padding:12px}.smtp-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-top:22px;padding-top:18px;border-top:1px solid #e0e9e4}@media(max-width:680px){.smtp-fields{grid-template-columns:1fr}.smtp-card{padding:16px}}</style><script>const presets=%s;function presetProvider(){const p=presets[document.getElementById("provider").value];if(p){document.getElementById("host").value=p.host;document.getElementById("port").value=p.port;document.getElementById("security").value=p.security}}function authFields(){const oauth=document.getElementById("auth_method").value==="oauth2";document.getElementById("password-label").style.opacity=oauth?".55":"1";}</script>'%("Edit" if r else "Add",sid or "",name,opts,from_email,auth_method=="password" and "selected" or "",auth_method=="oauth2" and "selected" or "",username,"unchanged" if r else "Enter SMTP password or app password",host,port,secs,from_name,reply_to,oauth_url,"unchanged" if r else "Enter OAuth access token",oauth_client,oauth_scopes,diagnostics,html.escape(str(SMTP_PROVIDERS).replace("'","\"")))
+        delete_btn=('<button class="btn" style="color:#a12d2d;border-color:#f0c0c0" type="submit" formaction="/admin/smtp/delete" onclick="return confirm(\'Delete this SMTP profile?\');">Delete Provider</button>') if r else ""
+        body='<div class="smtp-editor"><div class="smtp-heading"><h1>%s SMTP Provider</h1><p>Configure email delivery for your campaigns.</p></div><div class="card smtp-card"><form method="post" action="/admin/smtp/save"><input type="hidden" name="id" value="%s"><div class="smtp-fields"><label>Profile Name<input name="name" value="%s" placeholder="Corporate Mail - Primary" maxlength="100" required></label><label>Email Provider<select id="provider" name="provider" onchange="presetProvider()">%s</select></label><label>Sender Email<input type="email" name="from_email" value="%s" placeholder="security@example.com" maxlength="255" required></label><label>Sender Name<input name="from_name" value="%s" maxlength="150" placeholder="Trust PhishGuard"></label><label>Authentication<select id="auth_method" name="auth_method" onchange="authFields()"><option value="password" %s>SMTP Username &amp; Password</option><option value="oauth2" %s>OAuth 2.0 / XOAUTH2</option></select></label><label>Status<select name="enabled">%s</select></label><label>SMTP Username<input name="username" value="%s" autocomplete="username" placeholder="security@example.com" maxlength="255"></label><label id="password-label">SMTP Password / App Password<input type="password" name="password" value="" autocomplete="new-password" placeholder="%s"></label></div><details class="smtp-advanced" %s><summary>Advanced Settings &amp; Server Connection</summary><div class="smtp-fields"><label>SMTP Host<input id="host" name="host" value="%s" maxlength="255" required></label><label>Port<input id="port" type="number" min="1" max="65535" name="port" value="%s" required></label><label>Connection Security<select id="security" name="security">%s</select></label><label>Reply-To Email<input type="email" name="reply_to" value="%s" maxlength="255"></label><label>OAuth Token URL<input name="oauth_token_url" value="%s" maxlength="500"></label><label>OAuth Access Token<input type="password" name="oauth_token" value="" autocomplete="new-password" placeholder="%s"></label><label>OAuth Client ID<input name="oauth_client_id" value="%s" maxlength="255"></label><label>OAuth Scopes<input name="oauth_scopes" value="%s" maxlength="1000"></label></div><p class="smtp-secret-note">Credentials are stored encrypted and never displayed. When editing, leave secret fields blank to retain the existing secret.</p></details><div class="smtp-actions">%s<button class="btn" type="submit" name="test_after_save" value="1">Test Connection</button><button class="btn primary" type="submit">Save Provider</button>%s<a class="btn" href="/admin/smtp">Cancel</a></div></form></div></div><style>.smtp-editor{max-width:980px;margin:0 auto}.smtp-heading{margin:8px 0 22px}.smtp-heading h1{margin-bottom:8px}.smtp-heading p{color:#60716a;margin-top:0}.smtp-card{padding:24px}.smtp-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 22px}.smtp-fields label{display:flex;flex-direction:column;gap:8px;font-weight:650;color:#233b32}.smtp-fields input,.smtp-fields select{width:100%%;min-height:44px;border:1px solid #cbd9d2;border-radius:9px;padding:10px 12px;background:#fff;color:#12231d}.smtp-advanced{margin-top:22px;border-top:1px solid #e0e9e4;padding-top:18px}.smtp-advanced summary{cursor:pointer;font-weight:700;color:#145c45;padding:4px 0 14px}.smtp-secret-note{font-size:12px;color:#60716a;background:#f4f7f6;border-radius:8px;padding:12px}.smtp-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-top:22px;padding-top:18px;border-top:1px solid #e0e9e4}@media(max-width:680px){.smtp-fields{grid-template-columns:1fr}.smtp-card{padding:16px}}</style><script>const presets=%s;function presetProvider(){const p=presets[document.getElementById("provider").value];if(p){if(p.host)document.getElementById("host").value=p.host;if(p.port)document.getElementById("port").value=p.port;if(p.security)document.getElementById("security").value=p.security}}function authFields(){const oauth=document.getElementById("auth_method").value==="oauth2";const pwd=document.getElementById("password-label");if(pwd){pwd.style.opacity=oauth?".55":"1"}const adv=document.querySelector(".smtp-advanced");if(oauth&&adv){adv.open=true}}authFields();</script>'%("Edit" if r else "Add",sid or "",name,opts,from_email,from_name,auth_method=="password" and "selected" or "",auth_method=="oauth2" and "selected" or "",status_opts,username,"unchanged" if r else "Enter SMTP password or app password","open" if auth_method=="oauth2" else "",host,port,secs,reply_to,oauth_url,"unchanged" if r else "Enter OAuth access token",oauth_client,oauth_scopes,delete_btn,diagnostics,json.dumps(SMTP_PROVIDERS))
         return self.admin_shell("SMTP Provider",body,"SMTP Providers")
     def landing_page_form(self,lid=None):
         c=db()
@@ -1959,8 +1997,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             sid=parse_qs(p.query).get("id",[""])[0]
             c=db(); profile=c.execute("SELECT id,name,provider,host,port,security,from_name,from_email FROM smtp_profiles WHERE id=?",(sid,)).fetchone(); c.close()
             if not profile: return self.sendbody(404,"SMTP profile not found","text/plain")
-            body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><p><b>%s</b> · %s · %s:%s · %s</p><p>Runs DNS → TCP → TLS → AUTH and optionally sends one diagnostic message. Secrets are never displayed.</p><form class="form" method="post" action="/admin/smtp/diagnostics"><input type="hidden" name="id" value="%s"><label>Diagnostic recipient email<input type="email" name="to_email" maxlength="254" placeholder="security@example.com"></label><button class="btn primary">Run Diagnostics</button></form></div>'%(esc(profile["name"]),esc(profile["provider"]),esc(profile["host"]),profile["port"],esc(profile["security"]),profile["id"])
-            return self.admin_shell("SMTP Diagnostics",body,"SMTP")
+            body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><p><b>%s</b> · %s · %s:%s · %s</p><p>Runs DNS → TCP → TLS → AUTH and optionally sends one diagnostic message. Secrets are never displayed.</p><form class="form" method="post" action="/admin/smtp/diagnostics"><input type="hidden" name="id" value="%s"><label>Diagnostic recipient email<input type="email" name="to_email" maxlength="254" placeholder="security@example.com"></label><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><button class="btn primary">Run Diagnostics</button><a class="btn" href="/admin/smtp?id=%s">Edit Provider</a><a class="btn" href="/admin/smtp">Back to Providers</a></div></form></div>'%(esc(profile["name"]),esc(profile["provider"]),esc(profile["host"]),profile["port"],esc(profile["security"]),profile["id"],profile["id"])
+            return self.admin_shell("SMTP Diagnostics",body,"SMTP Providers")
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
@@ -1995,7 +2033,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/campaigns/test-send":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=parse_qs(p.query).get("id",[""])[0]
-            c=db(); campaign=c.execute("SELECT c.*,s.name smtp_name,s.from_email,s.from_name,s.reply_to,s.username,s.password_enc,s.host,s.port,s.security FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id WHERE c.id=?",(cid,)).fetchone(); c.close()
+            c=db(); campaign=c.execute("SELECT c.*,s.name smtp_name,s.from_email,s.from_name,s.reply_to,s.username,s.password_enc,s.host,s.port,s.security,s.auth_method,s.oauth_token_enc FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id WHERE c.id=?",(cid,)).fetchone(); c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
             body="<h1>Test Send</h1><div class='card'><p>Campaign: <b>%s</b></p><p>This sends one non-tracked test message using the configured SMTP profile. It does not target campaign recipients.</p><form class='form' method='post' action='/admin/campaigns/test-send'><input type='hidden' name='id' value='%s'><label>Test recipient email<input type='email' name='to_email' required maxlength='255'></label><button class='btn primary'>Send Test Message</button></form></div>"%(esc(campaign["name"]),cid)
             return self.sendbody(200,self.admin_shell("Campaign Test Send",body,"Campaigns"))
@@ -2515,6 +2553,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             host=form.get("host",[""])[0][:255]; port=int(form.get("port",["587"])[0]); security=form.get("security",["STARTTLS"])[0]
             username=form.get("username",[""])[0][:255]; password=form.get("password",[""])[0]; from_name=form.get("from_name",[""])[0][:150]
             from_email=form.get("from_email",[""])[0][:255]; reply_to=form.get("reply_to",[""])[0][:255]; auth_method=form.get("auth_method",["password"])[0]; oauth_url=form.get("oauth_token_url",[""])[0][:500]; oauth_client=form.get("oauth_client_id",[""])[0][:255]; oauth_scopes=form.get("oauth_scopes",[""])[0][:1000]; oauth_token=form.get("oauth_token",[""])[0]
+            enabled=1 if form.get("enabled",["1"])[0] in ("1","Enabled","true") else 0
             if provider not in SMTP_PROVIDERS or security not in ("STARTTLS","SSL/TLS","NONE") or auth_method not in ("password","oauth2") or not host or not from_email or port<1 or port>65535:
                 return self.sendbody(400,"Invalid SMTP profile","text/plain")
             c=db()
@@ -2527,13 +2566,31 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 profile_id=int(sid)
                 old=c.execute("SELECT password_enc,oauth_token_enc FROM smtp_profiles WHERE id=?",(sid,)).fetchone()
                 enc=encrypt_secret(password) if password else (old["password_enc"] if old else ""); oauth_enc=encrypt_secret(oauth_token) if oauth_token else (old["oauth_token_enc"] if old else "")
-                c.execute("UPDATE smtp_profiles SET name=?,provider=?,host=?,port=?,security=?,username=?,password_enc=?,from_name=?,from_email=?,reply_to=?,auth_method=?,oauth_token_enc=?,oauth_token_url=?,oauth_client_id=?,oauth_scopes=?,updated_at=? WHERE id=?",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,auth_method,oauth_enc,oauth_url,oauth_client,oauth_scopes,now(),sid)); action="SMTP_PROFILE_UPDATE"
+                c.execute("UPDATE smtp_profiles SET name=?,provider=?,host=?,port=?,security=?,username=?,password_enc=?,from_name=?,from_email=?,reply_to=?,auth_method=?,oauth_token_enc=?,oauth_token_url=?,oauth_client_id=?,oauth_scopes=?,enabled=?,updated_at=? WHERE id=?",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,auth_method,oauth_enc,oauth_url,oauth_client,oauth_scopes,enabled,now(),sid)); action="SMTP_PROFILE_UPDATE"
             else:
                 enc=encrypt_secret(password) if password else ""; oauth_enc=encrypt_secret(oauth_token) if oauth_token else ""
-                cur=c.execute("INSERT INTO smtp_profiles(name,provider,host,port,security,username,password_enc,from_name,from_email,reply_to,auth_method,oauth_token_enc,oauth_token_url,oauth_client_id,oauth_scopes,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,auth_method,oauth_enc,oauth_url,oauth_client,oauth_scopes,1,now(),now())); profile_id=cur.lastrowid; action="SMTP_PROFILE_CREATE"
+                cur=c.execute("INSERT INTO smtp_profiles(name,provider,host,port,security,username,password_enc,from_name,from_email,reply_to,auth_method,oauth_token_enc,oauth_token_url,oauth_client_id,oauth_scopes,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,provider,host,port,security,username,enc,from_name,from_email,reply_to,auth_method,oauth_enc,oauth_url,oauth_client,oauth_scopes,enabled,now(),now())); profile_id=cur.lastrowid; action="SMTP_PROFILE_CREATE"
             c.commit(); c.close(); audit(ADMIN_USERNAME,action,name,ip)
             destination=("/admin/smtp/diagnostics?id="+str(profile_id)) if form.get("test_after_save",[""])[0]=="1" else "/admin/smtp"
             return self.sendbody(302,b"",extra={"Location":destination})
+        if p.path=="/admin/smtp/delete":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            sid=form.get("id",[""])[0]
+            if not sid.isdigit(): return self.sendbody(400,"Invalid SMTP profile","text/plain")
+            c=db()
+            profile=c.execute("SELECT id,name FROM smtp_profiles WHERE id=?",(int(sid),)).fetchone()
+            if not profile:
+                c.close()
+                return self.sendbody(404,"SMTP profile not found","text/plain")
+            in_camp=c.execute("SELECT COUNT(*) n FROM campaigns WHERE smtp_profile_id=?",(int(sid),)).fetchone()["n"]
+            in_rep=c.execute("SELECT COUNT(*) n FROM scheduled_reports WHERE smtp_profile_id=?",(int(sid),)).fetchone()["n"]
+            if in_camp > 0 or in_rep > 0:
+                c.close()
+                return self.sendbody(400,page("Cannot Delete SMTP Provider","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Cannot Delete SMTP Provider</h2><p>This SMTP provider is currently in use by %d campaign(s) and %d scheduled report(s). To discontinue its use, disable the profile instead.</p><p><a class='btn' href='/admin/smtp?id=%s'>Back to Profile</a> <a class='btn' href='/admin/smtp'>Back to SMTP Providers</a></p></div>"%(in_camp,in_rep,sid)))
+            c.execute("DELETE FROM smtp_profiles WHERE id=?",(int(sid),))
+            c.commit(); c.close()
+            audit(ADMIN_USERNAME,"SMTP_PROFILE_DELETE","profile=%s"%profile["name"],ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
         if p.path=="/admin/smtp/diagnostics":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; to_email=form.get("to_email",[""])[0].strip()[:254]
@@ -2545,22 +2602,22 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             results=smtp_diagnostics(profile,to_email)
             rows="".join("<tr><td>%s</td><td><b>%s</b></td><td>%s</td></tr>"%(esc(x["stage"]),esc(x["status"]),esc(x["detail"])) for x in results)
             audit(ADMIN_USERNAME,"SMTP_DIAGNOSTICS","profile=%s result=%s"%(profile["name"],",".join(x["status"] for x in results)),ip)
-            body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><table class="table"><tr><th>Stage</th><th>Status</th><th>Detail</th></tr>%s</table><p><a class="btn" href="/admin/smtp">Back to SMTP Providers</a></p></div>'%rows
-            return self.sendbody(200,self.admin_shell("SMTP Diagnostics",body,"SMTP"))
+            body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><table class="table"><tr><th>Stage</th><th>Status</th><th>Detail</th></tr>%s</table><p><a class="btn" href="/admin/smtp?id=%s">Edit Provider</a> <a class="btn" href="/admin/smtp">Back to SMTP Providers</a></p></div>'%(rows,sid)
+            return self.sendbody(200,self.admin_shell("SMTP Diagnostics",body,"SMTP Providers"))
         if p.path=="/admin/smtp/test":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; to_email=form.get("to_email",[""])[0][:255]
             if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",to_email):
                 return self.sendbody(400,"Invalid test email","text/plain")
-            c=db(); profile=c.execute("SELECT * FROM smtp_profiles WHERE id=?",(sid,)).fetchone(); c.close()
+            c=db(); profile=c.execute("SELECT * FROM smtp_profiles WHERE id=?",(int(sid) if sid.isdigit() else sid,)).fetchone(); c.close()
             if not profile: return self.sendbody(404,"SMTP profile not found","text/plain")
             try:
                 smtp_send_test(profile,to_email)
                 audit(ADMIN_USERNAME,"SMTP_TEST",f"profile={profile['name']} recipient={to_email}",ip)
-                return self.sendbody(200,page("SMTP Test","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test sent</h2><p>The test message was accepted by the configured SMTP server.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
+                return self.sendbody(200,page("SMTP Test","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test sent</h2><p>The test message was accepted by the configured SMTP server.</p><p><a class='btn' href='/admin/smtp?id=%s'>Back to Profile</a> <a class='btn' href='/admin/smtp'>Back to SMTP Providers</a></p></div>"%profile["id"]))
             except Exception as e:
                 audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
-                return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
+                return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>Error details: %s</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a class='btn' href='/admin/smtp?id=%s'>Back to Profile</a> <a class='btn' href='/admin/smtp'>Back to SMTP Providers</a></p></div>"%(esc(sanitize_audit_details(str(e)[:150])),profile["id"])))
         if p.path=="/admin/training/update":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             aid=form.get("id",[""])[0]

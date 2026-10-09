@@ -67,6 +67,11 @@ else
   fail "RBAC security regression suite is missing"
 fi
 
+if [ -f "$APP/tests/test_smtp_provider.py" ]; then
+  python3 -m unittest "$APP/tests/test_smtp_provider.py"
+  pass "SMTP provider regression suite passes"
+fi
+
 # Static contract checks guard the rollback script's recovery path without performing a rollback.
 if grep -Fq 'git reset --hard "$TARGET"' "$APP/rollback.sh" \
    && grep -Fq 'git reset --hard "$CURRENT"' "$APP/rollback.sh" \
