@@ -240,5 +240,26 @@ class SMTPProviderUnitTests(unittest.TestCase):
         # Secret is retained
         self.assertEqual(self.server.decrypt_secret(updated_row["password_enc"]),"my_secret_pass")
 
+    def test_smtp_diagnostics_page_renders_with_sendbody(self):
+        c=self.server.db()
+        c.execute("INSERT INTO smtp_profiles(name,provider,host,port,security,from_name,from_email,enabled,created_at,updated_at) VALUES('Diag Test','Custom SMTP','mail.example.com',587,'STARTTLS','Test','test@example.com',1,?,?)",(self.server.now(),self.server.now()))
+        pid=c.execute("SELECT id FROM smtp_profiles WHERE name='Diag Test'").fetchone()["id"]
+        c.commit(); c.close()
+
+        h=self.handler
+        h.path=f"/admin/smtp/diagnostics?id={pid}"
+        h.client_address=("127.0.0.1",12345)
+        h.auth=lambda: True
+        h.headers={}
+        response_data=[]
+        h.sendbody=lambda code,body,ctype="text/html",extra=None: response_data.append((code,body,extra))
+
+        h.do_GET()
+        self.assertEqual(len(response_data),1)
+        self.assertEqual(response_data[0][0],200)
+        self.assertIn("SMTP Connectivity Diagnostics",response_data[0][1])
+        self.assertIn("Diag Test",response_data[0][1])
+
 if __name__=="__main__":
     unittest.main()
+

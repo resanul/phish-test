@@ -1998,7 +1998,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             c=db(); profile=c.execute("SELECT id,name,provider,host,port,security,from_name,from_email FROM smtp_profiles WHERE id=?",(sid,)).fetchone(); c.close()
             if not profile: return self.sendbody(404,"SMTP profile not found","text/plain")
             body='<h1>SMTP Connectivity Diagnostics</h1><div class="card"><p><b>%s</b> · %s · %s:%s · %s</p><p>Runs DNS → TCP → TLS → AUTH and optionally sends one diagnostic message. Secrets are never displayed.</p><form class="form" method="post" action="/admin/smtp/diagnostics"><input type="hidden" name="id" value="%s"><label>Diagnostic recipient email<input type="email" name="to_email" maxlength="254" placeholder="security@example.com"></label><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><button class="btn primary">Run Diagnostics</button><a class="btn" href="/admin/smtp?id=%s">Edit Provider</a><a class="btn" href="/admin/smtp">Back to Providers</a></div></form></div>'%(esc(profile["name"]),esc(profile["provider"]),esc(profile["host"]),profile["port"],esc(profile["security"]),profile["id"],profile["id"])
-            return self.admin_shell("SMTP Diagnostics",body,"SMTP Providers")
+            return self.sendbody(200,self.admin_shell("SMTP Diagnostics",body,"SMTP Providers"))
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
@@ -2029,7 +2029,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not tpl: return self.sendbody(404,"Template not found","text/plain")
             opts="".join('<option value="%s">%s</option>'%(x["id"],esc(x["name"])) for x in profiles)
             body='<h1>Template Test Send</h1><div class="card"><p>Template: <b>%s</b> · Version %s</p><p>This sends a single non-tracked test message. No campaign recipient or tracking event is created.</p><form class="form" method="post" action="/admin/templates/test-send"><input type="hidden" name="template" value="%s"><label>Test recipient email<input type="email" name="to_email" required maxlength="254"></label><label>SMTP Profile<select name="smtp_profile_id" required>%s</select></label><button class="btn primary">Send Test Message</button></form></div>'%(esc(tpl["name"]),tpl["version"] or 1,esc(tid),opts)
-            return self.admin_shell("Template Test Send",body,"Templates")
+            return self.sendbody(200,self.admin_shell("Template Test Send",body,"Templates"))
         if path=="/admin/campaigns/test-send":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=parse_qs(p.query).get("id",[""])[0]
