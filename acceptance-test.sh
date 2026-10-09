@@ -32,12 +32,13 @@ else
   fail "HTTP health endpoint /1.html failed"
 fi
 
-# Confirm the public authentication entry point is reachable without requiring a login.
-LOGIN_STATUS="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$BASE_URL/admin/login" || true)"
-case "$LOGIN_STATUS" in
-  2??|3??) pass "HTTP authentication route /admin/login responds ($LOGIN_STATUS)" ;;
-  *) fail "HTTP authentication route /admin/login returned $LOGIN_STATUS" ;;
-esac
+# GET /admin is the public login entry point; /admin/login is a POST-only form action.
+LOGIN_PAGE="$(curl -fsS --max-time 10 "$BASE_URL/admin" || true)"
+if [ -n "$LOGIN_PAGE" ] && printf '%s' "$LOGIN_PAGE" | grep -Fq 'action="/admin/login"'; then
+  pass "HTTP authentication page /admin responds and posts to /admin/login"
+else
+  fail "HTTP authentication page /admin is unavailable or its login form action is missing"
+fi
 
 if grep -q '^data/$' "$APP/.gitignore" && grep -q '^logs/$' "$APP/.gitignore"; then
   pass "runtime data/log directories are excluded from Git"
