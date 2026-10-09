@@ -46,6 +46,14 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.close()
         self.assertEqual(self.handler.resolve_role_permissions("Custom Reviewer"),{"admin.view"})
 
+    def test_access_review_snapshot_uses_access_preview_resolver(self):
+        source=open(os.path.join(os.path.dirname(__file__),"..","server.py")).read()
+        start=source.find("if p.path==\"/admin/admins/review\":")
+        end=source.find("if p.path==\"/admin/admins/save\":",start)
+        review_block=source[start:end]
+        self.assertIn("resolve_role_access_preview(target[\"role\"])",review_block)
+        self.assertIn("counts=access_preview[\"risk_counts\"]",review_block)
+
     def test_access_review_route_requires_admin_view_permission(self):
         self.assertEqual(self.server.route_permission("/admin/admins/review","POST",{}),"admin.view")
         self.assertTrue(self.handler.permission_allowed("/admin/admins/review","POST",{}))

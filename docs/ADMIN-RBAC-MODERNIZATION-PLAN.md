@@ -655,6 +655,8 @@ Current status:
 
 **Completed follow-up:** Access Preview regression coverage now verifies that inactive custom roles cannot surface persisted permissions or resource scopes.
 
+**Completed follow-up:** Access Review regression coverage now guards that review snapshots derive their permission/risk counts from the same Access Preview resolver.
+
 ---
 
 ## 15. External UX Research References
