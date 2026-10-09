@@ -2528,7 +2528,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 audit(ADMIN_USERNAME,"SMTP_TEST_FAILED",f"profile={profile['name']}",ip)
                 return self.sendbody(502,page("SMTP Test Failed","<div style='max-width:700px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>SMTP test failed</h2><p>The SMTP connection or authentication failed. Check host, port, TLS mode and provider credentials.</p><p style='color:#a12d2d;font-size:12px'>No SMTP password is shown here.</p><p><a href='/admin/smtp'>Back to SMTP Providers</a></p></div>"))
         if p.path=="/admin/training/update":
-            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")            aid=form.get("id",[""])[0]
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            aid=form.get("id",[""])[0]
             try:
                 completion=max(0,min(100,float(form.get("completion",["0"])[0]))); raw=form.get("score",[""])[0].strip(); score=None if raw=="" else max(0,min(100,float(raw)))
             except (ValueError,TypeError): return self.sendbody(400,"Invalid completion or score","text/plain")
