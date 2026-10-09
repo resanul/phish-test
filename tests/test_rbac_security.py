@@ -201,6 +201,87 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(preview["permissions"],[])
         self.assertEqual(preview["scopes"],[])
 
+    def test_access_preview_state_matrix_consistency(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Campaign Manager","campaign-manager","Built-in state matrix role",1,1,ts,ts))
+        builtin_id=c.execute("SELECT id FROM rbac_roles WHERE name='Campaign Manager'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("State Matrix Reviewer","state-matrix-reviewer","Custom state matrix role",0,1,ts,ts))
+        custom_id=c.execute("SELECT id FROM rbac_roles WHERE name='State Matrix Reviewer'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) SELECT ?,id,? FROM rbac_permissions WHERE resource='campaign' AND action='view'",
+                  (custom_id,ts))
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                  (custom_id,permission_id,"campaign","matrix-123",ts,ts))
+        c.commit()
+        c.close()
+
+        def assert_summary_consistent(preview):
+            permissions=preview["permissions"]
+            self.assertEqual(preview["permission_count"],len(permissions))
+            self.assertEqual(preview["modules"],sorted({item["resource"] for item in permissions}))
+            expected={"normal":0,"elevated":0,"privileged":0}
+            for item in permissions:
+                expected[item["risk_level"]]=expected.get(item["risk_level"],0)+1
+            self.assertEqual(preview["risk_counts"],expected)
+            self.assertEqual(
+                preview["high_risk_permissions"],
+                [item for item in permissions if item["risk_level"] in ("elevated","privileged")]
+            )
+
+        # Active built-in: compatibility permissions are effective, custom scopes are not.
+        builtin=self.handler.resolve_role_access_preview("Campaign Manager")
+        self.assertGreater(builtin["permission_count"],0)
+        assert_summary_consistent(builtin)
+        self.assertEqual(builtin["scopes"],[])
+
+        # Inactive built-in: all effective access summaries fail closed.
+        c=self.server.db()
+        c.execute("UPDATE rbac_roles SET active=0 WHERE id=?",(builtin_id,))
+        c.commit()
+        c.close()
+        inactive_builtin=self.handler.resolve_role_access_preview("Campaign Manager")
+        self.assertEqual(inactive_builtin["permission_count"],0)
+        self.assertEqual(inactive_builtin["modules"],[])
+        self.assertEqual(inactive_builtin["permissions"],[])
+        self.assertEqual(inactive_builtin["high_risk_permissions"],[])
+        self.assertEqual(inactive_builtin["risk_counts"],{"normal":0,"elevated":0,"privileged":0})
+        self.assertEqual(inactive_builtin["scopes"],[])
+
+        # Active custom: assigned permission and its active scope appear consistently.
+        custom=self.handler.resolve_role_access_preview("State Matrix Reviewer")
+        assert_summary_consistent(custom)
+        self.assertEqual(custom["scopes"],[{"permission":"campaign.view","scope_kind":"campaign","scope_value":"matrix-123"}])
+
+        # Inactive custom: persisted assignments/scopes cannot appear effective.
+        c=self.server.db()
+        c.execute("UPDATE rbac_roles SET active=0 WHERE id=?",(custom_id,))
+        c.commit()
+        c.close()
+        inactive_custom=self.handler.resolve_role_access_preview("State Matrix Reviewer")
+        self.assertEqual(inactive_custom["permission_count"],0)
+        self.assertEqual(inactive_custom["modules"],[])
+        self.assertEqual(inactive_custom["permissions"],[])
+        self.assertEqual(inactive_custom["high_risk_permissions"],[])
+        self.assertEqual(inactive_custom["risk_counts"],{"normal":0,"elevated":0,"privileged":0})
+        self.assertEqual(inactive_custom["scopes"],[])
+
+        # Unknown role name and absent current role both produce safe empty snapshots.
+        missing=self.handler.resolve_role_access_preview("Missing Role")
+        self.assertEqual(missing["permission_count"],0)
+        self.assertEqual(missing["modules"],[])
+        self.assertEqual(missing["permissions"],[])
+        self.assertEqual(missing["scopes"],[])
+        self.handler.current_admin=lambda: None
+        no_role=self.handler.resolve_role_access_preview()
+        self.assertIsNone(no_role["role"])
+        self.assertEqual(no_role["permission_count"],0)
+        self.assertEqual(no_role["modules"],[])
+        self.assertEqual(no_role["permissions"],[])
+        self.assertEqual(no_role["scopes"],[])
+
     def test_access_preview_includes_active_resource_scopes(self):
         c=self.server.db()
         ts=self.server.now()
