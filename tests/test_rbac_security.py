@@ -50,7 +50,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("admin","view","View admins","View administrator access","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='admin' AND action='view'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,permission_id,ts))
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,0)",
                   ("admin","disable","Disable admins","Disabled regression permission","privileged"))
@@ -59,7 +59,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(self.handler.resolve_role_permissions("Custom Reviewer"),{"admin.view"})
 
     def test_access_review_snapshot_uses_access_preview_resolver(self):
-        source=open(os.path.join(os.path.dirname(__file__),"..","server.py")).read()
+        source=SERVER.read_text(encoding="utf-8")
         start=source.find("if p.path==\"/admin/admins/review\":")
         end=source.find("if p.path==\"/admin/admins/save\":",start)
         review_block=source[start:end]
@@ -96,7 +96,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
             c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                       (resource,action,label,"Risk count regression permission",risk))
             permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource=? AND action=?",(resource,action)).fetchone()["id"]
-            c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
+            c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
         c.commit()
         c.close()
         preview=self.handler.resolve_role_access_preview("Risk Preview Reviewer")
@@ -192,7 +192,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","view","View campaigns","Inactive preview regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,permission_id,ts))
         c.commit()
         c.close()
@@ -210,7 +210,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","view","View campaigns","Preview scope permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
         c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
                   (role_id,permission_id,"campaign","123",ts,ts))
         c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,0,?,?)",
@@ -234,7 +234,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","view","View campaigns","Scope regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,permission_id,ts))
         c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
                   (role_id,permission_id,"campaign","123",ts,ts))
@@ -257,7 +257,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","edit","Edit campaigns","Multi-scope regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='edit'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,permission_id,ts))
         scopes=[
             (role_id,permission_id,"campaign","123",1,ts,ts),
@@ -282,7 +282,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         ))
 
     def test_access_preview_scope_markup_is_escaped_and_has_empty_state(self):
-        source=open(os.path.join(os.path.dirname(__file__),"..","server.py")).read()
+        source=SERVER.read_text(encoding="utf-8")
         self.assertIn('scope_rows=""',source)
         self.assertIn('esc(item["permission"])',source)
         self.assertIn('esc(item["scope_kind"])',source)
@@ -298,7 +298,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("recipient","view","View recipients","Audit scope regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='recipient' AND action='view'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,permission_id,ts))
         c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
                   (role_id,permission_id,"department","Finance",ts,ts))
