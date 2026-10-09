@@ -649,6 +649,8 @@ Current status:
 
 **Completed follow-up:** Access Preview scope markup was corrected to use syntax-safe quoting so the server remains importable/renderable after the scope UI addition.
 
+**Completed follow-up:** RBAC regression coverage now guards the Access Preview scope-rendering contract: scope fields remain escaped and the no-active-scope empty state remains present.
+
 ---
 
 ## 15. External UX Research References

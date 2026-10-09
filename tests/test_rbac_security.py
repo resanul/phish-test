@@ -141,6 +141,14 @@ class RBACSecurityRegressionTests(unittest.TestCase):
             form={"id":["123"],"department":["Finance"]}
         ))
 
+    def test_access_preview_scope_markup_is_escaped_and_has_empty_state(self):
+        source=open(os.path.join(os.path.dirname(__file__),"..","server.py")).read()
+        self.assertIn('scope_rows=""',source)
+        self.assertIn('esc(item["permission"])',source)
+        self.assertIn('esc(item["scope_kind"])',source)
+        self.assertIn('esc(item["scope_value"])',source)
+        self.assertIn("No active resource scopes assigned.",source)
+
     def test_scope_denial_is_audited_without_secret_fields(self):
         c=self.server.db()
         ts=self.server.now()
