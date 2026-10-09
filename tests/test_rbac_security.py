@@ -45,7 +45,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.handler.current_admin=lambda: {"username":"admin@example.com","role":"Administrator"}
         page=self.handler.feature_page("/admin/admins","")
         self.assertIsInstance(page,str)
-        self.assertIn("Admin Users &amp; Roles",page)
+        self.assertIn("Admin Users & Roles",page)
         self.assertIn('action="/admin/admins/create"',page)
         self.assertIn("Add Administrator",page)
 
