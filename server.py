@@ -2231,7 +2231,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             password=form.get("password",[""])[0]
             role=form.get("role",[""])[0].strip()
             allowed_roles=("Administrator","Campaign Manager","Reporting Analyst","SMTP Manager","Security Auditor")
-            if not re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+",username):
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",username):
                 return self.sendbody(400,"A valid administrator email is required","text/plain")
             if len(password)<12 or len(password)>256 or "\\r" in password or "\\n" in password:
                 return self.sendbody(400,"Temporary password must be 12-256 characters and must not contain line breaks","text/plain")
