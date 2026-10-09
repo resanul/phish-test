@@ -95,6 +95,23 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         )
         self.assertEqual(len(preview["high_risk_permissions"]),2)
 
+    def test_access_preview_builtin_role_ignores_persisted_scopes(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Campaign Manager","campaign-manager","Built-in compatibility role",1,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Campaign Manager'").fetchone()["id"]
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        c.execute("INSERT OR IGNORE INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                  (role_id,permission_id,"campaign","999",ts,ts))
+        c.commit()
+        c.close()
+        preview=self.handler.resolve_role_access_preview("Campaign Manager")
+        self.assertIn("campaign.view",{item["key"] for item in preview["permissions"]})
+        self.assertEqual(preview["scopes"],[])
+
     def test_access_preview_summary_matches_effective_permissions(self):
         preview=self.handler.resolve_role_access_preview("Custom Reviewer")
         self.assertEqual(preview["permission_count"],len(preview["permissions"]))

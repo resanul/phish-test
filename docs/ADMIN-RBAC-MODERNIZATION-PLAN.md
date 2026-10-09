@@ -684,3 +684,4 @@ Reference pages:
 - Microsoft Entra role management: https://learn.microsoft.com/en-gb/entra/identity/role-based-access-control/manage-roles-portal
 - Auth0 role creation: https://auth0.com/docs/manage-users/access-control/configure-core-rbac/roles/create-roles
 - Auth0 role permissions: https://auth0.com/docs/manage-users/access-control/configure-core-rbac/roles/view-role-permissions
+**Completed follow-up:** Access Preview now ignores persisted resource-scope rows for built-in roles, matching the compatibility permission resolver where built-in access is derived from role mappings rather than custom role assignments. A regression guard prevents non-effective built-in scopes from appearing in the preview.

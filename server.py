@@ -1199,7 +1199,7 @@ class Handler(BaseHTTPRequestHandler):
                JOIN rbac_permissions p ON p.id=s.permission_id
                JOIN rbac_roles r ON r.id=s.role_id
                JOIN rbac_role_permissions rp ON rp.role_id=r.id AND rp.permission_id=p.id
-               WHERE r.name=? AND r.active=1 AND s.active=1 AND p.active=1
+               WHERE r.name=? AND r.built_in=0 AND r.active=1 AND s.active=1 AND p.active=1
                ORDER BY p.resource,p.action,s.scope_kind,s.scope_value""",
             (role,)
         ).fetchall()
