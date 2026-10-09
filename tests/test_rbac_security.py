@@ -41,6 +41,14 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.commit()
         c.close()
 
+    def test_admin_management_page_renders_without_selected_access_preview(self):
+        self.handler.current_admin=lambda: {"username":"admin@example.com","role":"Administrator"}
+        page=self.handler.feature_page("/admin/admins","")
+        self.assertIsInstance(page,str)
+        self.assertIn("Admin Users &amp; Roles",page)
+        self.assertIn('action="/admin/admins/create"',page)
+        self.assertIn("Add Administrator",page)
+
     def test_custom_role_resolver_uses_active_permissions_only(self):
         c=self.server.db()
         ts=self.server.now()
