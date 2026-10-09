@@ -671,7 +671,7 @@ Current status:
 
 The completed RBAC phases are retained as complete. Remaining hardening and release work is split into ten independently validated parts; complete only one part per atomic commit.
 
-- [ ] **Part 1 — Inactive built-in role fail-closed behavior:** ensure inactive built-in roles resolve to no permissions; add a regression test. *(In progress)*
+- [x] **Part 1 — Inactive built-in role fail-closed behavior:** ensure inactive built-in roles resolve to no permissions; add a regression test. Validated on target server after updating to `d31ded6fbfe978b1498104aaf07eeed29ba6b376`: deployment health check passed and `python3 -m unittest tests/test_rbac_security.py` passed twice (16 tests each run). *(Complete)*
 - [ ] **Part 2 — Access Preview state matrix:** verify active/inactive built-in and custom roles, missing roles, permission counts, modules, and scopes remain consistent.
 - [ ] **Part 3 — Resource-scope edge cases:** strengthen tests for missing/ambiguous request context, wildcard handling, and fail-closed behavior.
 - [ ] **Part 4 — Permission catalog integrity:** verify permission seeding is idempotent and inactive definitions cannot become effective access.
