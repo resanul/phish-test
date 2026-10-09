@@ -32,6 +32,13 @@ else
   fail "HTTP health endpoint /1.html failed"
 fi
 
+# Confirm the public authentication entry point is reachable without requiring a login.
+LOGIN_STATUS="$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' "$BASE_URL/admin/login" || true)"
+case "$LOGIN_STATUS" in
+  2??|3??) pass "HTTP authentication route /admin/login responds ($LOGIN_STATUS)" ;;
+  *) fail "HTTP authentication route /admin/login returned $LOGIN_STATUS" ;;
+esac
+
 if grep -q '^data/$' "$APP/.gitignore" && grep -q '^logs/$' "$APP/.gitignore"; then
   pass "runtime data/log directories are excluded from Git"
 else
@@ -57,6 +64,17 @@ if [ -f "$APP/tests/test_rbac_security.py" ]; then
   pass "RBAC security regression suite passes"
 else
   fail "RBAC security regression suite is missing"
+fi
+
+# Static contract checks guard the rollback script's recovery path without performing a rollback.
+if grep -Fq 'git reset --hard "$TARGET"' "$APP/rollback.sh" \
+   && grep -Fq 'git reset --hard "$CURRENT"' "$APP/rollback.sh" \
+   && grep -Fq 'Restoring $CURRENT' "$APP/rollback.sh" \
+   && grep -Fq 'python3 -m py_compile "$APP/server.py"' "$APP/rollback.sh" \
+   && grep -Fq 'curl -fsS --max-time 10' "$APP/rollback.sh"; then
+  pass "rollback script contains target restore, recovery restore, syntax and health checks"
+else
+  fail "rollback script recovery safety contract is incomplete"
 fi
 
 echo
