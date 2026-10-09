@@ -1365,7 +1365,10 @@ class Handler(BaseHTTPRequestHandler):
             return False
         required=route_permission(path,method,form)
         if not required:
-            return self.role_allowed(path)
+            # Unknown or unmapped admin routes must fail closed. Public login,
+            # session logout, and the authenticated dashboard are handled by
+            # their explicit control flow outside this permission check.
+            return False
         permissions=self.resolve_role_permissions()
         if required not in permissions:
             return False
