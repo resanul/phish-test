@@ -535,7 +535,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         for secret in ("plain-password","abc123","123456","key-value"):
             self.assertNotIn(secret,row["details"])
         for field in ("password","token","otp","api_key"):
-            self.assertRegex(row["details"],field+r"\\s*[=:]\\[REDACTED\\]")
+            self.assertRegex(row["details"],field+r"\s*[=:]\[REDACTED\]")
         self.assertEqual(row["action"],"ROLE_PERMISSION_UPDATE")
 
         source=SERVER.read_text(encoding="utf-8")
