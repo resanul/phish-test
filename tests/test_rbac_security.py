@@ -148,6 +148,29 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(preview["high_risk_permissions"],[])
         self.assertEqual(preview["scopes"],[])
 
+    def test_access_preview_inactive_builtin_role_returns_empty_snapshot(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Campaign Manager","campaign-manager","Built-in role regression",1,1,ts,ts))
+        row=c.execute("SELECT id,active FROM rbac_roles WHERE name='Campaign Manager'").fetchone()
+        self.assertIsNotNone(row)
+        previous_active=row["active"]
+        c.execute("UPDATE rbac_roles SET active=0 WHERE name='Campaign Manager'")
+        c.commit()
+        c.close()
+        try:
+            self.assertEqual(self.handler.resolve_role_permissions("Campaign Manager"),set())
+            preview=self.handler.resolve_role_access_preview("Campaign Manager")
+            self.assertEqual(preview["permission_count"],0)
+            self.assertEqual(preview["permissions"],[])
+            self.assertEqual(preview["scopes"],[])
+        finally:
+            c=self.server.db()
+            c.execute("UPDATE rbac_roles SET active=? WHERE name='Campaign Manager'",(previous_active,))
+            c.commit()
+            c.close()
+
     def test_access_preview_inactive_custom_role_returns_empty_snapshot(self):
         c=self.server.db()
         ts=self.server.now()

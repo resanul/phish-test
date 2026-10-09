@@ -1133,10 +1133,12 @@ class Handler(BaseHTTPRequestHandler):
 
         c=db()
         row=c.execute("SELECT id,built_in,active FROM rbac_roles WHERE name=?",(role,)).fetchone()
+        # Inactive roles must fail closed, including built-in roles that use
+        # the compatibility mapping below rather than persisted assignments.
+        if row and not row["active"]:
+            c.close()
+            return set()
         if row and row["built_in"]==0:
-            if not row["active"]:
-                c.close()
-                return set()
             rows=c.execute("""SELECT p.resource,p.action
                               FROM rbac_role_permissions rp
                               JOIN rbac_permissions p ON p.id=rp.permission_id

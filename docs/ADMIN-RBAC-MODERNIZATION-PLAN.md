@@ -639,7 +639,7 @@ Current status:
 
 **Completed milestone:** Phase F — Resource Scoping is complete. Resource scope persistence, assignment UI, scoped permission evaluation, scope audit events, and regression coverage are implemented.
 
-**Next task:** Continue with the next enterprise roadmap workstream outside RBAC modernization.
+**Next task:** Complete the 10-part follow-up hardening and release plan in Section 15, one atomic commit at a time.
 
 **Completed follow-up:** Access Preview now exposes active resource-scope assignments using the same resolver-backed, non-secret preview model. Scope rows include only permission key, scope kind, and scope value; inactive permissions/scopes are excluded. The preview now also requires the scope's permission to remain explicitly assigned to the role, preventing stale scope rows from appearing as effective access.
 
@@ -667,7 +667,26 @@ Current status:
 
 ---
 
-## 15. External UX Research References
+## 15. Remaining Work — 10 Small Parts
+
+The completed RBAC phases are retained as complete. Remaining hardening and release work is split into ten independently validated parts; complete only one part per atomic commit.
+
+- [ ] **Part 1 — Inactive built-in role fail-closed behavior:** ensure inactive built-in roles resolve to no permissions; add a regression test. *(In progress)*
+- [ ] **Part 2 — Access Preview state matrix:** verify active/inactive built-in and custom roles, missing roles, permission counts, modules, and scopes remain consistent.
+- [ ] **Part 3 — Resource-scope edge cases:** strengthen tests for missing/ambiguous request context, wildcard handling, and fail-closed behavior.
+- [ ] **Part 4 — Permission catalog integrity:** verify permission seeding is idempotent and inactive definitions cannot become effective access.
+- [ ] **Part 5 — Route-to-permission coverage:** audit and test the declarative mapping for admin routes and HTTP methods.
+- [ ] **Part 6 — Legacy authorization fallback inventory:** identify unmapped admin routes and safely close gaps without broad, unrelated rewrites.
+- [ ] **Part 7 — Audit governance regression:** broaden checks for role/permission/scope changes and ensure audit metadata excludes secrets.
+- [ ] **Part 8 — Deployment acceptance hardening:** review acceptance script coverage for compilation, service health, routes, RBAC tests, and rollback safety.
+- [ ] **Part 9 — Full regression validation:** run focused RBAC tests, syntax checks, and the deployment acceptance checks where the environment permits; fix only confirmed failures.
+- [ ] **Part 10 — Target-server acceptance and readiness:** execute the documented operational checklist, record evidence and unresolved risks, then make a production-readiness decision.
+
+**Working rule:** CHECK → inspect current code → one small implementation → validate → update this plan → re-fetch verify → atomic commit. Do not claim target-server acceptance until it has actually been run. Never collect or store passwords, OTPs, PINs, CVVs, full card numbers, or other authentication secrets.
+
+---
+
+## 16. External UX Research References
 
 The design direction is informed by established enterprise IAM/RBAC patterns, without copying any vendor interface:
 
