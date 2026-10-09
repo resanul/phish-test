@@ -70,6 +70,24 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(preview["high_risk_permissions"],[])
         self.assertEqual(preview["scopes"],[])
 
+    def test_access_preview_inactive_custom_role_returns_empty_snapshot(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Inactive Preview Reviewer","inactive-preview-reviewer","Inactive preview regression role",0,0,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Inactive Preview Reviewer'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+                  ("campaign","view","View campaigns","Inactive preview regression permission","normal"))
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
+        c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        c.commit()
+        c.close()
+        preview=self.handler.resolve_role_access_preview("Inactive Preview Reviewer")
+        self.assertEqual(preview["permission_count"],0)
+        self.assertEqual(preview["permissions"],[])
+        self.assertEqual(preview["scopes"],[])
+
     def test_access_preview_includes_active_resource_scopes(self):
         c=self.server.db()
         ts=self.server.now()

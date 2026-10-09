@@ -653,6 +653,8 @@ Current status:
 
 **Completed follow-up:** Access Preview regression coverage now verifies that a missing current role returns a safe empty snapshot without permissions or resource scopes.
 
+**Completed follow-up:** Access Preview regression coverage now verifies that inactive custom roles cannot surface persisted permissions or resource scopes.
+
 ---
 
 ## 15. External UX Research References
