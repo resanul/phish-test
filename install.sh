@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP="/opt/phish-simulation"
 SERVICE="phish-simulation"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8899}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: Run as root."
@@ -35,7 +35,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/phish-simulation
 ExecStart=/usr/bin/python3 /opt/phish-simulation/server.py
-Environment=PORT=8080
+Environment=PORT=8899
 EnvironmentFile=-/etc/phish-simulation.env
 Restart=always
 RestartSec=3

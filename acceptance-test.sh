@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP="/opt/phish-simulation"
 SERVICE="phish-simulation"
-PORT="${PORT:-8080}"
+PORT="${PORT:-8899}"
 BASE_URL="http://127.0.0.1:${PORT}"
 
 pass() { echo "[PASS] $1"; }
