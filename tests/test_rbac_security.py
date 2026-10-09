@@ -520,5 +520,35 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertIn("actual=HR",audit_row["details"])
         self.assertNotIn("password",audit_row["details"])
 
+    def test_audit_redacts_authentication_secrets_and_preserves_governance_metadata(self):
+        details='role_id=7 permission_count=3 password=plain-password token:abc123 otp="123456" api_key=key-value'
+        self.server.audit("reviewer@example.com","ROLE_PERMISSION_UPDATE",details,"127.0.0.1")
+
+        c=self.server.db()
+        row=c.execute(
+            "SELECT action,details FROM audit_logs WHERE action='ROLE_PERMISSION_UPDATE' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        c.close()
+        self.assertIsNotNone(row)
+        self.assertIn("role_id=7",row["details"])
+        self.assertIn("permission_count=3",row["details"])
+        for secret in ("plain-password","abc123","123456","key-value"):
+            self.assertNotIn(secret,row["details"])
+        for field in ("password","token","otp","api_key"):
+            self.assertIn(field+"=",row["details"])
+        self.assertEqual(row["action"],"ROLE_PERMISSION_UPDATE")
+
+        source=SERVER.read_text(encoding="utf-8")
+        for action in (
+            "ROLE_PERMISSION_UPDATE",
+            "PRIVILEGED_PERMISSION_GRANT",
+            "ROLE_CREATE",
+            "ROLE_UPDATE",
+            "ROLE_DELETE",
+            "RBAC_SCOPE_ASSIGNMENT_UPDATE",
+            "RBAC_SCOPE_ACCESS_DENIED",
+        ):
+            self.assertIn('"'+action+'"',source)
+
 if __name__=="__main__":
     unittest.main(verbosity=2)
