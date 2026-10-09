@@ -125,6 +125,15 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertIsNone(self.server.route_permission("/admin/campaigns/save","GET",{}))
         self.assertIsNone(self.server.route_permission("/admin/campaigns/launch","DELETE",{}))
 
+    def test_unmapped_admin_routes_fail_closed_instead_of_legacy_role_fallback(self):
+        # The legacy role gate allowed every unknown path for Administrator.
+        # Unknown routes must now deny even for Administrator; login/logout
+        # and the dashboard are handled by explicit request flow outside this check.
+        self.handler.current_admin=lambda: {"username":"admin@example.com","role":"Administrator"}
+        self.assertIsNone(self.server.route_permission("/admin/unmapped-legacy","GET",{}))
+        self.assertFalse(self.handler.permission_allowed("/admin/unmapped-legacy","GET",{}))
+        self.assertFalse(self.handler.permission_allowed("/admin/unmapped-legacy","POST",{}))
+
     def test_legacy_csv_export_and_settings_require_explicit_permissions(self):
         self.assertEqual(self.server.route_permission("/admin.csv","GET"),"report.export")
         self.assertEqual(self.server.route_permission("/admin/settings","GET"),"risk.manage")
