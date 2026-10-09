@@ -647,6 +647,8 @@ Current status:
 
 **Completed follow-up:** Access Preview UI now displays the resolver-backed active resource scopes in a read-only section, with an explicit empty state when no active scopes apply.
 
+**Completed follow-up:** Access Preview scope markup was corrected to use syntax-safe quoting so the server remains importable/renderable after the scope UI addition.
+
 ---
 
 ## 15. External UX Research References

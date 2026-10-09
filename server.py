@@ -1714,7 +1714,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                     (esc(item["label"]),esc(item["risk_level"]))                    for item in access_preview["high_risk_permissions"]
                 ) or "<li>None</li>"
                 scope_rows="".join(
-                    "<li><b>%s</b> <span class="sub">(%s=%s)</span></li>"%
+                    '<li><b>%s</b> <span class="sub">(%s=%s)</span></li>'%
                     (esc(item["permission"]),esc(item["scope_kind"]),esc(item["scope_value"]))
                     for item in access_preview["scopes"]
                 ) or "<li>No active resource scopes assigned.</li>"
