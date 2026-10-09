@@ -957,20 +957,114 @@ a{{color:inherit}}button,input,select{{font:inherit}}
 </style></head><body>{body}</body></html>"""
 
 LOGIN_CSS="""
-.login-shell{min-height:100vh;display:grid;grid-template-columns:1.05fr .95fr;background:#071b15}
-.login-left{padding:56px 7vw;color:#fff;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(145deg,#071b15,#0d3b2c)}
-.brand{display:flex;gap:13px;align-items:center;font-weight:800;font-size:24px}.brand-mark{width:42px;height:42px;border-radius:12px;background:#20b486;display:grid;place-items:center;color:#062218;font-weight:900}
-.login-left h1{font-size:clamp(36px,5vw,62px);line-height:1.02;margin:55px 0 20px;letter-spacing:-2px}.login-left p{max-width:570px;color:#b8d1c8;font-size:17px;line-height:1.7}.feature-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:34px}.feature{border:1px solid #2b5c4d;background:#0e3027;border-radius:999px;padding:9px 13px;font-size:12px;color:#d7ebe4}
-.login-right{background:#f7faf9;display:grid;place-items:center;padding:30px}.login-card{width:min(440px,100%);background:#fff;border:1px solid #dce7e2;border-radius:24px;padding:38px;box-shadow:0 24px 70px #00140d18}.login-card h2{margin:0 0 7px;font-size:28px}.muted{color:#71817b;font-size:14px}.field{margin-top:20px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:8px}.field input{width:100%;padding:13px 14px;border:1px solid #ccd9d4;border-radius:10px;outline:none}.field input:focus{border-color:#15966f;box-shadow:0 0 0 3px #15966f18}.login-btn{width:100%;border:0;border-radius:10px;padding:14px;background:#087b59;color:#fff;font-weight:800;cursor:pointer;margin-top:24px}.notice{margin-top:22px;padding:12px 14px;border-radius:10px;background:#edf8f4;color:#2b6554;font-size:12px;line-height:1.5}.trust{margin-top:25px;text-align:center;color:#84938e;font-size:12px}
-@media(max-width:850px){.login-shell{grid-template-columns:1fr}.login-left{padding:35px}.login-left h1{margin:35px 0 15px}.login-right{padding:25px}}
+:root{--primary:#087b59;--primary-hover:#066347;--bg:#051b14;--card:#ffffff;--text:#10221a}
+*{box-sizing:border-box}body{margin:0;background:#051b14;color:#10221a;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.login-shell{min-height:100vh;display:grid;grid-template-columns:1.15fr .85fr;background:#051b14}
+.login-left{padding:60px 8vw;color:#fff;display:flex;flex-direction:column;justify-content:center;background:radial-gradient(circle at 20% 30%,#0f4735 0%,#051b14 70%);border-right:1px solid #0e3729;position:relative}
+.brand{display:flex;gap:12px;align-items:center;font-weight:800;font-size:24px;letter-spacing:-0.5px}
+.brand-mark{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);display:grid;place-items:center;color:#fff;font-size:22px;box-shadow:0 4px 14px rgba(16,185,129,0.35)}
+.login-left h1{font-size:clamp(36px,4.5vw,56px);line-height:1.06;margin:46px 0 18px;letter-spacing:-1.5px;font-weight:850}
+.login-left p{max-width:540px;color:#a3c7bb;font-size:16px;line-height:1.7;margin:0 0 28px}
+.feature-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.feature{border:1px solid #1c523f;background:rgba(20,68,52,0.45);backdrop-filter:blur(8px);border-radius:999px;padding:8px 14px;font-size:12px;font-weight:600;color:#cde5dc}
+.login-right{background:#f2f5f3;display:grid;place-items:center;padding:36px}
+.login-card{width:min(440px,100%);background:#ffffff;border:1px solid #dce8e2;border-radius:20px;padding:38px;box-shadow:0 20px 60px rgba(5,27,20,0.08)}
+.login-card-head{margin-bottom:22px}
+.login-card h2{margin:0 0 6px;font-size:26px;font-weight:800;color:#10221a;letter-spacing:-0.5px}
+.muted{color:#647d72;font-size:13.5px;line-height:1.5}
+.field{margin-top:18px}
+.field label{display:block;font-size:12.5px;font-weight:700;color:#1a3127;margin-bottom:7px}
+.field input{width:100%;padding:12px 14px;border:1.5px solid #cbdad2;border-radius:10px;font-size:14px;outline:none;transition:all 0.15s ease}
+.field input:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
+.login-btn{width:100%;border:0;border-radius:10px;padding:13px;background:#087b59;color:#fff;font-size:14px;font-weight:750;cursor:pointer;margin-top:24px;transition:all 0.15s ease;box-shadow:0 3px 10px rgba(8,123,89,0.25)}
+.login-btn:hover{background:#066347;transform:translateY(-1px);box-shadow:0 5px 14px rgba(8,123,89,0.3)}
+.login-alert{margin-top:14px;padding:11px 14px;border-radius:9px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;font-size:13px;font-weight:600}
+.notice{margin-top:22px;padding:12px 14px;border-radius:10px;background:#e8f4ef;color:#1e4d3c;font-size:12px;line-height:1.5;border:1px solid #c8e4d8}
+.trust{margin-top:24px;text-align:center;color:#789186;font-size:12px;font-weight:600}
+@media(max-width:850px){.login-shell{grid-template-columns:1fr}.login-left{padding:40px 24px}.login-right{padding:24px}}
 """
 
 DASH_CSS="""
-.topbar{height:72px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 30px}.topbrand{display:flex;align-items:center;gap:11px;font-weight:800}.mark{width:35px;height:35px;border-radius:10px;background:#20b486;color:#062218;display:grid;place-items:center;font-weight:900}.top-actions{display:flex;gap:9px;align-items:center}.top-actions a{padding:8px 12px;border:1px solid #31564b;border-radius:8px;text-decoration:none;font-size:12px}
-.wrap{max-width:1440px;margin:auto;padding:28px}.hero{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px}.hero h1{margin:0;font-size:29px;letter-spacing:-.7px}.hero p{margin:7px 0 0;color:#71817b;font-size:13px}.export{background:#087b59;color:#fff;text-decoration:none;padding:10px 14px;border-radius:9px;font-size:13px;font-weight:700}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat{background:#fff;border:1px solid #e0e9e5;border-radius:15px;padding:19px}.stat-label{font-size:12px;color:#71817b;font-weight:700}.num{font-size:30px;font-weight:800;margin-top:8px}.delta{font-size:11px;color:#087b59;margin-top:7px}.grid{display:grid;grid-template-columns:1.35fr .65fr;gap:15px;margin-top:15px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:15px;padding:19px}.card h3{margin:0;font-size:15px}.sub{color:#81908b;font-size:11px;margin-top:5px}.bars{margin-top:20px;display:grid;gap:13px}.bar-row{display:grid;grid-template-columns:105px 1fr 45px;gap:10px;align-items:center;font-size:12px}.bar{height:9px;background:#edf2f0;border-radius:20px;overflow:hidden}.bar>i{display:block;height:100%;background:#149b73;border-radius:20px}.trend{height:185px;display:flex;align-items:end;gap:8px;margin-top:20px;padding:0 3px}.day{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:100%;gap:7px}.daybar{width:100%;max-width:42px;background:#159b73;border-radius:6px 6px 2px 2px;min-height:3px}.day small{font-size:10px;color:#82908b}.day b{font-size:10px;color:#53645d}.activity{margin-top:15px}.table-wrap{overflow:auto;margin-top:15px}.table{width:100%;border-collapse:collapse;font-size:12px;min-width:850px}.table th{background:#f7faf8;text-align:left;color:#667770;font-size:11px}.table th,.table td{padding:11px 9px;border-bottom:1px solid #edf1ef;white-space:nowrap}.pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800}.click{background:#eaf6f1;color:#087b59}.submitted{background:#e9f0ff;color:#345ca8}.filter{display:flex;gap:8px;align-items:center;margin-top:14px}.filter input{border:1px solid #d3dfda;border-radius:8px;padding:8px 10px;font-size:12px}.filter button{border:0;background:#e9f1ee;padding:8px 11px;border-radius:8px;cursor:pointer;font-size:12px}
-@media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.hero{align-items:flex-start;gap:15px;flex-direction:column}}@media(max-width:520px){.wrap{padding:18px}.stats{grid-template-columns:1fr 1fr}.topbar{padding:0 16px}.top-actions span{display:none}}
+:root{--primary:#087b59;--primary-hover:#066347;--bg:#f2f5f3;--card:#ffffff;--border:#e1ece6;--text:#10221a;--text-muted:#5e776d}
+*{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#10221a;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}button,input,select,textarea{font:inherit}
+.topbar{height:68px;background:#051b14;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #0f382a;position:sticky;top:0;z-index:90}
+.topbrand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:16px;color:#fff;text-decoration:none}
+.mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
+.live-status-pill{display:inline-flex;align-items:center;gap:7px;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25);padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;display:inline-block}
+.top-actions{display:flex;gap:10px;align-items:center}
+.top-actions a{padding:7px 13px;border:1px solid #1c4b3a;background:rgba(255,255,255,0.05);border-radius:8px;text-decoration:none;font-size:12px;color:#d7ebe3;font-weight:600;transition:all 0.15s ease}
+.top-actions a:hover{background:#123e2f;border-color:#2a6952;color:#fff}
+.top-role-badge{font-size:11px;font-weight:750;background:rgba(255,255,255,0.08);color:#a8c7bc;padding:5px 9px;border-radius:6px;border:1px solid #1b4536;letter-spacing:0.5px}
+.layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 68px)}
+.side{background:#071c15;color:#b8d1c8;padding:18px 14px;border-right:1px solid #0f3327;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.side-group-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#497563;padding:12px 10px 4px;margin-top:4px}
+.side a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;text-decoration:none;font-size:12.5px;font-weight:550;color:#a8c4b9;margin:1px 0;transition:all 0.15s ease}
+.side a:hover{background:#103528;color:#fff;transform:translateX(3px)}
+.side a.active{background:#164536;color:#ffffff;font-weight:700;box-shadow:inset 3px 0 0 #10b981}
+.side-ico{font-size:14px;width:18px;display:inline-block;text-align:center}
+.main{padding:28px 36px;max-width:1560px}
+.wrap{max-width:1440px;margin:auto;padding:28px}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;flex-wrap:wrap;gap:14px}
+.hero h1{margin:0;font-size:28px;font-weight:850;color:#10221a;letter-spacing:-0.7px}
+.hero p{margin:6px 0 0;color:#5e776d;font-size:13.5px}
+.camp-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:16px;flex-wrap:wrap}
+.camp-crumb{font-size:12px;color:#5e776d;margin-bottom:6px;display:flex;gap:6px;align-items:center}
+.camp-crumb a{color:#087b59;text-decoration:none;font-weight:600}
+.camp-crumb a:hover{text-decoration:underline}
+.camp-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.camp-title-row h1{margin:0;font-size:24px;font-weight:850;color:#10221a;letter-spacing:-0.5px}
+.camp-status-badge{font-size:11px;font-weight:750;padding:4px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:0.5px}
+.status-active{background:#e6f7f0;color:#087b59;border:1px solid #b7e8d3}
+.status-draft{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.status-completed{background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.stat{background:#fff;border:1px solid #e0ece6;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.02);transition:all 0.15s ease}
+.stat:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(8,123,89,0.06);border-color:#b8dad0}
+.stat-label{font-size:11px;color:#5e776d;font-weight:750;text-transform:uppercase;letter-spacing:0.6px}
+.num{font-size:30px;font-weight:850;color:#10221a;margin-top:8px;letter-spacing:-0.5px}
+.delta{font-size:11.5px;color:#087b59;margin-top:8px;font-weight:600}
+.grid{display:grid;grid-template-columns:1.35fr .65fr;gap:16px;margin-top:16px}
+.card{background:#ffffff;border:1px solid #e1ece6;border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 14px rgba(7,28,21,0.02);margin-bottom:20px}
+.card h3{margin:0 0 6px;font-size:16px;font-weight:750;color:#10221a}
+.sub{color:#647d72;font-size:12px;line-height:1.5}
+.bars{margin-top:18px;display:grid;gap:13px}
+.bar-row{display:grid;grid-template-columns:110px 1fr 45px;gap:12px;align-items:center;font-size:12.5px}
+.bar{height:10px;background:#edf3f0;border-radius:20px;overflow:hidden}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,#087b59,#10b981);border-radius:20px}
+.trend{height:185px;display:flex;align-items:end;gap:8px;margin-top:20px;padding:0 3px}
+.day{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:100%;gap:7px}
+.daybar{width:100%;max-width:42px;background:linear-gradient(180deg,#10b981,#087b59);border-radius:6px 6px 2px 2px;min-height:3px;box-shadow:0 2px 6px rgba(8,123,89,0.15)}
+.day small{font-size:10.5px;color:#647d72;font-weight:600}
+.day b{font-size:11px;color:#10221a;font-weight:750}
+.table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #e1ece6;background:#fff;margin-top:14px}
+.table{width:100%;border-collapse:collapse;font-size:12.5px;text-align:left}
+.table th{background:#f7faf8;color:#496559;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:0.5px;padding:12px 14px;border-bottom:1.5px solid #e1ece6;white-space:nowrap}
+.table td{padding:12px 14px;border-bottom:1px solid #edf3f0;color:#1a3127;vertical-align:middle}
+.table tbody tr:hover{background:#f8fbf9}
+.table tbody tr:last-child td{border-bottom:none}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:750}
+.pill.click{background:#e6f7f0;color:#087b59;border:1px solid #c2ebd9}
+.pill.submitted{background:#edf3ff;color:#2563eb;border:1px solid #c7dcfe}
+.pill.report{background:#fdf4ff;color:#9333ea;border:1px solid #f5d0fe}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1.5px solid #d0e0d8;background:#fff;color:#193026;text-decoration:none;font-size:12px;font-weight:650;cursor:pointer;transition:all 0.15s ease}
+.btn:hover{border-color:#087b59;background:#f5faf7;color:#087b59;transform:translateY(-1px)}
+.btn.primary{background:#087b59;border-color:#087b59;color:#fff;box-shadow:0 2px 6px rgba(8,123,89,0.2)}
+.btn.primary:hover{background:#066347;border-color:#066347;color:#fff;box-shadow:0 4px 10px rgba(8,123,89,0.25)}
+.filter{display:flex;gap:9px;align-items:center;margin-top:14px;flex-wrap:wrap}
+.filter input{border:1.5px solid #ccdcd5;border-radius:8px;padding:9px 12px;font-size:12.5px;outline:none;background:#fff;color:#10221a;transition:all 0.15s ease}
+.filter input:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
+.filter button{border:0;background:#e3ede8;color:#1a3328;padding:9px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:650;transition:all 0.15s ease}
+.filter button:hover{background:#d5e5dd}
+.form{display:grid;gap:14px;max-width:850px}
+.form label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:650;color:#1a3127}
+.form input,.form select,.form textarea{padding:10px 13px;border:1.5px solid #ccdcd5;border-radius:9px;font-size:13px;background:#fff;color:#10221a;outline:none;transition:all 0.15s ease}
+.form input:focus,.form select:focus,.form textarea:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
+@media(max-width:960px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.side{display:flex;flex-direction:row;overflow-x:auto;padding:10px}.side-group-title{display:none}.side a{white-space:nowrap}}
+@media(max-width:540px){.stats{grid-template-columns:1fr}.main{padding:18px}.topbar{padding:0 16px}.top-role-badge{display:none}}
 """
+
 
 def report_window(query):
     end_s=(query.get("end",[""])[0] or "").strip()
@@ -1421,20 +1515,28 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def login_page(self,error=""):
-        err=f'<div style="margin-top:14px;color:#a12d2d;font-size:13px">{esc(error)}</div>' if error else ""
+        err=f'<div class="login-alert">{esc(error)}</div>' if error else ""
         body=f"""<div class="login-shell"><section class="login-left">
-<div class="brand"><div class="brand-mark">✓</div><div>Trust PhishGuard</div></div>
+<div class="brand"><div class="brand-mark">🛡️</div><div>Trust PhishGuard</div></div>
 <h1>Security awareness, measured.</h1>
-<p>Centralized phishing simulation monitoring for campaign activity, user engagement and security-awareness outcomes.</p>
-<div class="feature-row"><span class="feature">Campaign Management</span><span class="feature">Risk Analytics</span><span class="feature">Live Activity</span><span class="feature">Executive Reports</span></div>
+<p>Enterprise phishing simulation and behavioral human-risk telemetry control center. Measure employee awareness, schedule automated drills, and track resilience without capturing credentials.</p>
+<div class="feature-row">
+  <span class="feature">🎯 Multi-Vector Drills</span>
+  <span class="feature">📊 Real-Time Telemetry</span>
+  <span class="feature">🛡️ Zero-Credential Policy</span>
+  <span class="feature">⚡ Asia/Dhaka Synchronized</span>
+</div>
 </section><section class="login-right"><div class="login-card">
-<h2>Admin Sign In</h2><div class="muted">Sign in to the Trust PhishGuard control center.</div>
+<div class="login-card-head">
+  <h2>Admin Sign In</h2>
+  <div class="muted">Access the Trust PhishGuard security operations console.</div>
+</div>
 {err}<form method="post" action="/admin/login">
-<div class="field"><label>Admin Username</label><input name="username" autocomplete="username" placeholder="Enter username" required></div>
-<div class="field"><label>Password</label><input type="password" name="password" autocomplete="current-password" placeholder="Enter password" required></div>
-<button class="login-btn">Sign in securely</button></form>
-<div class="notice">Protected admin area · Simulation telemetry only. No password, OTP, PIN, CVV or full card-number data is requested or stored.</div>
-<div class="trust">Trust Bank PLC · Information Security</div>
+<div class="field"><label>Admin Username</label><input name="username" autocomplete="username" placeholder="admin@trustbank.com.bd" required autofocus></div>
+<div class="field"><label>Password</label><input type="password" name="password" autocomplete="current-password" placeholder="••••••••••••" required></div>
+<button class="login-btn" type="submit">Sign in securely ➔</button></form>
+<div class="notice"><b>🛡️ Strict Simulation Policy:</b> This portal monitors awareness telemetry only. Passwords, OTPs, PINs, CVVs, and payment credentials are never requested or stored.</div>
+<div class="trust">Trust Bank PLC · Information Security Division</div>
 </div></section></div>"""
         return page("Admin Sign In",body,LOGIN_CSS)
 
@@ -1466,14 +1568,30 @@ class Handler(BaseHTTPRequestHandler):
         rows=[]
         for r in recent:
             d,t=format_datetime(r["ts"])
-            rows.append(f'<tr><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td>{esc(r["template"])}</td><td>{esc(r["ip"])}</td><td>{esc(r["name"])}</td><td>{esc(r["email"])}</td><td>{esc(r["mobile"])}</td></tr>')
+            rows.append(f'<tr><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td><b>{esc(r["template"])}</b></td><td><code>{esc(r["ip"])}</code></td><td>{esc(r["name"])}</td><td>{esc(r["email"])}</td><td>{esc(r["mobile"])}</td></tr>')
         table="".join(rows) or '<tr><td colspan="8">No activity yet.</td></tr>'
 
-        body=f"""<header class="topbar"><div class="topbrand"><div class="mark">✓</div>Trust PhishGuard</div><div class="top-actions"><span style="font-size:11px;color:#b8d1c8">ADMIN CONTROL CENTER</span><a href="/admin.csv">Export CSV</a><a href="/admin/logout">Logout</a></div></header>
-<main class="wrap"><div class="hero"><div><h1>Dashboard</h1><p>Simulation telemetry and engagement overview · Asia/Dhaka</p></div></div>
-<section class="stats"><div class="stat"><div class="stat-label">TOTAL EVENTS</div><div class="num">{total}</div><div class="delta">All recorded activity</div></div><div class="stat"><div class="stat-label">CLICKS</div><div class="num">{clicks}</div><div class="delta">Simulation page visits</div></div><div class="stat"><div class="stat-label">SUBMISSIONS</div><div class="num">{subs}</div><div class="delta">Form actions recorded</div></div><div class="stat"><div class="stat-label">ACTION RATE</div><div class="num">{rate:.1f}%</div><div class="delta">{ips} unique source IPs</div></div></section>
-<section class="grid"><div class="card"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div><div class="card"><h3>Template Performance</h3><div class="sub">Total events by template</div><div class="bars">{bars}</div></div></section>
-<section class="card activity"><h3>Recent Activity</h3><div class="sub">Latest simulation events · dates and times shown in Bangladesh Standard Time</div><div class="filter"><input id="q" oninput="filterRows()" placeholder="Filter IP, template, email..."><button onclick="document.getElementById('q').value='';filterRows()">Clear</button></div><div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Source IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr></thead><tbody id="rows">{table}</tbody></table></div></section></main>
+        body=f"""<header class="topbar"><div class="topbrand"><div class="mark">🛡️</div>Trust PhishGuard</div><div class="top-actions"><span class="top-role-badge">ADMIN CONTROL CENTER</span><a href="/admin.csv">📥 Export CSV</a><a href="/admin/logout">🚪 Logout</a></div></header>
+<main class="wrap"><div class="hero"><div><h1>Dashboard</h1><p>Simulation telemetry and engagement overview · Asia/Dhaka</p></div><div style="display:flex;gap:10px;align-items:center"><a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a><a class="btn" href="/admin/landing-pages/new">+ New Landing Page</a><a class="btn" href="/admin.csv">📥 Export CSV</a></div></div>
+<section class="stats">
+  <div class="stat"><div class="stat-label">TOTAL EVENTS</div><div class="num">{total}</div><div class="delta">All recorded activity</div></div>
+  <div class="stat"><div class="stat-label">CLICKS</div><div class="num">{clicks}</div><div class="delta">Simulation page visits</div></div>
+  <div class="stat"><div class="stat-label">SUBMISSIONS</div><div class="num">{subs}</div><div class="delta">Form actions recorded</div></div>
+  <div class="stat"><div class="stat-label">ACTION RATE</div><div class="num">{rate:.1f}%</div><div class="delta">{ips} unique source IPs</div></div>
+</section>
+<section class="grid">
+  <div class="card"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div>
+  <div class="card"><h3>Template Performance</h3><div class="sub">Total events by template</div><div class="bars">{bars}</div></div>
+</section>
+<section class="card activity" style="margin-top:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+    <div><h3 style="margin:0">Recent Activity</h3><div class="sub" style="margin-top:4px">Latest simulation events · dates and times shown in Bangladesh Standard Time</div></div>
+    <div class="filter" style="margin:0"><input id="q" oninput="filterRows()" placeholder="Filter IP, template, email..."><button onclick="document.getElementById('q').value='';filterRows()">Clear</button></div>
+  </div>
+  <div class="table-wrap">
+    <table class="table"><thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Source IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr></thead><tbody id="rows">{table}</tbody></table>
+  </div>
+</section></main>
 <script>
 function filterRows(){{const q=document.getElementById('q').value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
 </script>"""
@@ -1481,24 +1599,148 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         return self.admin_shell("Overview",dashboard_main,"Overview")
 
     def admin_shell(self,title,content,active):
-        nav=[("Overview","/admin"),("Campaigns","/admin/campaigns"),("Templates","/admin/templates"),("Landing Pages","/admin/landing-pages"),("SMTP Providers","/admin/smtp"),("Training","/admin/training"),("Recipients","/admin/recipients"),("Groups & Departments","/admin/groups"),("Users & Groups","/admin/users"),("Reports","/admin/reports"),("Risk & Trends","/admin/risk"),("Exports","/admin/exports"),("Settings","/admin/settings"),("Audit Log","/admin/audit"),("Admin Users","/admin/admins")]
-        links="".join('<a href="%s" class="%s">%s</a>'%(u,"active" if n==active else "",n) for n,u in nav)
-        css=DASH_CSS+".layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 68px)}.side{background:#0b241c;color:#b8d1c8;padding:16px}.side a{display:block;padding:9px;border-radius:8px;text-decoration:none;font-size:12px;margin:2px 0}.side a:hover,.side a.active{background:#164536;color:#fff}.main{padding:26px;max-width:1500px}.card{background:#fff;border:1px solid #e0e9e5;border-radius:14px;padding:18px}.table{width:100%;border-collapse:collapse;font-size:12px}.table th,.table td{padding:10px;border-bottom:1px solid #edf1ef;text-align:left}.table th{background:#f7faf8}.btn{display:inline-block;padding:9px 12px;border-radius:8px;border:1px solid #d5e0dc;text-decoration:none;font-size:12px;font-weight:700}.primary{background:#087b59;color:#fff}.form{display:grid;gap:12px;max-width:700px}.form input,.form select{padding:10px;border:1px solid #ccd9d4;border-radius:8px}.pill{padding:4px 8px;border-radius:999px;background:#eaf6f1;color:#087b59;font-size:10px;font-weight:800}@media(max-width:800px){.layout{grid-template-columns:1fr}.side{display:flex;overflow:auto}.side a{white-space:nowrap}}";
-        body='<header style="height:68px;background:#071b15;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 25px"><b>✓ Trust PhishGuard</b><span><a style="color:#fff;margin-right:15px" href="/admin.csv">CSV</a><a style="color:#fff" href="/admin/logout">Logout</a></span></header><div class="layout"><aside class="side">'+links+'</aside><main class="main">'+content+'</main></div>';
+        nav_groups=[
+            ("Simulation Suite",[
+                ("Overview","/admin","📊"),
+                ("Campaigns","/admin/campaigns","🎯"),
+                ("Templates","/admin/templates","✉️"),
+                ("Landing Pages","/admin/landing-pages","🌐"),
+            ]),
+            ("Audience & Relay",[
+                ("Recipients","/admin/recipients","👥"),
+                ("Groups & Departments","/admin/groups","🏢"),
+                ("SMTP Providers","/admin/smtp","⚡"),
+            ]),
+            ("Analytics & Risk",[
+                ("Reports","/admin/reports","📈"),
+                ("Risk & Trends","/admin/risk","🛡️"),
+                ("Users & Groups","/admin/users","👤"),
+            ]),
+            ("Governance",[
+                ("Training","/admin/training","🎓"),
+                ("Exports","/admin/exports","💾"),
+                ("Settings","/admin/settings","⚙️"),
+                ("Audit Log","/admin/audit","📋"),
+                ("Admin Users","/admin/admins","🔐"),
+            ]),
+        ]
+        links_parts=[]
+        for gname,items in nav_groups:
+            links_parts.append(f'<div class="side-group-title">{gname}</div>')
+            for n,u,ico in items:
+                act="active" if (n==active or (active=="Overview" and n=="Overview") or (active=="Dashboard" and n=="Overview")) else ""
+                links_parts.append(f'<a href="{u}" class="{act}"><span class="side-ico">{ico}</span><span>{n}</span></a>')
+        links="".join(links_parts)
+        css=DASH_CSS
+        body=f'''<header class="topbar">
+  <a class="topbrand" href="/admin">
+    <div class="mark">🛡️</div>
+    <div>Trust PhishGuard</div>
+  </a>
+  <div class="live-status-pill">
+    <span class="pulse-dot"></span> Simulation Engine Online · Asia/Dhaka
+  </div>
+  <div class="top-actions">
+    <span class="top-role-badge">ADMINISTRATOR</span>
+    <a href="/admin.csv">📥 Export CSV</a>
+    <a href="/admin/logout">🚪 Logout</a>
+  </div>
+</header>
+<div class="layout">
+  <aside class="side">{links}</aside>
+  <main class="main">{content}</main>
+</div>'''
         return page(title,body,css)
 
     def feature_page(self,path,query=""):
         c=db()
         if path=="/admin/campaigns":
             rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>Template %s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/campaigns?id=%s">Edit</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["template"]),r["targeted"],esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="6">No campaigns yet.</td></tr>'
-            return self.admin_shell("Campaigns",'<h1>Campaigns</h1><p>Create, pause and complete simulation campaigns.</p><p><a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Template</th><th>Targeted</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Campaigns")
+            total_c=len(rows)
+            active_c=sum(1 for r in rows if r["status"]=="Active")
+            completed_c=sum(1 for r in rows if r["status"]=="Completed")
+            targeted_sum=sum(r["targeted"] or 0 for r in rows)
+            table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#10221a">%s</div></td><td><span class="pill" style="background:#f4f7f5;color:#1e352b">Template %s</span></td><td><b>%s</b></td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/campaigns?id=%s">✏️ Edit</a> <a class="btn" href="/admin/reports?campaign_id=%s">📊 Analytics</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["template"]),r["targeted"],"status-active" if r["status"]=="Active" else ("status-completed" if r["status"]=="Completed" else "status-draft"),esc(r["status"]),r["id"],r["id"]) for r in rows) or '<tr><td colspan="6">No campaigns yet.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Campaigns</span></div>
+    <div class="camp-title-row">
+      <h1>Simulation Campaigns</h1>
+      <span class="camp-status-badge status-active">{active_c} Active</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">TOTAL CAMPAIGNS</div><div class="num">{total_c}</div><div class="delta">All scheduled drills</div></div>
+  <div class="stat"><div class="stat-label">ACTIVE DRILLS</div><div class="num">{active_c}</div><div class="delta">Currently dispatching</div></div>
+  <div class="stat"><div class="stat-label">COMPLETED</div><div class="num">{completed_c}</div><div class="delta">Archived simulations</div></div>
+  <div class="stat"><div class="stat-label">TARGETED EMPLOYEES</div><div class="num">{targeted_sum}</div><div class="delta">Cumulative recipients</div></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <h3 style="margin:0">Configured Campaigns</h3>
+    <input id="qCamp" oninput="filterCampTable()" placeholder="Filter by name, template or status..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12px;width:280px">
+  </div>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Campaign Name</th><th>Payload</th><th>Targeted</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="campRows">{table}</tbody>
+    </table>
+  </div>
+</div>
+<script>
+function filterCampTable(){{const q=document.getElementById('qCamp').value.toLowerCase();document.querySelectorAll('#campRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
+</script>'''
+            return self.admin_shell("Campaigns",body,"Campaigns")
         if path=="/admin/templates":
-            rows=c.execute("SELECT * FROM template_library ORDER BY CAST(template AS INTEGER)").fetchall()
-            c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/templates?id=%s">Edit</a> <a class="btn" target="_blank" href="/%s.html">Preview</a></td></tr>'%
-                         (esc(r["template"]),esc(r["name"]),esc(r["category"]),esc(r["difficulty"]),esc(r["language"]), "Enabled",esc(r["template"]),esc(r["template"])) for r in rows)
-            return self.admin_shell("Templates",'<h1>Email Templates & Payloads</h1><p>Enterprise-style simulation payload metadata, HTML/plain-text content and preview.</p><p><a class="btn primary" href="/admin/templates?id=1">Open Template Builder</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Category</th><th>Difficulty</th><th>Language</th><th>Status</th><th></th></tr>'+table+'</table></div>',"Templates")
+            rows=c.execute("SELECT * FROM template_library ORDER BY CAST(template AS INTEGER)").fetchall(); c.close()
+            total_t=len(rows)
+            categories=len({r["category"] for r in rows if r["category"]})
+            table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#10221a">%s</div><div class="sub" style="font-size:11px">%s</div></td><td><span class="pill" style="background:#eaf4ef;color:#087b59">%s</span></td><td><span class="pill %s">%s</span></td><td>%s</td><td><span class="camp-status-badge status-active">Enabled</span></td><td style="text-align:right"><a class="btn primary" href="/admin/templates?id=%s">✏️ Edit</a> <a class="btn" target="_blank" href="/%s.html">👁️ Preview</a></td></tr>'%
+                         (esc(r["template"]),esc(r["name"]),esc(r["subject"] or ""),esc(r["category"]),
+                          "click" if r["difficulty"]=="Easy" else ("submitted" if r["difficulty"]=="Hard" else "report"),
+                          esc(r["difficulty"]),esc(r["language"]),esc(r["template"]),esc(r["template"])) for r in rows) or '<tr><td colspan="7">No templates configured.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Templates</span></div>
+    <div class="camp-title-row">
+      <h1>Email Templates &amp; Payloads</h1>
+      <span class="camp-status-badge status-active">{total_t} Payloads</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn primary" href="/admin/templates?id=1">+ Open Template Builder</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">TOTAL TEMPLATES</div><div class="num">{total_t}</div><div class="delta">Simulation lures</div></div>
+  <div class="stat"><div class="stat-label">CATEGORIES</div><div class="num">{categories}</div><div class="delta">HR, IT, Finance, Phish</div></div>
+  <div class="stat"><div class="stat-label">SUPPORTED LANGUAGES</div><div class="num">5</div><div class="delta">Bengali, English, Arabic...</div></div>
+  <div class="stat"><div class="stat-label">POLICY STATUS</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">✓ Verified Safe</div><div class="delta">No credential forms</div></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <h3 style="margin:0">Template Catalog</h3>
+    <input id="qTpl" oninput="filterTplTable()" placeholder="Filter by name, subject, category..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12px;width:280px">
+  </div>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Template Name &amp; Subject</th><th>Category</th><th>Difficulty</th><th>Language</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="tplRows">{table}</tbody>
+    </table>
+  </div>
+</div>
+<script>
+function filterTplTable(){{const q=document.getElementById('qTpl').value.toLowerCase();document.querySelectorAll('#tplRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
+</script>'''
+            return self.admin_shell("Templates",body,"Templates")
         if path=="/admin/landing-pages":
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
             total_lp=len(rows)
@@ -1518,19 +1760,11 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:22px">
-  <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px">
-    <div style="width:42px;height:42px;border-radius:10px;background:#e8f4ef;color:#087b59;display:flex;align-items:center;justify-content:center;font-size:20px">🌐</div>
-    <div><div style="font-size:11px;color:#556c62;font-weight:700;text-transform:uppercase">Total Portals</div><div style="font-size:22px;font-weight:800;color:#12251e">{total_lp}</div></div>
-  </div>
-  <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px">
-    <div style="width:42px;height:42px;border-radius:10px;background:#dff6ec;color:#087b59;display:flex;align-items:center;justify-content:center;font-size:20px">✓</div>
-    <div><div style="font-size:11px;color:#556c62;font-weight:700;text-transform:uppercase">Enabled &amp; Ready</div><div style="font-size:22px;font-weight:800;color:#087b59">{active_lp}</div></div>
-  </div>
-  <div class="card" style="padding:16px;display:flex;align-items:center;gap:14px">
-    <div style="width:42px;height:42px;border-radius:10px;background:#e0f2fe;color:#0284c7;display:flex;align-items:center;justify-content:center;font-size:20px">⚡</div>
-    <div><div style="font-size:11px;color:#556c62;font-weight:700;text-transform:uppercase">Market Presets</div><div style="font-size:22px;font-weight:800;color:#0369a1">6 Included</div></div>
-  </div>
+<div class="stats">
+  <div class="stat"><div class="stat-label">TOTAL PORTALS</div><div class="num">{total_lp}</div><div class="delta">Configured drill pages</div></div>
+  <div class="stat"><div class="stat-label">ENABLED &amp; READY</div><div class="num">{active_lp}</div><div class="delta">Active for campaigns</div></div>
+  <div class="stat"><div class="stat-label">MARKET PRESETS</div><div class="num">6 Included</div><div class="delta">M365, Google, HR, bKash...</div></div>
+  <div class="stat"><div class="stat-label">SAFETY GUARD</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">✓ Policy Active</div><div class="delta">Credentials blocked</div></div>
 </div>
 
 <div class="card" style="margin-bottom:20px;padding:16px 20px;background:#f8faf9;border:1px solid #dbe7e1;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
@@ -1567,9 +1801,42 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
             return self.admin_shell("Landing Pages",body,"Landing Pages")
         if path=="/admin/smtp":
             rows=c.execute("SELECT id,name,provider,host,port,security,username,from_name,from_email,reply_to,enabled,updated_at FROM smtp_profiles ORDER BY id DESC").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s:%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/smtp?id=%s">Edit</a> <a class="btn" href="/admin/smtp/diagnostics?id=%s">Diagnostics</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"Enabled" if r["enabled"] else "Disabled",r["id"],r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
-            note='<div style="margin:12px 0;padding:12px;background:#edf8f4;border-radius:9px;font-size:12px;color:#2b6554">SMTP passwords are encrypted at rest with a server-local 0600 key. They are never displayed, exported or committed to Git.</div>'
-            return self.admin_shell("SMTP Providers",'<h1>SMTP Providers</h1><p>Enterprise mail-delivery profiles for simulation campaigns and test messages.</p>'+note+'<p><a class="btn primary" href="/admin/smtp/new">+ Add SMTP Provider</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Name</th><th>Server</th><th>Security</th><th>From</th><th>Status</th><th></th></tr>'+table+'</table></div>',"SMTP Providers")
+            total_smtp=len(rows)
+            active_smtp=sum(1 for r in rows if r["enabled"])
+            table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#10221a">%s</div><div class="sub" style="font-size:11px">%s</div></td><td><code>%s:%s</code></td><td><span class="pill" style="background:#eaf4ef;color:#087b59">%s</span></td><td>%s</td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/smtp?id=%s">✏️ Edit</a> <a class="btn" href="/admin/smtp/diagnostics?id=%s">🩺 Diagnostics</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["provider"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"status-active" if r["enabled"] else "status-draft","Enabled" if r["enabled"] else "Disabled",r["id"],r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
+            note='<div class="card" style="margin-bottom:20px;padding:16px 20px;background:#f8faf9;border:1px solid #dbe7e1;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">🛡️</span><span style="font-size:12.5px;color:#2b4539"><b>Zero-Exposure Credential Encryption:</b> SMTP passwords and OAuth tokens are AES-encrypted at rest using a server-local 0600 key file. Secrets are never displayed, exported, or committed to Git.</span></div></div>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>SMTP Providers</span></div>
+    <div class="camp-title-row">
+      <h1>SMTP Mail Delivery Providers</h1>
+      <span class="camp-status-badge status-active">{active_smtp} Enabled</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn primary" href="/admin/smtp/new">+ Add SMTP Provider</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">CONFIGURED PROFILES</div><div class="num">{total_smtp}</div><div class="delta">Mail relay servers</div></div>
+  <div class="stat"><div class="stat-label">ACTIVE &amp; READY</div><div class="num">{active_smtp}</div><div class="delta">Available for drills</div></div>
+  <div class="stat"><div class="stat-label">AUTHENTICATION</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">OAuth 2.0 &amp; Password</div><div class="delta">XOAUTH2 supported</div></div>
+  <div class="stat"><div class="stat-label">ENCRYPTION</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">AES-256 Rest</div><div class="delta">Local keystore (0600)</div></div>
+</div>
+
+{note}
+
+<div class="card">
+  <h3 style="margin-bottom:14px">Configured Relay Profiles</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Profile &amp; Provider</th><th>Host : Port</th><th>Security</th><th>From Address</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody>{table}</tbody>
+    </table>
+  </div>
+</div>'''
+            return self.admin_shell("SMTP Providers",body,"SMTP Providers")
         if path=="/admin/training":
             courses=c.execute("SELECT * FROM training_courses ORDER BY id DESC").fetchall()
             assigned=c.execute("""SELECT a.id,a.status,a.result,a.completion,a.score,a.due_at,a.trigger_campaign_id,a.remediation_campaign_id,c.name course,c.passing_score,r.email,r.name,r.department,
@@ -1581,29 +1848,170 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
                                   ORDER BY a.id DESC LIMIT 1000""").fetchall()
             total=len(assigned); completed=sum(1 for x in assigned if x["status"]=="Completed"); passed=sum(1 for x in assigned if x["result"]=="Passed"); failed=sum(1 for x in assigned if x["result"]=="Failed")
             overdue=sum(1 for x in assigned if x["status"] not in ("Completed","Cancelled","Failed") and x["due_at"] and x["due_at"] < now())
-            course_rows="".join('<tr><td>%s</td><td>%s</td><td>%s min</td><td>%s%%</td><td><span class="pill">%s</span></td></tr>'%(x["id"],esc(x["name"]),x["duration_minutes"],x["passing_score"],esc(x["status"])) for x in courses) or '<tr><td colspan="5">No training courses.</td></tr>'
-            assignment_rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.0f%%</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><form method="post" action="/admin/training/update" style="display:flex;gap:4px"><input type="hidden" name="id" value="%s"><input name="completion" type="number" min="0" max="100" step="1" value="%s" style="width:65px"><input name="score" type="number" min="0" max="100" step="1" value="%s" placeholder="score" style="width:65px"><button class="btn">Update</button></form></td></tr>'%(esc(x["email"]),esc(x["name"]),esc(x["department"]),esc(x["course"]),x["completion"] or 0,esc(x["status"]),esc(x["result"] or "Pending"),esc(x["trigger_name"] or "—"),esc(x["remediation_name"] or "—"),x["id"],x["completion"] or 0,"" if x["score"] is None else x["score"]) for x in assigned) or '<tr><td colspan="10">No assignments yet.</td></tr>'
+            course_rows="".join('<tr><td><b>#%s</b></td><td><b>%s</b></td><td>%s min</td><td>%s%%</td><td><span class="camp-status-badge status-active">%s</span></td></tr>'%(x["id"],esc(x["name"]),x["duration_minutes"],x["passing_score"],esc(x["status"])) for x in courses) or '<tr><td colspan="5">No training courses.</td></tr>'
+            assignment_rows="".join('<tr><td>%s</td><td><b>%s</b></td><td>%s</td><td>%s</td><td><b>%.0f%%</b></td><td><span class="pill %s">%s</span></td><td><span class="pill %s">%s</span></td><td>%s</td><td>%s</td><td><form method="post" action="/admin/training/update" style="display:flex;gap:4px"><input type="hidden" name="id" value="%s"><input name="completion" type="number" min="0" max="100" step="1" value="%s" style="width:65px;padding:6px;border:1.5px solid #ccdcd5;border-radius:6px"><input name="score" type="number" min="0" max="100" step="1" value="%s" placeholder="score" style="width:65px;padding:6px;border:1.5px solid #ccdcd5;border-radius:6px"><button class="btn primary" style="padding:6px 10px">Update</button></form></td></tr>'%(esc(x["email"]),esc(x["name"]),esc(x["department"]),esc(x["course"]),x["completion"] or 0,"click" if x["status"]=="Completed" else "submitted",esc(x["status"]),"click" if x["result"]=="Passed" else ("submitted" if x["result"]=="Failed" else "report"),esc(x["result"] or "Pending"),esc(x["trigger_name"] or "—"),esc(x["remediation_name"] or "—"),x["id"],x["completion"] or 0,"" if x["score"] is None else x["score"]) for x in assigned) or '<tr><td colspan="10">No assignments yet.</td></tr>'
             c.close()
-            body=('<h1>Training</h1><p>Assign security-awareness courses after simulations and track completion, pass/fail and remediation linkage without collecting credentials.</p><div class="stats" style="margin:16px 0"><div class="stat"><div class="stat-label">ASSIGNMENTS</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">PASSED</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">FAILED</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">OVERDUE</div><div class="num">%s</div></div></div><p><a class="btn primary" href="/admin/training/new">+ Create Assignment</a> <a class="btn" href="/admin/training/course/new">+ New Course</a></p><div class="card"><h3>Course Catalog</h3><table class="table"><tr><th>ID</th><th>Course</th><th>Duration</th><th>Pass Score</th><th>Status</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>Assignments & Results</h3><div class="table-wrap"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Course</th><th>Completion</th><th>Status</th><th>Result</th><th>Trigger Campaign</th><th>Remediation Campaign</th><th>Update</th></tr>%s</table></div></div>'%(total,passed,failed,overdue,course_rows,assignment_rows))
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Training</span></div>
+    <div class="camp-title-row">
+      <h1>Security Awareness Training</h1>
+      <span class="camp-status-badge status-active">{total} Assignments</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn primary" href="/admin/training/new">+ Create Assignment</a>
+    <a class="btn" href="/admin/training/course/new">+ New Course</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">ASSIGNMENTS</div><div class="num">{total}</div><div class="delta">Enrolled users</div></div>
+  <div class="stat"><div class="stat-label">PASSED</div><div class="num">{passed}</div><div class="delta">Successful completion</div></div>
+  <div class="stat"><div class="stat-label">FAILED</div><div class="num">{failed}</div><div class="delta">Needs retake</div></div>
+  <div class="stat"><div class="stat-label">OVERDUE</div><div class="num">{overdue}</div><div class="delta">Past deadline</div></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-bottom:14px">Course Catalog</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Course</th><th>Duration</th><th>Pass Score</th><th>Status</th></tr></thead>
+      <tbody>{course_rows}</tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px">
+  <h3 style="margin-bottom:14px">Assignments &amp; Results</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>Email</th><th>Name</th><th>Department</th><th>Course</th><th>Completion</th><th>Status</th><th>Result</th><th>Trigger Drill</th><th>Remediation Drill</th><th>Quick Update</th></tr></thead>
+      <tbody>{assignment_rows}</tbody>
+    </table>
+  </div>
+</div>'''
             return self.admin_shell("Training",body,"Training")
         if path=="/admin/recipients":
             rows=c.execute("SELECT id,email,name,employee_id,department,designation,location,manager,language,timezone,group_name,status,created_at FROM recipients ORDER BY id DESC LIMIT 1000").fetchall()
             total=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
             suppressed=c.execute("SELECT COUNT(*) n FROM recipients WHERE status='Suppressed'").fetchone()["n"]
+            active_rec=total - suppressed
             imports=c.execute("SELECT id,source_name,processed,created,updated,skipped,errors,created_at FROM recipient_import_history ORDER BY id DESC LIMIT 20").fetchall()
             c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td><span class="pill">%s</span></td><td><a class="btn" href="/admin/recipients?id=%s">Profile</a></td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["designation"]),esc(r["location"]),esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="9">No recipients imported.</td></tr>'
-            ih="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["source_name"] or "Manual/CSV"),r["processed"],r["created"],r["updated"],r["skipped"],esc(r["errors"] or ""),esc(r["created_at"])) for r in imports) or '<tr><td colspan="8">No import history.</td></tr>'
-            body='<h1>Recipients</h1><p>Enterprise recipient profiles for authorized simulation targeting. Suppressed recipients are excluded from campaign delivery.</p><div class="stats" style="margin:16px 0"><div class="stat"><div class="stat-label">RECIPIENTS</div><div class="num">%s</div></div><div class="stat"><div class="stat-label">SUPPRESSED</div><div class="num">%s</div></div></div><p><a class="btn primary" href="/admin/recipients/import">+ Import CSV</a></p><div class="card"><div class="table-wrap"><table class="table"><tr><th>ID</th><th>Email</th><th>Name</th><th>Employee ID</th><th>Department</th><th>Designation</th><th>Location</th><th>Status</th><th></th></tr>%s</table></div></div><div class="card" style="margin-top:15px"><h3>Import History</h3><div class="table-wrap"><table class="table"><tr><th>ID</th><th>Source</th><th>Processed</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Errors</th><th>Time</th></tr>%s</table></div></div>'%(total,suppressed,table,ih)
+            table="".join('<tr><td><b>#%s</b></td><td><b>%s</b></td><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/recipients?id=%s">✏️ Profile</a></td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["designation"]),esc(r["location"]),"status-draft" if r["status"]=="Suppressed" else "status-active",esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="9">No recipients imported.</td></tr>'
+            ih="".join('<tr><td><b>#%s</b></td><td>%s</td><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td><span style="color:#a12d2d">%s</span></td><td>%s</td></tr>'%(r["id"],esc(r["source_name"] or "Manual/CSV"),r["processed"],r["created"],r["updated"],r["skipped"],esc(r["errors"] or ""),esc(r["created_at"])) for r in imports) or '<tr><td colspan="8">No import history.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Recipients</span></div>
+    <div class="camp-title-row">
+      <h1>Employee Target Directory</h1>
+      <span class="camp-status-badge status-active">{active_rec} Active</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn primary" href="/admin/recipients/import">📥 Import CSV</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">TOTAL RECIPIENTS</div><div class="num">{total}</div><div class="delta">Imported employee profiles</div></div>
+  <div class="stat"><div class="stat-label">ACTIVE TARGETS</div><div class="num">{active_rec}</div><div class="delta">Eligible for simulations</div></div>
+  <div class="stat"><div class="stat-label">SUPPRESSED</div><div class="num">{suppressed}</div><div class="delta">Excluded from delivery</div></div>
+  <div class="stat"><div class="stat-label">COMPLIANCE POLICY</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">✓ Zero-Secret Policy</div><div class="delta">No credential storage</div></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <h3 style="margin:0">Active Recipients</h3>
+    <input id="qRec" oninput="filterRecTable()" placeholder="Filter by email, name, dept, id..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12px;width:280px">
+  </div>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Employee ID</th><th>Department</th><th>Designation</th><th>Location</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+      <tbody id="recRows">{table}</tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px">
+  <h3 style="margin-bottom:14px">Import History</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Source</th><th>Processed</th><th>Created</th><th>Updated</th><th>Skipped</th><th>Errors</th><th>Timestamp</th></tr></thead>
+      <tbody>{ih}</tbody>
+    </table>
+  </div>
+</div>
+<script>
+function filterRecTable(){{const q=document.getElementById('qRec').value.toLowerCase();document.querySelectorAll('#recRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
+</script>'''
             return self.admin_shell("Recipients",body,"Recipients")
         if path=="/admin/groups":
             rows=c.execute("SELECT g.id,g.name,g.department,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.id ORDER BY g.id DESC").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(r["id"],esc(r["name"]),esc(r["department"]),r["members"]) for r in rows) or '<tr><td colspan="4">No groups yet.</td></tr>'
-            return self.admin_shell("Groups",'<h1>Groups & Departments</h1><p>Reusable recipient groups for campaign targeting.</p><p><a class="btn primary" href="/admin/groups/new">+ New Group</a></p><div class="card"><table class="table"><tr><th>ID</th><th>Group</th><th>Department</th><th>Members</th></tr>'+table+'</table></div>',"Groups & Departments")
+            total_g=len(rows)
+            total_members=sum(r["members"] or 0 for r in rows)
+            table="".join('<tr><td><b>#%s</b></td><td><b>%s</b></td><td>%s</td><td><span class="pill" style="background:#eaf4ef;color:#087b59">%s Members</span></td></tr>'%(r["id"],esc(r["name"]),esc(r["department"]),r["members"]) for r in rows) or '<tr><td colspan="4">No groups yet.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Groups</span></div>
+    <div class="camp-title-row">
+      <h1>Groups &amp; Departments</h1>
+      <span class="camp-status-badge status-active">{total_g} Groups</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn primary" href="/admin/groups/new">+ New Group</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">RECIPIENT GROUPS</div><div class="num">{total_g}</div><div class="delta">Targeting groups</div></div>
+  <div class="stat"><div class="stat-label">ASSIGNED MEMBERS</div><div class="num">{total_members}</div><div class="delta">Total group assignments</div></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-bottom:14px">Configured Target Groups</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>ID</th><th>Group Name</th><th>Department</th><th>Members</th></tr></thead>
+      <tbody>{table}</tbody>
+    </table>
+  </div>
+</div>'''
+            return self.admin_shell("Groups",body,"Groups & Departments")
         if path=="/admin/users":
             rows=c.execute("SELECT email,MAX(name) name,MAX(employee_id) employee_id,COUNT(*) events,SUM(event='click') clicks,SUM(event='submitted') submissions FROM events WHERE email!='' GROUP BY email ORDER BY events DESC").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),r["events"],r["clicks"] or 0,r["submissions"] or 0) for r in rows) or '<tr><td colspan="6">No users recorded yet.</td></tr>'
-            return self.admin_shell("Users",'<h1>Users & Groups</h1><p>Observed simulation users and engagement.</p><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Employee ID</th><th>Events</th><th>Clicks</th><th>Submissions</th></tr>'+table+'</table></div>',"Users & Groups")
+            total_u=len(rows)
+            total_clicks=sum(r["clicks"] or 0 for r in rows)
+            total_subs=sum(r["submissions"] or 0 for r in rows)
+            table="".join('<tr><td><b>%s</b></td><td>%s</td><td><code>%s</code></td><td><b>%s</b></td><td><span class="pill click">%s</span></td><td><span class="pill submitted">%s</span></td></tr>'%(esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),r["events"],r["clicks"] or 0,r["submissions"] or 0) for r in rows) or '<tr><td colspan="6">No users recorded yet.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Users</span></div>
+    <div class="camp-title-row">
+      <h1>Observed Users &amp; Engagement</h1>
+      <span class="camp-status-badge status-active">{total_u} Monitored</span>
+    </div>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">MONITORED USERS</div><div class="num">{total_u}</div><div class="delta">With recorded telemetry</div></div>
+  <div class="stat"><div class="stat-label">TOTAL CLICKS</div><div class="num">{total_clicks}</div><div class="delta">Link visit events</div></div>
+  <div class="stat"><div class="stat-label">FORM SUBMISSIONS</div><div class="num">{total_subs}</div><div class="delta">Action drill failures</div></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-bottom:14px">User Engagement Telemetry</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>Email</th><th>Name</th><th>Employee ID</th><th>Events</th><th>Clicks</th><th>Submissions</th></tr></thead>
+      <tbody>{table}</tbody>
+    </table>
+  </div>
+</div>'''
+            return self.admin_shell("Users",body,"Users & Groups")
         if path=="/admin/risk":
             snapshot_risk_history()
             c=db()
@@ -1616,16 +2024,87 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
                                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='form_action'),0) actions,
                                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='report'),0) reports FROM campaigns c ORDER BY c.id DESC LIMIT 100""").fetchall()
             history=c.execute("SELECT * FROM risk_history WHERE scope='user' ORDER BY id DESC LIMIT 50").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%.0f</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(r["email"]),r["failures"],r["score"],esc(r["level"]),"Yes" if r["repeat_offender"] else "No",esc(r["remediation_status"] or "None"),esc(r["factor_summary"] or "")) for r in rows) or '<tr><td colspan="7">No risk data yet.</td></tr>'
-            dept="".join('<tr><td>%s</td><td>%s</td><td>%.1f</td><td>%s</td></tr>'%(esc(r["department"]),r["members"],r["score"],r["failures"]) for r in departments) or '<tr><td colspan="4">No department risk data.</td></tr>'
-            camp="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td>%s</td></tr>'%(r["id"],esc(r["name"]),r["sent"],(r["clicks"] or 0)/max(r["sent"],1)*100,(r["actions"] or 0)/max(r["sent"],1)*100,r["reports"] or 0) for r in campaigns) or '<tr><td colspan="6">No campaign risk data.</td></tr>'
-            hist="".join('<tr><td>%s</td><td>%s</td><td>%.0f</td><td>%s</td><td>%s</td></tr>'%(esc(r["subject"]),esc(r["recorded_at"]),r["score"],esc(r["level"]),esc(r["factors"] or "")) for r in history) or '<tr><td colspan="5">No risk history yet.</td></tr>'
-            body='<h1>Risk & Trends</h1><p>Explainable risk based only on measured click, form-action and report telemetry.</p><div class="card"><h3>User Risk</h3><div class="table-wrap"><table class="table"><tr><th>User</th><th>Failures</th><th>Score</th><th>Risk</th><th>Repeat</th><th>Remediation</th><th>Factors</th></tr>%s</table></div></div><div class="card" style="margin-top:15px"><h3>Department Risk</h3><table class="table"><tr><th>Department</th><th>Members</th><th>Avg Score</th><th>Failures</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>Campaign Risk</h3><table class="table"><tr><th>ID</th><th>Campaign</th><th>Sent</th><th>Click Rate</th><th>Action Rate</th><th>Reports</th></tr>%s</table></div><div class="card" style="margin-top:15px"><h3>User Risk History</h3><div class="table-wrap"><table class="table"><tr><th>User</th><th>Recorded</th><th>Score</th><th>Risk</th><th>Factors</th></tr>%s</table></div></div>'%(table,dept,camp,hist)
+            total_r=len(rows)
+            high_r=sum(1 for r in rows if r["level"] in ("High","Critical"))
+            repeats=sum(1 for r in rows if r["repeat_offender"])
+            table="".join('<tr><td><b>%s</b></td><td><b>%s</b></td><td><b>%.0f</b></td><td><span class="pill %s">%s</span></td><td>%s</td><td>%s</td><td><div class="sub" style="font-size:11px">%s</div></td></tr>'%(esc(r["email"]),r["failures"],r["score"],"submitted" if r["level"] in ("High","Critical") else ("click" if r["level"]=="Low" else "report"),esc(r["level"]),'<span class="pill submitted">Repeat</span>' if r["repeat_offender"] else "No",esc(r["remediation_status"] or "None"),esc(r["factor_summary"] or "")) for r in rows) or '<tr><td colspan="7">No risk data yet.</td></tr>'
+            dept="".join('<tr><td><b>%s</b></td><td>%s</td><td><b>%.1f</b></td><td>%s</td></tr>'%(esc(r["department"]),r["members"],r["score"],r["failures"]) for r in departments) or '<tr><td colspan="4">No department risk data.</td></tr>'
+            camp="".join('<tr><td><b>#%s</b></td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td>%s</td></tr>'%(r["id"],esc(r["name"]),r["sent"],(r["clicks"] or 0)/max(r["sent"],1)*100,(r["actions"] or 0)/max(r["sent"],1)*100,r["reports"] or 0) for r in campaigns) or '<tr><td colspan="6">No campaign risk data.</td></tr>'
+            hist="".join('<tr><td><b>%s</b></td><td>%s</td><td>%.0f</td><td><span class="pill %s">%s</span></td><td>%s</td></tr>'%(esc(r["subject"]),esc(r["recorded_at"]),r["score"],"submitted" if r["level"] in ("High","Critical") else "click",esc(r["level"]),esc(r["factors"] or "")) for r in history) or '<tr><td colspan="5">No risk history yet.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Risk</span></div>
+    <div class="camp-title-row">
+      <h1>Risk &amp; Trends Analytics</h1>
+      <span class="camp-status-badge status-active">{total_r} Scored</span>
+    </div>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">SCORED PROFILES</div><div class="num">{total_r}</div><div class="delta">Telemetry-based scores</div></div>
+  <div class="stat"><div class="stat-label">ELEVATED RISK</div><div class="num" style="color:#b91c1c">{high_r}</div><div class="delta">High / Critical risk</div></div>
+  <div class="stat"><div class="stat-label">REPEAT OFFENDERS</div><div class="num" style="color:#b45309">{repeats}</div><div class="delta">Multiple drill failures</div></div>
+  <div class="stat"><div class="stat-label">MODEL AUDIT</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">Explainable AI</div><div class="delta">Zero synthetic bias</div></div>
+</div>
+
+<div class="card">
+  <h3 style="margin-bottom:14px">User Risk Leaderboard</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>User Email</th><th>Failures</th><th>Score</th><th>Risk Level</th><th>Repeat Offender</th><th>Remediation Status</th><th>Risk Factor Breakdown</th></tr></thead>
+      <tbody>{table}</tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3 style="margin-bottom:14px">Department Risk Summary</h3>
+    <div class="table-wrap">
+      <table class="table"><thead><tr><th>Department</th><th>Members</th><th>Avg Score</th><th>Failures</th></tr></thead><tbody>{dept}</tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="margin-bottom:14px">Campaign Drill Outcomes</h3>
+    <div class="table-wrap">
+      <table class="table"><thead><tr><th>ID</th><th>Campaign</th><th>Sent</th><th>Click Rate</th><th>Action Rate</th><th>Reports</th></tr></thead><tbody>{camp}</tbody></table>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:20px">
+  <h3 style="margin-bottom:14px">Historical Risk Snapshots</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>Subject</th><th>Recorded At</th><th>Score</th><th>Risk Level</th><th>Factors</th></tr></thead>
+      <tbody>{hist}</tbody>
+    </table>
+  </div>
+</div>'''
             return self.admin_shell("Risk",body,"Risk & Trends")
         if path=="/admin/audit":
             rows=c.execute("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200").fetchall(); c.close()
-            table="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
-            return self.admin_shell("Audit",'<h1>Audit Log</h1><p>Administrative actions and exports.</p><div class="card"><table class="table"><tr><th>Date</th><th>Time</th><th>Action</th><th>Details</th></tr>'+table+'</table></div>',"Audit Log")
+            table="".join('<tr><td><b>%s</b></td><td><code>%s</code></td><td><span class="pill click">%s</span></td><td>%s</td></tr>'%(esc(format_datetime(r["ts"])[0]),esc(format_datetime(r["ts"])[1]),esc(r["action"]),esc(r["details"])) for r in rows) or '<tr><td colspan="4">No audit records.</td></tr>'
+            body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Audit Log</span></div>
+    <div class="camp-title-row">
+      <h1>Administrative Audit Trail</h1>
+      <span class="camp-status-badge status-active">Immutable Log</span>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <h3 style="margin-bottom:14px">Recent Audit Events</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>Date</th><th>Time</th><th>Action</th><th>Details &amp; Parameters</th></tr></thead>
+      <tbody>{table}</tbody>
+    </table>
+  </div>
+</div>'''
+            return self.admin_shell("Audit",body,"Audit Log")
         if path=="/admin/reports.pdf":
             try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
@@ -2525,37 +3004,174 @@ updateLivePreview();
         catopts="".join('<option %s>%s</option>'%("selected" if r["category"]==x else "",x) for x in cats)
         diffopts="".join('<option %s>%s</option>'%("selected" if r["difficulty"]==x else "",x) for x in diffs)
         langopts="".join('<option %s>%s</option>'%("selected" if r["language"]==x else "",x) for x in langs)
-        body="""<h1>Edit Simulation Template %s</h1>
-<p>Build the message metadata and HTML body used by an authorized awareness campaign. Never add password, OTP, PIN, CVV or full-card-number collection fields.</p>
-<div class="card"><form class="form" method="post" action="/admin/templates/save">
-<input type="hidden" name="template" value="%s">
-<label>Template Name<input name="name" value="%s" required maxlength="150"></label>
-<label>Subject<input name="subject" value="%s" maxlength="250"></label>
-<label>Preheader<input name="preheader" value="%s" maxlength="250"></label>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-<label>Category<select name="category">%s</select></label>
-<label>Difficulty<select name="difficulty">%s</select></label>
-<label>Language<select name="language">%s</select></label>
+        body=f"""<div class="camp-editor">
+<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin/templates">Templates</a> <span>/</span> <span>Edit Template #{val('template')}</span></div>
+    <div class="camp-title-row">
+      <h1>Edit Simulation Template #{val('template')}</h1>
+      <span class="camp-status-badge status-active">{r['status'] or 'Active'}</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn" target="_blank" href="/{val('template')}.html">👁️ Preview Tab</a>
+    <a class="btn" href="/admin/templates/test-send?id={val('template')}">✉️ Test Send</a>
+    <a class="btn" href="/admin/templates">Cancel</a>
+    <button class="btn primary" type="submit" form="tplForm">Save Template</button>
+  </div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-<label>Brand<input name="brand" value="%s" maxlength="100"></label>
-<label>Industry<input name="industry" value="%s" maxlength="100"></label>
+
+<form id="tplForm" method="post" action="/admin/templates/save">
+<input type="hidden" name="template" value="{val('template')}">
+
+<div class="camp-card">
+  <div class="camp-card-header">
+    <div class="camp-icon">📝</div>
+    <div class="camp-card-title">
+      <h3>Template Metadata &amp; Targeting</h3>
+      <p>Configure subject line, lure category, difficulty rating, and brand identifiers.</p>
+    </div>
+  </div>
+  <div class="camp-fields">
+    <div class="camp-label col-full">
+      <span>Template Title <b style="color:#a12d2d">*</b></span>
+      <input name="name" value="{val('name')}" required maxlength="150" placeholder="e.g. Microsoft 365 Account Expiry Drill">
+      <div class="field-hint">A clear name shown in campaign setup and administrative audit logs.</div>
+    </div>
+    <div class="camp-label">
+      <span>Subject Line</span>
+      <input name="subject" value="{val('subject')}" maxlength="250" placeholder="e.g. Urgent: Verify Your Security Credentials">
+    </div>
+    <div class="camp-label">
+      <span>Preheader / Preview Text</span>
+      <input name="preheader" value="{val('preheader')}" maxlength="250" placeholder="e.g. Action required within 24 hours">
+    </div>
+    <div class="camp-label">
+      <span>Category</span>
+      <select name="category">{catopts}</select>
+    </div>
+    <div class="camp-label">
+      <span>Difficulty</span>
+      <select name="difficulty">{diffopts}</select>
+    </div>
+    <div class="camp-label">
+      <span>Language</span>
+      <select name="language">{langopts}</select>
+    </div>
+    <div class="camp-label">
+      <span>Brand</span>
+      <input name="brand" value="{val('brand')}" maxlength="100" placeholder="e.g. Microsoft, Google, HR Dept">
+    </div>
+    <div class="camp-label">
+      <span>Industry</span>
+      <input name="industry" value="{val('industry')}" maxlength="100" placeholder="e.g. Banking, Corporate, Tech">
+    </div>
+    <div class="camp-label">
+      <span>Tags (comma-separated)</span>
+      <input name="tags" value="{val('tags')}" placeholder="finance, employee, urgent" maxlength="500">
+    </div>
+  </div>
 </div>
-<label>Tags<input name="tags" value="%s" placeholder="finance, employee, urgent" maxlength="500"></label>
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
-<label>From Name<input name="from_name" value="%s" maxlength="150"></label>
-<label>From Email<input name="from_email" value="%s" maxlength="254"></label>
-<label>Reply-To<input name="reply_to" value="%s" maxlength="254"></label>
+
+<div class="camp-card">
+  <div class="camp-card-header">
+    <div class="camp-icon">✉️</div>
+    <div class="camp-card-title">
+      <h3>Sender &amp; Header Identity</h3>
+      <p>Configure the simulated sender profile and return addresses.</p>
+    </div>
+  </div>
+  <div class="camp-fields">
+    <div class="camp-label">
+      <span>From Name</span>
+      <input name="from_name" value="{val('from_name')}" maxlength="150" placeholder="e.g. Trust PhishGuard Alert">
+    </div>
+    <div class="camp-label">
+      <span>From Email</span>
+      <input name="from_email" value="{val('from_email')}" maxlength="254" placeholder="e.g. no-reply@security-notice.net">
+    </div>
+    <div class="camp-label">
+      <span>Reply-To Email</span>
+      <input name="reply_to" value="{val('reply_to')}" maxlength="254" placeholder="e.g. security-audit@notice.local">
+    </div>
+    <div class="camp-label">
+      <span>Template Owner</span>
+      <input name="owner" value="{val('owner')}" maxlength="150" placeholder="e.g. SecOps Lead">
+    </div>
+    <div class="camp-label">
+      <span>Status</span>
+      <select name="status">
+        <option {"selected" if (r["status"] or "Active")=="Active" else ""}>Active</option>
+        <option {"selected" if (r["status"] or "Active")=="Archived" else ""}>Archived</option>
+      </select>
+    </div>
+  </div>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-<label>Owner<input name="owner" value="%s" maxlength="150"></label>
-<label>Status<select name="status"><option %s>Active</option><option %s>Archived</option></select></label>
+
+<div class="camp-card">
+  <div class="camp-card-header">
+    <div class="camp-icon">⚡</div>
+    <div class="camp-card-title">
+      <h3>Dynamic Variables Insertion</h3>
+      <p>Click any variable below to insert it at cursor position in the HTML editor.</p>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button type="button" class="btn" onclick="insertTplVar('{{name}}')">+ Employee Name</button>
+    <button type="button" class="btn" onclick="insertTplVar('{{email}}')">+ Email</button>
+    <button type="button" class="btn" onclick="insertTplVar('{{employee_id}}')">+ Employee ID</button>
+    <button type="button" class="btn" onclick="insertTplVar('{{department}}')">+ Department</button>
+    <button type="button" class="btn" onclick="insertTplVar('{{tracking_link}}')">+ Phish Tracking Link</button>
+    <button type="button" class="btn" onclick="insertTplVar('{{report_link}}')">+ Report Phish Link</button>
+    <button type="button" class="btn" onclick="insertTplVar('{{qr_link}}')">+ QR Code Link</button>
+  </div>
 </div>
-<p style="font-size:12px;color:#71817b">Safe variables: {{name}}, {{email}}, {{employee_id}}, {{department}}, {{designation}}, {{location}}, {{manager}}, {{language}}, {{timezone}}, {{campaign_name}}, {{tracking_link}}, {{report_link}}, {{qr_link}}. Unknown variables remain unchanged.</p><label>HTML Body<textarea name="html_body" rows="22" style="width:100%%;font-family:Consolas,monospace;padding:12px;border:1px solid #ccd9d4;border-radius:8px" required>%s</textarea></label>
-<label>Plain Text Body<textarea name="text_body" rows="8" style="width:100%%;padding:12px;border:1px solid #ccd9d4;border-radius:8px">%s</textarea></label>
-<div style="display:flex;gap:8px"><button class="btn primary">Save Template</button><a class="btn" href="/admin/templates/test-send?id=%s">Test Send</a><a class="btn" target="_blank" href="/%s.html">Preview</a><a class="btn" href="/admin/templates">Cancel</a></div>
-</form></div><div class="card" style="margin-top:15px"><h3>Version History</h3><table class="table"><tr><th>Version</th><th>Created</th><th>Created By</th></tr>%s</table></div>"""%(val("template"),val("template"),val("name"),val("subject"),val("preheader"),catopts,diffopts,langopts,val("brand"),val("industry"),val("tags"),val("from_name"),val("from_email"),val("reply_to"),val("owner"),"selected" if (r["status"] or "Active")=="Active" else "","selected" if (r["status"] or "Active")=="Archived" else "",val("html_body"),val("text_body"),val("template"),val("template"),version_rows)
+
+<div class="camp-card">
+  <div class="camp-card-header">
+    <div class="camp-icon">💻</div>
+    <div class="camp-card-title">
+      <h3>HTML Email Body &amp; Plain Text</h3>
+      <p>Write the responsive email layout. Simulation safety policy blocks any password input tags.</p>
+    </div>
+  </div>
+  <div style="display:grid;gap:14px">
+    <label style="font-weight:700;font-size:12.5px;color:#10221a">HTML Source Code
+      <textarea id="tplHtml" name="html_body" rows="22" style="width:100%;font-family:Consolas,monospace;padding:12px;border:1.5px solid #cbdad2;border-radius:8px;background:#0d1c16;color:#e8f4ef;font-size:13px;line-height:1.5;margin-top:6px" required>{val('html_body')}</textarea>
+    </label>
+    <label style="font-weight:700;font-size:12.5px;color:#10221a">Plain Text Fallback
+      <textarea name="text_body" rows="6" style="width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px;margin-top:6px">{val('text_body')}</textarea>
+    </label>
+  </div>
+</div>
+
+<div class="camp-bottom-bar">
+  <a class="btn" href="/admin/templates">Cancel</a>
+  <button class="btn primary" type="submit">Save Template</button>
+</div>
+</form>
+
+<div class="camp-card" style="margin-top:20px">
+  <h3 style="margin-bottom:12px">Version Revision History</h3>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>Version</th><th>Created At</th><th>Created By</th></tr></thead>
+      <tbody>{version_rows}</tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function insertTplVar(v) {{
+  const ed = document.getElementById('tplHtml');
+  if (!ed) return;
+  const pos = ed.selectionStart || ed.value.length;
+  ed.value = ed.value.slice(0, pos) + v + ed.value.slice(pos);
+  ed.focus();
+}}
+</script>"""
         return self.admin_shell("Template Builder",body,"Templates")
+
 
     def campaign_form(self,cid=None):
         c=db()
