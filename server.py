@@ -1013,6 +1013,8 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/reports":"report.view",
         "/admin/reports.pdf":"report.export",
         "/admin/risk":"risk.view",
+        "/admin/settings":"risk.manage",
+        "/admin.csv":"report.export",
         "/admin/exports":"report.export",
         "/admin/audit":"audit.view",
         "/admin/admins":"admin.view",
@@ -1902,6 +1904,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":"admin_session=; Max-Age=0; HttpOnly; SameSite=Strict"})
         if path=="/admin.csv":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
             c=db(); rows=c.execute("SELECT ts,event,template,ip,name,employee_id,email,mobile,card_type,user_agent FROM events ORDER BY id DESC").fetchall(); c.close()
             out=io.StringIO(); w=csv.writer(out)
             w.writerow(["timestamp","event","template","local_ip","name","employee_id","email","mobile","card_type","user_agent"])
