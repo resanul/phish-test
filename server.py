@@ -1035,6 +1035,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/admins/review":"admin.view",
         "/admin/landing-pages/save":{"create":"landing_page.create","edit":"landing_page.edit"},
         "/admin/templates/save":{"create":"template.create","edit":"template.edit"},
+        "/admin/templates/test-send":"template.edit",
         "/admin/reports/scheduled/save":"report.schedule",
         "/admin/admins/create":"admin.create",
         "/admin/roles/permissions":"role.edit",
