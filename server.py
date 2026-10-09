@@ -2518,6 +2518,10 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if provider not in SMTP_PROVIDERS or security not in ("STARTTLS","SSL/TLS","NONE") or auth_method not in ("password","oauth2") or not host or not from_email or port<1 or port>65535:
                 return self.sendbody(400,"Invalid SMTP profile","text/plain")
             c=db()
+            existing=c.execute("SELECT id FROM smtp_profiles WHERE name=? AND id<>?",(name,int(sid) if sid else -1)).fetchone()
+            if existing:
+                c.close()
+                return self.sendbody(409,"A provider with this profile name already exists. Open SMTP Providers and edit the existing profile, or choose a different Profile Name.","text/plain")
             profile_id=None
             if sid:
                 profile_id=int(sid)
