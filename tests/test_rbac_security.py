@@ -329,6 +329,40 @@ class RBACSecurityRegressionTests(unittest.TestCase):
             "Scoped Reviewer","campaign.view","/admin/campaigns","GET",query="id=999"
         ))
 
+    def test_scoped_permission_fails_closed_on_ambiguous_context(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Ambiguous Scope Reviewer","ambiguous-scope-reviewer","Ambiguous context regression role",0,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Ambiguous Scope Reviewer'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+                  ("campaign","view","View campaigns","Ambiguous context regression permission","normal"))
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        c.execute("INSERT INTO rbac_resource_scopes(role_id,permission_id,scope_kind,scope_value,active,created_at,updated_at) VALUES(?,?,?,?,1,?,?)",
+                  (role_id,permission_id,"campaign","123",ts,ts))
+        c.commit()
+        c.close()
+        self.handler.client_address=("127.0.0.1",12345)
+
+        # Repeated query values must not silently select the first identifier.
+        self.assertFalse(self.handler.scoped_permission_allowed(
+            "Ambiguous Scope Reviewer","campaign.view","/admin/campaigns","GET",
+            query="id=123&id=999"
+        ))
+        # A conflicting form value and query value must also fail closed.
+        self.assertFalse(self.handler.scoped_permission_allowed(
+            "Ambiguous Scope Reviewer","campaign.view","/admin/campaigns","POST",
+            form={"id":["123"]},query="id=999"
+        ))
+        # Equivalent aliases with the same value remain unambiguous.
+        context=self.handler.scope_context(
+            "/admin/campaigns","POST",
+            form={"id":["123"],"campaign_id":["123"]},query="id=123"
+        )
+        self.assertEqual(context["campaign"],"123")
+
     def test_scoped_permission_combines_scope_kinds_and_wildcard(self):
         c=self.server.db()
         ts=self.server.now()
