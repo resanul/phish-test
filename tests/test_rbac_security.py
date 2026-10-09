@@ -18,29 +18,41 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def setUpClass(cls):
         cls.server=load_server()
         cls.tmp=tempfile.TemporaryDirectory()
-        cls.server.DB=os.path.join(cls.tmp.name,"rbac-test.db")
-        cls.server.db().close()
 
     @classmethod
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
     def setUp(self):
+        # Each test gets a fresh seeded database so permission rows and role
+        # assignments from one test cannot leak into another.
+        self.server.DB=os.path.join(self.tmp.name,self._testMethodName+".db")
+        self.server.db().close()
         self.handler=self.server.Handler.__new__(self.server.Handler)
         self.handler.current_admin=lambda: {"username":"reviewer@example.com","role":"Custom Reviewer"}
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Custom Reviewer","custom-reviewer","Regression role fixture",0,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Custom Reviewer'").fetchone()["id"]
+        permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='admin' AND action='view'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,permission_id,ts))
+        c.commit()
+        c.close()
 
     def test_custom_role_resolver_uses_active_permissions_only(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Custom Reviewer","custom-reviewer","Regression role",0,1,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Custom Reviewer'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("admin","view","View admins","View administrator access","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='admin' AND action='view'").fetchone()["id"]
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
                   (role_id,permission_id,ts))
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,0)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,0)",
                   ("admin","disable","Disable admins","Disabled regression permission","privileged"))
         c.commit()
         c.close()
@@ -72,7 +84,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def test_access_preview_risk_counts_match_permission_risk_levels(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Risk Preview Reviewer","risk-preview-reviewer","Risk count regression role",0,1,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Risk Preview Reviewer'").fetchone()["id"]
         permissions=[
@@ -81,7 +93,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
             ("report","export","Export reports","privileged")
         ]
         for resource,action,label,risk in permissions:
-            c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+            c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                       (resource,action,label,"Risk count regression permission",risk))
             permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource=? AND action=?",(resource,action)).fetchone()["id"]
             c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
@@ -174,10 +186,10 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def test_access_preview_inactive_custom_role_returns_empty_snapshot(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Inactive Preview Reviewer","inactive-preview-reviewer","Inactive preview regression role",0,0,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Inactive Preview Reviewer'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","view","View campaigns","Inactive preview regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
@@ -192,10 +204,10 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def test_access_preview_includes_active_resource_scopes(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Preview Scope Reviewer","preview-scope-reviewer","Preview scope regression role",0,1,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Preview Scope Reviewer'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","view","View campaigns","Preview scope permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
@@ -216,10 +228,10 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def test_scoped_permission_allows_matching_context_and_denies_mismatch(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Scoped Reviewer","scoped-reviewer","Scope regression role",0,1,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Scoped Reviewer'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","view","View campaigns","Scope regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()["id"]
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
@@ -239,10 +251,10 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def test_scoped_permission_combines_scope_kinds_and_wildcard(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Multi Scope Reviewer","multi-scope-reviewer","Multi-scope regression role",0,1,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Multi Scope Reviewer'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("campaign","edit","Edit campaigns","Multi-scope regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='campaign' AND action='edit'").fetchone()["id"]
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
@@ -280,10 +292,10 @@ class RBACSecurityRegressionTests(unittest.TestCase):
     def test_scope_denial_is_audited_without_secret_fields(self):
         c=self.server.db()
         ts=self.server.now()
-        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+        c.execute("INSERT OR IGNORE INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
                   ("Audit Scope Reviewer","audit-scope-reviewer","Audit regression role",0,1,ts,ts))
         role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Audit Scope Reviewer'").fetchone()["id"]
-        c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+        c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
                   ("recipient","view","View recipients","Audit scope regression permission","normal"))
         permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='recipient' AND action='view'").fetchone()["id"]
         c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
