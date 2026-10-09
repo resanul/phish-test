@@ -58,6 +58,8 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertIn('"ADMIN_ACCESS_REVIEW"',source)
         self.assertIn('"RBAC_SCOPE_ASSIGNMENT_UPDATE"',source)
         self.assertIn('"RBAC_SCOPE_ACCESS_DENIED"',source)
+        self.assertIn("Resource scopes",source)
+        self.assertIn("No active resource scopes assigned.",source)
 
     def test_access_preview_includes_active_resource_scopes(self):
         c=self.server.db()

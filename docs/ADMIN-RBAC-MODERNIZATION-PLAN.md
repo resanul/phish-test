@@ -645,6 +645,8 @@ Current status:
 
 **Completed follow-up:** Access Preview regression coverage now explicitly verifies that inactive scope assignments are excluded from the effective scope list.
 
+**Completed follow-up:** Access Preview UI now displays the resolver-backed active resource scopes in a read-only section, with an explicit empty state when no active scopes apply.
+
 ---
 
 ## 15. External UX Research References
