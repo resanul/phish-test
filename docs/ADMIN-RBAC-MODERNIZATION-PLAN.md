@@ -661,6 +661,8 @@ Current status:
 
 **Completed follow-up:** RBAC regression coverage now locks the Access Preview snapshot schema to non-secret access metadata only, preventing credential/session fields from being added to the preview contract accidentally.
 
+**Completed follow-up:** RBAC regression coverage now verifies that Access Preview risk counts and elevated/privileged entries remain consistent with the effective permission risk levels.
+
 ---
 
 ## 15. External UX Research References

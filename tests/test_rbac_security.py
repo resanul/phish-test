@@ -69,6 +69,32 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertIn("Resource scopes",source)
         self.assertIn("No active resource scopes assigned.",source)
 
+    def test_access_preview_risk_counts_match_permission_risk_levels(self):
+        c=self.server.db()
+        ts=self.server.now()
+        c.execute("INSERT INTO rbac_roles(name,slug,description,built_in,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+                  ("Risk Preview Reviewer","risk-preview-reviewer","Risk count regression role",0,1,ts,ts))
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Risk Preview Reviewer'").fetchone()["id"]
+        permissions=[
+            ("campaign","view","View campaigns","normal"),
+            ("campaign","launch","Launch campaigns","elevated"),
+            ("report","export","Export reports","privileged")
+        ]
+        for resource,action,label,risk in permissions:
+            c.execute("INSERT INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,1)",
+                      (resource,action,label,"Risk count regression permission",risk))
+            permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource=? AND action=?",(resource,action)).fetchone()["id"]
+            c.execute("INSERT INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",(role_id,permission_id,ts))
+        c.commit()
+        c.close()
+        preview=self.handler.resolve_role_access_preview("Risk Preview Reviewer")
+        self.assertEqual(preview["risk_counts"],{"normal":1,"elevated":1,"privileged":1})
+        self.assertEqual(
+            {item["risk_level"] for item in preview["high_risk_permissions"]},
+            {"elevated","privileged"}
+        )
+        self.assertEqual(len(preview["high_risk_permissions"]),2)
+
     def test_access_preview_snapshot_exposes_only_non_secret_access_fields(self):
         preview=self.handler.resolve_role_access_preview("Custom Reviewer")
         self.assertEqual(
