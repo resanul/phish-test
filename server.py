@@ -1907,10 +1907,13 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
     def campaign_form(self,cid=None):
         c=db()
         r=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone() if cid else None
-        smtps=c.execute("SELECT id,name,provider,from_email FROM smtp_profiles WHERE enabled=1 ORDER BY name").fetchall()
-        lands=c.execute("SELECT id,name,template FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
+        smtps=c.execute("SELECT id,name,provider,from_email,host,port,security FROM smtp_profiles WHERE enabled=1 ORDER BY name").fetchall()
+        lands=c.execute("SELECT id,name,template,version FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
         groups=c.execute("SELECT g.name,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.name ORDER BY g.name").fetchall()
+        total_recipients=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+        templates=c.execute("SELECT template,name,category,difficulty,subject FROM template_library ORDER BY CAST(template AS INTEGER)").fetchall()
         c.close()
+
         name=esc(r["name"]) if r else ""
         template=esc(r["template"]) if r else "1"
         status=esc(r["status"]) if r else "Draft"
@@ -1920,10 +1923,6 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         saved_group=str(r["group_name"]) if r and r["group_name"] else ""
         launch=esc(r["launch_at"]) if r else ""
         send_by=esc(r["send_by"]) if r else ""
-        opts="".join('<option value="%s" %s>Template %s</option>'%(i,"selected" if str(i)==template else "",i) for i in range(1,11))
-        smtp_opts='<option value="">-- Select SMTP provider --</option>'+"".join('<option value="%s" %s>%s · %s</option>'%(x["id"],"selected" if str(x["id"])==smtp_id else "",esc(x["name"]),esc(x["from_email"])) for x in smtps)
-        land_opts='<option value="">-- Select landing page --</option>'+"".join('<option value="%s" %s>%s · Template %s</option>'%(x["id"],"selected" if str(x["id"])==landing_id else "",esc(x["name"]),esc(x["template"])) for x in lands)
-        group_opts='<option value="">All imported recipients</option>'+"".join('<option value="%s" %s>%s · %s members</option>'%(esc(x["name"]),"selected" if x["name"]==saved_group else "",esc(x["name"]),x["members"]) for x in groups)
         timezone=esc(r["timezone"]) if r and r["timezone"] else "Asia/Dhaka"
         business_days=esc(r["business_days"]) if r and r["business_days"] else "Sun,Mon,Tue,Wed,Thu"
         window_start=esc(r["window_start"]) if r and r["window_start"] else "09:00"
@@ -1932,11 +1931,470 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         rate=str(r["rate_per_minute"] or 60) if r else "60"
         retry_max=str(r["retry_max"] if r and r["retry_max"] is not None else 2)
         retry_backoff=str(r["retry_backoff_seconds"] if r and r["retry_backoff_seconds"] is not None else 5)
-        tz_opts="".join('<option value="%s" %s>%s</option>'%(z,"selected" if z==timezone else "",z) for z in ("Asia/Dhaka","UTC","Asia/Kolkata","Asia/Singapore","Asia/Dubai","Europe/London","America/New_York","America/Los_Angeles"))
-        stats="".join('<option %s>%s</option>'%("selected" if x==status else "",x) for x in ("Draft","Scheduled","Active","Paused","Completed","Cancelled","Expired"))
-        launch_link='<p><a class="btn primary" href="/admin/campaigns/launch?id=%s">Launch / Queue Campaign</a></p>'%cid if cid else ""
-        control_link=('<div style="display:flex;gap:8px;margin:12px 0"><form method="post" action="/admin/campaigns/control"><input type="hidden" name="id" value="%s"><button class="btn" name="action" value="pause">Pause</button><button class="btn" name="action" value="resume">Resume</button><button class="btn" name="action" value="cancel">Cancel</button></form></div>'%cid) if cid else ""
-        body='<h1>%s Campaign</h1>%s%s<div class="card"><form class="form" method="post" action="/admin/campaigns/save"><input type="hidden" name="id" value="%s"><label>Name<input name="name" value="%s" required maxlength="150"></label><label>Template<select name="template">%s</select></label><label>SMTP Provider<select name="smtp_profile_id" required>%s</select></label><label>Landing Page<select name="landing_page_id" required>%s</select></label><label>Recipient Group<select name="group_name">%s</select></label><label>Subject<input name="subject" value="%s" maxlength="250" required></label><label>Launch At<input type="datetime-local" name="launch_at" value="%s"></label><label>Send By<input type="datetime-local" name="send_by" value="%s"></label><label>Timezone<select name="timezone">%s</select></label><label>Business Days<input name="business_days" value="%s"></label><label>Sending Window<input name="window_start" type="time" value="%s"> — <input name="window_end" type="time" value="%s"></label><label>Batch Size<input name="batch_size" type="number" min="1" max="1000" value="%s"></label><label>Rate Limit<input name="rate_per_minute" type="number" min="1" max="1000" value="%s"></label><label>Retry Attempts<input name="retry_max" type="number" min="0" max="5" value="%s"></label><label>Retry Backoff Seconds<input name="retry_backoff_seconds" type="number" min="1" max="300" value="%s"></label><label>Status<select name="status">%s</select></label><button class="btn primary">Save Campaign</button></form></div>'%("Edit" if r else "New",launch_link,control_link,cid or "",name,opts,smtp_opts,land_opts,group_opts,subject,launch,send_by,tz_opts,business_days,window_start,window_end,batch_size,rate,retry_max,retry_backoff,stats)
+
+        if templates:
+            opts="".join('<option value="%s" data-name="%s" data-diff="%s" %s>Template %s · %s (%s)</option>'%(esc(t["template"]),esc(t["name"]),esc(t["difficulty"]),"selected" if str(t["template"])==template else "",esc(t["template"]),esc(t["name"]),esc(t["difficulty"])) for t in templates)
+        else:
+            opts="".join('<option value="%s" data-name="Template %s" data-diff="Medium" %s>Template %s</option>'%(i,i,"selected" if str(i)==template else "",i) for i in range(1,11))
+
+        smtp_opts='<option value="">-- Select SMTP provider --</option>'+"".join('<option value="%s" %s>%s (%s · %s)</option>'%(x["id"],"selected" if str(x["id"])==smtp_id else "",esc(x["name"]),esc(x["provider"]),esc(x["from_email"])) for x in smtps)
+        land_opts='<option value="">-- Select landing page --</option>'+"".join('<option value="%s" data-template="%s" %s>%s (Template %s · v%s)</option>'%(x["id"],esc(x["template"]),"selected" if str(x["id"])==landing_id else "",esc(x["name"]),esc(x["template"]),x["version"] or 1) for x in lands)
+        group_opts='<option value="" data-count="%s" %s>All Active Recipients (%s members)</option>'%(total_recipients,"selected" if not saved_group else "",total_recipients)+"".join('<option value="%s" data-count="%s" %s>%s (%s members)</option>'%(esc(x["name"]),x["members"],"selected" if x["name"]==saved_group else "",esc(x["name"]),x["members"]) for x in groups)
+        tz_opts="".join('<option value="%s" %s>%s</option>'%(z,"selected" if z==timezone else "",z) for z in ("Asia/Dhaka","UTC","Asia/Kolkata","Asia/Singapore","Asia/Dubai","Europe/London","America/New_York","America/Los_Angeles","Europe/Berlin","Asia/Tokyo"))
+        stats="".join('<option value="%s" %s>%s</option>'%(x,"selected" if x==status else "",x) for x in ("Draft","Scheduled","Active","Paused","Completed","Cancelled","Expired"))
+
+        cur_days=set(d.strip() for d in business_days.split(",") if d.strip())
+        day_chips="".join('<button type="button" class="day-chip%s" data-day="%s" onclick="toggleDay(\'%s\')">%s</button>'%(" active" if d in cur_days else "",d,d,d) for d in ("Sun","Mon","Tue","Wed","Thu","Fri","Sat"))
+
+        status_class={"Draft":"status-draft","Active":"status-active","Scheduled":"status-scheduled","Paused":"status-paused","Completed":"status-completed","Cancelled":"status-cancelled","Expired":"status-expired"}.get(status,"status-draft")
+
+        top_actions=""
+        if cid:
+            top_actions+='<a class="btn" href="/admin/campaigns/test-send?id=%s">✉️ Test Send</a> '%cid
+            top_actions+='<form method="post" action="/admin/campaigns/control" style="display:inline-flex;gap:6px"><input type="hidden" name="id" value="%s"><button class="btn" name="action" value="pause">⏸ Pause</button><button class="btn" name="action" value="resume">▶ Resume</button></form> '%cid
+            top_actions+='<a class="btn primary" href="/admin/campaigns/launch?id=%s">🚀 Launch Campaign</a> '%cid
+        top_actions+='<a class="btn" href="/admin/campaigns">Cancel</a>'
+
+        body=f"""<div class="camp-editor">
+<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin/campaigns">Campaigns</a> <span>/</span> <span>{"Edit Campaign #"+str(cid) if cid else "New Campaign"}</span></div>
+    <div class="camp-title-row">
+      <h1>{"Edit" if r else "New"} Simulation Campaign</h1>
+      <span class="camp-status-badge {status_class}" id="statusBadge">{status}</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    {top_actions}
+    <button class="btn primary" type="submit" form="campForm">Save Campaign</button>
+  </div>
+</div>
+
+<form id="campForm" method="post" action="/admin/campaigns/save">
+<input type="hidden" name="id" value="{cid or ''}">
+<input type="hidden" name="business_days" id="business_days_input" value="{business_days}">
+
+<div class="camp-grid">
+  <div class="camp-main">
+
+    <!-- Card 1: Identity & Target Audience -->
+    <div class="camp-card">
+      <div class="camp-card-header">
+        <div class="camp-icon">👥</div>
+        <div class="camp-card-title">
+          <h3>Campaign Identity &amp; Target Audience</h3>
+          <p>Define the core simulation metadata, target group, and lifecycle status.</p>
+        </div>
+      </div>
+      <div class="camp-fields">
+        <div class="camp-label col-full">
+          <span>Campaign Name <b style="color:#a12d2d">*</b></span>
+          <input name="name" value="{name}" placeholder="e.g. Q4 2026 Enterprise Phishing Simulation Drill" required maxlength="150" autocomplete="off">
+          <div class="field-hint">A clear, descriptive title visible in administrative reporting and audit logs.</div>
+        </div>
+        <div class="camp-label">
+          <span>Target Recipient Group</span>
+          <select name="group_name" id="groupSelect" onchange="syncAudience()">
+            {group_opts}
+          </select>
+          <div class="field-hint">Select a departmental employee group or target all active recipients.</div>
+        </div>
+        <div class="camp-label">
+          <span>Simulation Status</span>
+          <select name="status" id="statusSelect" onchange="syncStatusBadge()">
+            {stats}
+          </select>
+          <div class="field-hint">Draft campaigns are safe to edit without sending emails.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 2: Attack Vector & Simulation Payload -->
+    <div class="camp-card">
+      <div class="camp-card-header">
+        <div class="camp-icon">🎯</div>
+        <div class="camp-card-title">
+          <h3>Simulation Scenario &amp; Attack Vector</h3>
+          <p>Select the simulated email template, customize the subject line, and attach the educational landing page.</p>
+        </div>
+      </div>
+      <div class="camp-fields">
+        <div class="camp-label col-full">
+          <span>Email Template (Phishing Scenario) <b style="color:#a12d2d">*</b></span>
+          <select name="template" id="templateSelect" onchange="syncTemplatePreview()">
+            {opts}
+          </select>
+          <div class="preview-link-wrap">
+            <a id="templatePreviewBtn" class="preview-link" target="_blank" href="/{template}.html">
+              <span>👁️</span> Preview Template in New Tab
+            </a>
+          </div>
+        </div>
+        <div class="camp-label col-full">
+          <span>Email Subject Line <b style="color:#a12d2d">*</b></span>
+          <input name="subject" id="subjectInput" value="{subject}" maxlength="250" required placeholder="e.g. Urgent: Account Verification Required">
+          <div class="token-row">
+            <small>Insert personalization tags:</small>
+            <button type="button" class="token-chip" onclick="insertToken('{{{{name}}}}')">{{name}}</button>
+            <button type="button" class="token-chip" onclick="insertToken('{{{{email}}}}')">{{email}}</button>
+            <button type="button" class="token-chip" onclick="insertToken('{{{{employee_id}}}}')">{{employee_id}}</button>
+            <button type="button" class="token-chip" onclick="insertToken('{{{{department}}}}')">{{department}}</button>
+          </div>
+        </div>
+        <div class="camp-label col-full">
+          <span>Landing Page (Simulation / Training Page) <b style="color:#a12d2d">*</b></span>
+          <select name="landing_page_id" id="landingSelect" required onchange="syncLandingPreview()">
+            {land_opts}
+          </select>
+          <div class="preview-link-wrap">
+            <a id="landingPreviewBtn" class="preview-link" target="_blank" href="/admin/landing-pages/preview?id={landing_id or '1'}">
+              <span>🔗</span> Preview Landing Page in New Tab
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Mail Delivery Infrastructure -->
+    <div class="camp-card">
+      <div class="camp-card-header">
+        <div class="camp-icon">📨</div>
+        <div class="camp-card-title">
+          <h3>Mail Delivery Infrastructure (SMTP Provider)</h3>
+          <p>The authorized corporate SMTP relay or external provider used to deliver simulation emails.</p>
+        </div>
+      </div>
+      <div class="camp-fields">
+        <div class="camp-label col-full">
+          <span>SMTP Provider Profile <b style="color:#a12d2d">*</b></span>
+          <select name="smtp_profile_id" id="smtpSelect" required onchange="syncSmtpInfo()">
+            {smtp_opts}
+          </select>
+          <div class="preview-link-wrap" style="display:flex;gap:12px;align-items:center;margin-top:8px;">
+            <a class="preview-link" href="/admin/smtp" target="_blank">⚙️ Manage SMTP Providers ↗</a>
+            <span style="font-size:11.5px;color:#556c62">Credentials are stored encrypted at rest.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: Schedule & Smart Sending Window -->
+    <div class="camp-card">
+      <div class="camp-card-header">
+        <div class="camp-icon">⏰</div>
+        <div class="camp-card-title">
+          <h3>Schedule &amp; Smart Delivery Window</h3>
+          <p>Align simulation email delivery with actual business hours to ensure maximum realism and avoid after-hours disruption.</p>
+        </div>
+      </div>
+      <div class="camp-fields">
+        <div class="camp-label">
+          <span>Launch Date &amp; Time</span>
+          <input type="datetime-local" name="launch_at" id="launchAt" value="{launch}">
+          <div class="field-hint">Leave blank to begin sending immediately once the campaign is launched.</div>
+        </div>
+        <div class="camp-label">
+          <span>Send-By Deadline</span>
+          <input type="datetime-local" name="send_by" id="sendBy" value="{send_by}">
+          <div class="field-hint">Pending emails will not be dispatched after this date and time.</div>
+        </div>
+        <div class="camp-label col-full">
+          <span>Delivery Timezone</span>
+          <select name="timezone" id="tzSelect" onchange="syncSummary()">
+            {tz_opts}
+          </select>
+          <div class="field-hint">Business days and sending hours are evaluated according to this timezone.</div>
+        </div>
+        <div class="camp-label col-full">
+          <span>Allowed Delivery Days</span>
+          <div class="day-chips" id="dayChips">
+            {day_chips}
+          </div>
+          <div class="preset-btns">
+            <small style="color:#556c62;align-self:center;font-size:11px">Presets:</small>
+            <button type="button" class="preset-btn" onclick="setPresetDays(['Sun','Mon','Tue','Wed','Thu'])">Workdays (Sun–Thu)</button>
+            <button type="button" class="preset-btn" onclick="setPresetDays(['Mon','Tue','Wed','Thu','Fri'])">Workdays (Mon–Fri)</button>
+            <button type="button" class="preset-btn" onclick="setPresetDays(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'])">All 7 Days</button>
+          </div>
+        </div>
+        <div class="camp-label col-full">
+          <span>Sending Window (Working Hours)</span>
+          <div class="time-range-wrap">
+            <div style="flex:1">
+              <input type="time" name="window_start" id="windowStart" value="{window_start}" required>
+              <div class="field-hint">Window Start</div>
+            </div>
+            <span class="time-range-sep">—</span>
+            <div style="flex:1">
+              <input type="time" name="window_end" id="windowEnd" value="{window_end}" required>
+              <div class="field-hint">Window End</div>
+            </div>
+          </div>
+          <div class="field-hint" style="margin-top:6px">Emails will pause automatically outside this time window. Window End must be after Window Start.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 5: Throttling & Anti-Spam Safeguards -->
+    <div class="camp-card">
+      <div class="camp-card-header">
+        <div class="camp-icon">🛡️</div>
+        <div class="camp-card-title">
+          <h3>Throttling &amp; Anti-Spam Safeguards</h3>
+          <p>Rate limiting protects your mail server from hitting spam traps or outbound relay throttling.</p>
+        </div>
+      </div>
+      <div class="camp-fields">
+        <div class="camp-label">
+          <span>Batch Size (Emails per Cycle)</span>
+          <input type="number" min="1" max="1000" name="batch_size" id="batchSize" value="{batch_size}" required>
+          <div class="field-hint">Number of emails picked up and processed in each queue worker run.</div>
+        </div>
+        <div class="camp-label">
+          <span>Rate Limit (Emails / Minute)</span>
+          <input type="number" min="1" max="1000" name="rate_per_minute" id="rateLimit" value="{rate}" required oninput="syncSummary()">
+          <div class="field-hint">Paces outbound traffic to avoid triggering tenant spam rate limits.</div>
+        </div>
+        <div class="camp-label">
+          <span>Max Retry Attempts</span>
+          <input type="number" min="0" max="5" name="retry_max" value="{retry_max}" required>
+          <div class="field-hint">Retries for transient SMTP connection errors (4xx codes).</div>
+        </div>
+        <div class="camp-label">
+          <span>Retry Backoff (Seconds)</span>
+          <input type="number" min="1" max="300" name="retry_backoff_seconds" value="{retry_backoff}" required>
+          <div class="field-hint">Delay before retrying a temporarily deferred delivery.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="camp-bottom-bar">
+      <a class="btn" href="/admin/campaigns">Cancel</a>
+      <button class="btn primary" type="submit">Save Campaign</button>
+    </div>
+
+  </div>
+
+  <!-- Sidebar -->
+  <div class="camp-sidebar">
+    <div class="camp-sidebar-sticky">
+
+      <!-- Summary Widget -->
+      <div class="camp-card" style="margin-bottom:0">
+        <div class="camp-card-header" style="margin-bottom:14px;padding-bottom:12px">
+          <div class="camp-icon" style="background:#e8f4ef;color:#087b59">📊</div>
+          <div class="camp-card-title">
+            <h3>Simulation Summary</h3>
+            <p>Live calculated metrics for this campaign.</p>
+          </div>
+        </div>
+        <div class="summary-stat">
+          <span>Target Audience</span>
+          <b id="sumAudience">0 recipients</b>
+        </div>
+        <div class="summary-stat">
+          <span>Delivery Rate</span>
+          <b id="sumPace">{rate} emails/min</b>
+        </div>
+        <div class="summary-stat">
+          <span>Est. Delivery Duration</span>
+          <b id="sumEstTime">~1 min</b>
+        </div>
+        <div class="summary-stat">
+          <span>Selected Timezone</span>
+          <b id="sumTz" style="font-size:11.5px">{timezone}</b>
+        </div>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #edf3f0">
+          <div style="font-size:12px;font-weight:700;color:#12251e;margin-bottom:8px">Campaign Readiness</div>
+          <ul class="checklist">
+            <li><span class="checklist-icon">✓</span> <span>Profile &amp; Audience defined</span></li>
+            <li><span class="checklist-icon">✓</span> <span>Simulation template matched</span></li>
+            <li><span class="checklist-icon">✓</span> <span>Encrypted SMTP profile attached</span></li>
+            <li><span class="checklist-icon">✓</span> <span>Safe sending window active</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Enterprise Best Practices -->
+      <div class="camp-card" style="background:#f9fbf9;border-color:#d7e7df;margin-bottom:0">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#184a36;margin-bottom:8px">
+          <span>💡</span> Enterprise Best Practices
+        </div>
+        <p style="font-size:12px;color:#496155;line-height:1.55;margin:0 0 10px 0">
+          For Microsoft 365 and Google Workspace, maintain a rate limit under <b>60 emails/min</b> to avoid tenant-level outbound throttling.
+        </p>
+        <p style="font-size:12px;color:#496155;line-height:1.55;margin:0">
+          Ensure sending hours match employee working hours so click-through and reporting metrics represent realistic engagement.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</div>
+</form>
+</div>
+
+<style>
+.camp-editor {{ max-width: 1400px; margin: 0 auto; }}
+.camp-header {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid #e0e9e4; }}
+.camp-crumb {{ display: flex; align-items: center; gap: 8px; font-size: 13px; color: #556c62; margin-bottom: 6px; }}
+.camp-crumb a {{ color: #087b59; text-decoration: none; font-weight: 600; }}
+.camp-title-row {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
+.camp-title-row h1 {{ margin: 0; font-size: 26px; font-weight: 800; color: #12251e; letter-spacing: -0.02em; }}
+.camp-status-badge {{ padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }}
+.status-draft {{ background: #eef2f0; color: #4b6157; border: 1px solid #d4ded9; }}
+.status-active {{ background: #dff6ec; color: #087b59; border: 1px solid #a3e4cb; }}
+.status-scheduled {{ background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }}
+.status-paused {{ background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }}
+.status-completed {{ background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }}
+.status-cancelled {{ background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }}
+.status-expired {{ background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }}
+.camp-actions {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }}
+
+.camp-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }}
+@media (max-width: 1040px) {{ .camp-grid {{ grid-template-columns: 1fr; }} }}
+
+.camp-card {{ background: #ffffff; border: 1px solid #e2ebe6; border-radius: 14px; padding: 22px 24px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }}
+.camp-card-header {{ display: flex; align-items: flex-start; gap: 14px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid #edf3f0; }}
+.camp-icon {{ width: 38px; height: 38px; border-radius: 10px; background: #edf7f3; color: #087b59; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }}
+.camp-card-title h3 {{ margin: 0 0 3px 0; font-size: 16px; font-weight: 700; color: #12251e; }}
+.camp-card-title p {{ margin: 0; font-size: 12.5px; color: #556c62; }}
+
+.camp-fields {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; }}
+.col-full {{ grid-column: span 2; }}
+@media (max-width: 640px) {{ .camp-fields {{ grid-template-columns: 1fr; }} .col-full {{ grid-column: span 1; }} }}
+
+.camp-label {{ display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 650; color: #1a3328; }}
+.camp-label input, .camp-label select {{ width: 100%; min-height: 44px; border: 1.5px solid #cbdad2; border-radius: 9px; padding: 10px 13px; background: #ffffff; color: #12251e; font-size: 13.5px; transition: all 0.15s ease; box-sizing: border-box; }}
+.camp-label input:focus, .camp-label select:focus {{ outline: none; border-color: #087b59; box-shadow: 0 0 0 3px rgba(8, 123, 89, 0.15); }}
+.field-hint {{ font-size: 11.5px; color: #5c746a; font-weight: 400; margin-top: 2px; }}
+
+.token-row {{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; }}
+.token-chip {{ padding: 3px 8px; border-radius: 6px; background: #edf6f2; border: 1px solid #cfe0d8; color: #087b59; font-size: 11px; font-weight: 600; cursor: pointer; transition: background 0.15s; }}
+.token-chip:hover {{ background: #ddf0e8; }}
+
+.preview-link-wrap {{ margin-top: 6px; }}
+.preview-link {{ display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 650; color: #087b59; text-decoration: none; padding: 4px 8px; background: #f0f7f4; border-radius: 6px; transition: background 0.15s; }}
+.preview-link:hover {{ background: #e2f1eb; }}
+
+.day-chips {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }}
+.day-chip {{ flex: 1; min-width: 44px; padding: 10px 6px; text-align: center; border-radius: 8px; border: 1.5px solid #cfe0d8; background: #f8faf9; color: #2b4539; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all 0.15s ease; user-select: none; }}
+.day-chip:hover {{ border-color: #087b59; background: #edf7f3; }}
+.day-chip.active {{ background: #087b59; color: #ffffff; border-color: #087b59; box-shadow: 0 2px 6px rgba(8, 123, 89, 0.25); }}
+
+.preset-btns {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }}
+.preset-btn {{ font-size: 11px; padding: 4px 9px; border-radius: 6px; border: 1px dashed #b7cec4; background: #ffffff; color: #204c3b; cursor: pointer; font-weight: 600; transition: background 0.15s; }}
+.preset-btn:hover {{ background: #f0f7f4; border-color: #087b59; }}
+
+.time-range-wrap {{ display: flex; align-items: center; gap: 12px; }}
+.time-range-sep {{ font-size: 14px; font-weight: 700; color: #6a8277; margin-top: -12px; }}
+
+.camp-sidebar-sticky {{ position: sticky; top: 24px; display: flex; flex-direction: column; gap: 20px; }}
+.summary-stat {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #edf3f0; font-size: 13px; }}
+.summary-stat:last-child {{ border-bottom: none; }}
+.summary-stat span {{ color: #556c62; }}
+.summary-stat b {{ color: #12251e; font-weight: 700; }}
+
+.checklist {{ list-style: none; padding: 0; margin: 14px 0 0 0; font-size: 12.5px; }}
+.checklist li {{ display: flex; align-items: center; gap: 8px; margin-bottom: 9px; color: #3b5247; }}
+.checklist-icon {{ width: 18px; height: 18px; border-radius: 50%; background: #dff6ec; color: #087b59; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; }}
+
+.camp-bottom-bar {{ display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 20px 24px; background: #ffffff; border: 1px solid #e2ebe6; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-top: 24px; }}
+</style>
+
+<script>
+const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function toggleDay(d) {{
+  const chip = document.querySelector(`.day-chip[data-day="${{d}}"]`);
+  if (chip) chip.classList.toggle('active');
+  updateDaysInput();
+}}
+
+function setPresetDays(days) {{
+  document.querySelectorAll('.day-chip').forEach(c => {{
+    c.classList.toggle('active', days.includes(c.getAttribute('data-day')));
+  }});
+  updateDaysInput();
+}}
+
+function updateDaysInput() {{
+  const activeDays = [];
+  ALL_DAYS.forEach(d => {{
+    const c = document.querySelector(`.day-chip[data-day="${{d}}"]`);
+    if (c && c.classList.contains('active')) activeDays.push(d);
+  }});
+  document.getElementById('business_days_input').value = activeDays.join(',');
+}}
+
+function insertToken(token) {{
+  const input = document.getElementById('subjectInput');
+  const pos = input.selectionStart || input.value.length;
+  input.value = input.value.slice(0, pos) + token + input.value.slice(pos);
+  input.focus();
+}}
+
+function syncTemplatePreview() {{
+  const sel = document.getElementById('templateSelect');
+  const val = sel.value;
+  const btn = document.getElementById('templatePreviewBtn');
+  if (btn && val) btn.href = '/' + val + '.html';
+  syncSummary();
+}}
+
+function syncLandingPreview() {{
+  const sel = document.getElementById('landingSelect');
+  const val = sel.value;
+  const btn = document.getElementById('landingPreviewBtn');
+  if (btn) btn.href = '/admin/landing-pages/preview?id=' + (val || '1');
+}}
+
+function syncStatusBadge() {{
+  const sel = document.getElementById('statusSelect');
+  const badge = document.getElementById('statusBadge');
+  if (badge && sel) {{
+    badge.textContent = sel.value;
+    badge.className = 'camp-status-badge status-' + sel.value.toLowerCase();
+  }}
+}}
+
+function syncAudience() {{
+  const sel = document.getElementById('groupSelect');
+  const opt = sel.options[sel.selectedIndex];
+  const count = parseInt(opt ? opt.getAttribute('data-count') : 0) || 0;
+  const targetEl = document.getElementById('sumAudience');
+  if (targetEl) targetEl.textContent = count + ' recipients';
+  syncSummary();
+}}
+
+function syncSummary() {{
+  const groupSel = document.getElementById('groupSelect');
+  const opt = groupSel ? groupSel.options[groupSel.selectedIndex] : null;
+  const count = parseInt(opt ? opt.getAttribute('data-count') : 0) || 0;
+
+  const rateInput = document.getElementById('rateLimit');
+  const rate = Math.max(1, parseInt(rateInput ? rateInput.value : 60) || 60);
+
+  const durationMin = Math.max(1, Math.ceil(count / rate));
+  const durEl = document.getElementById('sumEstTime');
+  if (durEl) durEl.textContent = '~' + durationMin + ' min' + (durationMin > 1 ? 's' : '');
+
+  const paceEl = document.getElementById('sumPace');
+  if (paceEl) paceEl.textContent = rate + ' emails/min';
+
+  const tzSel = document.getElementById('tzSelect');
+  const tzEl = document.getElementById('sumTz');
+  if (tzEl && tzSel) tzEl.textContent = tzSel.value;
+}}
+
+document.addEventListener('DOMContentLoaded', function() {{
+  syncAudience();
+  syncTemplatePreview();
+  syncLandingPreview();
+}});
+syncAudience();
+</script>"""
         return self.admin_shell("Campaign",body,"Campaigns")
 
     def do_HEAD(self):

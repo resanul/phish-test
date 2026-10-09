@@ -37,5 +37,16 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn("0", html)
         self.assertIn("No template activity yet.", html)
 
+    def test_campaign_form_renders_modern_design_and_controls(self):
+        self.handler.admin_shell = lambda title, body, active: body
+        html = self.handler.campaign_form()
+        self.assertIn("Simulation Campaign", html)
+        self.assertIn("camp-editor", html)
+        self.assertIn("camp-card", html)
+        self.assertIn("day-chip", html)
+        self.assertIn("Simulation Summary", html)
+        self.assertIn("business_days_input", html)
+
 if __name__ == "__main__":
     unittest.main()
+
