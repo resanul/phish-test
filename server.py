@@ -397,7 +397,8 @@ def db():
     for i in range(1,11):
         c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
         fn=os.path.join(TEMPLATES,str(i)+".html")
-        existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()        if not existing:
+        existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()
+        if not existing:
             body=""
             try:
                 with open(fn,"r",encoding="utf-8") as tf: body=tf.read()
