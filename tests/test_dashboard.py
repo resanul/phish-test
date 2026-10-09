@@ -47,6 +47,24 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn("Simulation Summary", html)
         self.assertIn("business_days_input", html)
 
+    def test_landing_page_form_renders_builder_and_presets(self):
+        self.handler.admin_shell = lambda title, body, active: body
+        html = self.handler.landing_page_form(None)
+        self.assertIn("Create Simulation Landing Page", html)
+        self.assertIn("lp-editor", html)
+        self.assertIn("setDevice('mobile')", html)
+        self.assertIn("previewFrame", html)
+        self.assertIn("Microsoft 365 Sign-In", html)
+        self.assertIn("loadPreset('m365')", html)
+
+    def test_landing_page_directory_renders(self):
+        self.handler.admin_shell = lambda title, body, active: body
+        html = self.handler.feature_page("/admin/landing-pages")
+        self.assertIn("Simulation Landing Pages", html)
+        self.assertIn("/admin/landing-pages/new", html)
+        self.assertIn("+ Create Landing Page", html)
+
 if __name__ == "__main__":
     unittest.main()
+
 
