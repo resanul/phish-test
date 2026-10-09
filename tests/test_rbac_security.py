@@ -120,6 +120,8 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(self.server.route_permission("/admin/campaigns/save","POST",{"id":["42"]}),"campaign.edit")
         self.assertEqual(self.server.route_permission("/admin/templates/save","POST",{}),"template.create")
         self.assertEqual(self.server.route_permission("/admin/templates/save","POST",{"id":["42"]}),"template.edit")
+        self.assertEqual(self.server.route_permission("/admin/templates/test-send","POST",{}),"template.edit")
+        self.assertFalse(self.handler.permission_allowed("/admin/templates/test-send","POST",{}))
         self.assertIsNone(self.server.route_permission("/admin/campaigns/save","GET",{}))
         self.assertIsNone(self.server.route_permission("/admin/campaigns/launch","DELETE",{}))
 
