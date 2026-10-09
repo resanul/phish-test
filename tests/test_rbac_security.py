@@ -95,6 +95,14 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         )
         self.assertEqual(len(preview["high_risk_permissions"]),2)
 
+    def test_access_preview_summary_matches_effective_permissions(self):
+        preview=self.handler.resolve_role_access_preview("Custom Reviewer")
+        self.assertEqual(preview["permission_count"],len(preview["permissions"]))
+        self.assertEqual(
+            preview["modules"],
+            sorted({item["resource"] for item in preview["permissions"]})
+        )
+
     def test_access_preview_snapshot_exposes_only_non_secret_access_fields(self):
         preview=self.handler.resolve_role_access_preview("Custom Reviewer")
         self.assertEqual(

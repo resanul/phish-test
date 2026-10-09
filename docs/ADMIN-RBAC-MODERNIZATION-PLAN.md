@@ -663,6 +663,8 @@ Current status:
 
 **Completed follow-up:** RBAC regression coverage now verifies that Access Preview risk counts and elevated/privileged entries remain consistent with the effective permission risk levels.
 
+**Completed follow-up:** RBAC regression coverage now verifies that Access Preview summary metadata (`permission_count` and `modules`) remains consistent with the effective permission list.
+
 ---
 
 ## 15. External UX Research References
