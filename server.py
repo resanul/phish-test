@@ -1911,7 +1911,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(302,b"",extra={"Location":"/dashboard"})
         if path=="/dashboard":
-            if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
+            if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(200,self.dashboard())
         if path=="/admin/logout":
             c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session")
