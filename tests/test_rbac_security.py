@@ -41,6 +41,15 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         c.commit()
         c.close()
 
+    def test_admin_create_email_validation_accepts_normal_email_addresses(self):
+        source=SERVER.read_text(encoding="utf-8")
+        self.assertIn('re.fullmatch(r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+",username)',source)
+        email_pattern=r"[^@\\s]+@[^@\\s]+\\.[^@\\s]+"
+        for address in ("resanul2@protonmail.com","security@example.com"):
+            self.assertIsNotNone(self.server.re.fullmatch(email_pattern,address),address)
+        for address in ("not-an-email","user@localhost","user name@example.com"):
+            self.assertIsNone(self.server.re.fullmatch(email_pattern,address),address)
+
     def test_admin_management_page_renders_without_selected_access_preview(self):
         self.handler.current_admin=lambda: {"username":"admin@example.com","role":"Administrator"}
         page=self.handler.feature_page("/admin/admins","")
