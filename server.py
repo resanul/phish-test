@@ -1911,7 +1911,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(302,b"",extra={"Location":"/"})
         if path=="/":
-            if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
+            if not self.auth(): return self.sendbody(200,self.login_page())
             return self.sendbody(200,self.dashboard())
         if path=="/dashboard":
             if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
@@ -1919,7 +1919,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
         if path=="/admin/logout":
             c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session")
             if s: SESSIONS.pop(s.value,None)
-            return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":"admin_session=; Max-Age=0; HttpOnly; SameSite=Strict"})
+            return self.sendbody(302,b"",extra={"Location":"/admin","Set-Cookie":"admin_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"})
         if path=="/admin.csv":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
@@ -2059,7 +2059,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if valid:
                 LOGIN_ATTEMPTS.pop(self.client_address[0],None)
                 sid=secrets.token_urlsafe(32); SESSIONS[sid]={"username":username,"role":admin["role"] if admin else "Administrator","created_at":time.time(),"last_seen":time.time()}
-                ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"
+                ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"; ck["admin_session"]["Path"]="/"
                 if self.headers.get("X-Forwarded-Proto","").lower()=="https": ck["admin_session"]["Secure"]=True
                 return self.sendbody(302,b"",extra={"Location":"/","Set-Cookie":ck["admin_session"].OutputString()})
             self.login_failed()
