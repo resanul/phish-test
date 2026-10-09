@@ -54,9 +54,30 @@ class RBACSecurityRegressionTests(unittest.TestCase):
                   (role_id,permission_id,ts))
         c.execute("INSERT OR IGNORE INTO rbac_permissions(resource,action,label,description,risk_level,active) VALUES(?,?,?,?,?,0)",
                   ("admin","disable","Disable admins","Disabled regression permission","privileged"))
+        inactive_permission_id=c.execute("SELECT id FROM rbac_permissions WHERE resource='admin' AND action='disable'").fetchone()["id"]
+        c.execute("INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                  (role_id,inactive_permission_id,ts))
         c.commit()
         c.close()
         self.assertEqual(self.handler.resolve_role_permissions("Custom Reviewer"),{"admin.view"})
+
+    def test_permission_seed_is_idempotent_and_preserves_disabled_definitions(self):
+        c=self.server.db()
+        initial_count=c.execute("SELECT COUNT(*) FROM rbac_permissions").fetchone()[0]
+        c.execute("UPDATE rbac_permissions SET active=0 WHERE resource='campaign' AND action='view'")
+        c.commit()
+        c.close()
+
+        # db() runs schema setup and permission seeding; repeated initialization
+        # must not duplicate rows or reactivate an intentionally disabled definition.
+        self.server.db().close()
+        c=self.server.db()
+        final_count=c.execute("SELECT COUNT(*) FROM rbac_permissions").fetchone()[0]
+        row=c.execute("SELECT active FROM rbac_permissions WHERE resource='campaign' AND action='view'").fetchone()
+        c.close()
+        self.assertEqual(final_count,initial_count)
+        self.assertIsNotNone(row)
+        self.assertEqual(row["active"],0)
 
     def test_access_review_snapshot_uses_access_preview_resolver(self):
         source=SERVER.read_text(encoding="utf-8")
