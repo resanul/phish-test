@@ -61,6 +61,15 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertIn("Resource scopes",source)
         self.assertIn("No active resource scopes assigned.",source)
 
+    def test_access_preview_without_role_returns_safe_empty_snapshot(self):
+        self.handler.current_admin=lambda: None
+        preview=self.handler.resolve_role_access_preview()
+        self.assertIsNone(preview["role"])
+        self.assertEqual(preview["permission_count"],0)
+        self.assertEqual(preview["permissions"],[])
+        self.assertEqual(preview["high_risk_permissions"],[])
+        self.assertEqual(preview["scopes"],[])
+
     def test_access_preview_includes_active_resource_scopes(self):
         c=self.server.db()
         ts=self.server.now()

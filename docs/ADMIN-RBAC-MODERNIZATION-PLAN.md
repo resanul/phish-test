@@ -651,6 +651,8 @@ Current status:
 
 **Completed follow-up:** RBAC regression coverage now guards the Access Preview scope-rendering contract: scope fields remain escaped and the no-active-scope empty state remains present.
 
+**Completed follow-up:** Access Preview regression coverage now verifies that a missing current role returns a safe empty snapshot without permissions or resource scopes.
+
 ---
 
 ## 15. External UX Research References
