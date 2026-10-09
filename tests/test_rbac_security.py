@@ -105,7 +105,7 @@ class RBACSecurityRegressionTests(unittest.TestCase):
 
         for method,routes in mapping.items():
             for path,value in routes.items():
-                self.assertTrue(path.startswith("/admin/"),(method,path))
+                self.assertTrue(path.startswith("/admin/") or path=="/admin.csv",(method,path))
                 values=set(value.values()) if isinstance(value,dict) else {value}
                 self.assertTrue(values,(method,path))
                 for permission in values:
@@ -122,6 +122,29 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(self.server.route_permission("/admin/templates/save","POST",{"id":["42"]}),"template.edit")
         self.assertIsNone(self.server.route_permission("/admin/campaigns/save","GET",{}))
         self.assertIsNone(self.server.route_permission("/admin/campaigns/launch","DELETE",{}))
+
+    def test_legacy_csv_export_and_settings_require_explicit_permissions(self):
+        self.assertEqual(self.server.route_permission("/admin.csv","GET"),"report.export")
+        self.assertEqual(self.server.route_permission("/admin/settings","GET"),"risk.manage")
+        self.assertFalse(self.handler.permission_allowed("/admin.csv","GET"))
+        self.assertFalse(self.handler.permission_allowed("/admin/settings","GET"))
+
+        c=self.server.db()
+        ts=self.server.now()
+        role_id=c.execute("SELECT id FROM rbac_roles WHERE name='Custom Reviewer'").fetchone()["id"]
+        for resource,action in (("report","export"),("risk","manage")):
+            permission_id=c.execute(
+                "SELECT id FROM rbac_permissions WHERE resource=? AND action=? AND active=1",
+                (resource,action)
+            ).fetchone()["id"]
+            c.execute(
+                "INSERT OR IGNORE INTO rbac_role_permissions(role_id,permission_id,created_at) VALUES(?,?,?)",
+                (role_id,permission_id,ts)
+            )
+        c.commit()
+        c.close()
+        self.assertTrue(self.handler.permission_allowed("/admin.csv","GET"))
+        self.assertTrue(self.handler.permission_allowed("/admin/settings","GET"))
 
     def test_privileged_and_last_superadmin_audit_guards_remain_present(self):
         source=SERVER.read_text(encoding="utf-8")
