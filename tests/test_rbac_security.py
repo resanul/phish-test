@@ -94,6 +94,35 @@ class RBACSecurityRegressionTests(unittest.TestCase):
         self.assertEqual(self.server.route_permission("/admin/admins/review","POST",{}),"admin.view")
         self.assertTrue(self.handler.permission_allowed("/admin/admins/review","POST",{}))
 
+    def test_route_permission_map_catalog_and_method_coverage(self):
+        mapping=self.server.RBAC_ROUTE_PERMISSION_MAP
+        self.assertEqual(set(mapping),{"GET","POST"})
+        c=self.server.db()
+        catalog={f"{row['resource']}.{row['action']}" for row in c.execute(
+            "SELECT resource,action FROM rbac_permissions WHERE active=1"
+        ).fetchall()}
+        c.close()
+
+        for method,routes in mapping.items():
+            for path,value in routes.items():
+                self.assertTrue(path.startswith("/admin/"),(method,path))
+                values=set(value.values()) if isinstance(value,dict) else {value}
+                self.assertTrue(values,(method,path))
+                for permission in values:
+                    self.assertIn(permission,catalog,(method,path,permission))
+                # A mapped route must not accidentally grant the same mapping
+                # through another HTTP method unless separately declared.
+                other_method="POST" if method=="GET" else "GET"
+                if path not in mapping.get(other_method,{}):
+                    self.assertIsNone(self.server.route_permission(path,other_method,{}),(path,other_method))
+
+        self.assertEqual(self.server.route_permission("/admin/campaigns/save","POST",{}),"campaign.create")
+        self.assertEqual(self.server.route_permission("/admin/campaigns/save","POST",{"id":["42"]}),"campaign.edit")
+        self.assertEqual(self.server.route_permission("/admin/templates/save","POST",{}),"template.create")
+        self.assertEqual(self.server.route_permission("/admin/templates/save","POST",{"id":["42"]}),"template.edit")
+        self.assertIsNone(self.server.route_permission("/admin/campaigns/save","GET",{}))
+        self.assertIsNone(self.server.route_permission("/admin/campaigns/launch","DELETE",{}))
+
     def test_privileged_and_last_superadmin_audit_guards_remain_present(self):
         source=SERVER.read_text(encoding="utf-8")
         self.assertIn('name="confirm_privileged"',source)
