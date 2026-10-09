@@ -1450,7 +1450,7 @@ class Handler(BaseHTTPRequestHandler):
         c.close()
 
         rate=(subs/clicks*100) if clicks else 0
-        max_t=max([r["n"] for r in templates],default=1)
+        max_t=max([r["n"] for r in templates],default=1) or 1
         bars="".join(f'<div class="bar-row"><span>Template {esc(r["template"])}</span><div class="bar"><i style="width:{r["n"]/max_t*100:.0f}%"></i></div><b>{r["n"]}</b></div>' for r in templates[:8]) or '<div class="sub">No template activity yet.</div>'
 
         byday={r["d"]:r["n"] for r in trend}
@@ -1459,7 +1459,7 @@ class Handler(BaseHTTPRequestHandler):
         for i in range(6,-1,-1):
             d=(now-timedelta(days=i)).date().isoformat()
             days.append((d,byday.get(d,0)))
-        max_d=max([x[1] for x in days],default=1)
+        max_d=max([x[1] for x in days],default=1) or 1
         trend_html="".join(f'<div class="day"><b>{n}</b><div class="daybar" style="height:{max(3,n/max_d*135):.0f}px"></div><small>{d[5:]}</small></div>' for d,n in days)
 
         rows=[]
