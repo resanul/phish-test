@@ -1264,13 +1264,17 @@ class Handler(BaseHTTPRequestHandler):
         form=form or {}
         params=parse_qs(query or "")
         def first(*names):
+            # Scope context must be unambiguous across aliases, repeated query
+            # parameters, and form/query sources. Conflicts fail closed.
+            candidates=[]
             for name in names:
-                value=form.get(name,[""])[0].strip()
-                if not value:
-                    value=params.get(name,[""])[0].strip()
-                if value:
-                    return value
-            return ""
+                for source in (form,params):
+                    raw=source.get(name,[])
+                    if isinstance(raw,str):
+                        raw=[raw]
+                    candidates.extend(value.strip() for value in raw if isinstance(value,str) and value.strip())
+            distinct=set(candidates)
+            return next(iter(distinct)) if len(distinct)==1 else ""
         if path.startswith("/admin/campaigns"):
             return {
                 "campaign": first("id","campaign_id"),
