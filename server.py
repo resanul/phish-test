@@ -1909,10 +1909,13 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
             if path!="/admin/logout" and not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
         if path=="/admin":
             if not self.auth(): return self.sendbody(200,self.login_page())
-            return self.sendbody(302,b"",extra={"Location":"/dashboard"})
-        if path=="/dashboard":
-            if not self.auth(): return self.sendbody(200,self.login_page())
+            return self.sendbody(302,b"",extra={"Location":"/"})
+        if path=="/":
+            if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
             return self.sendbody(200,self.dashboard())
+        if path=="/dashboard":
+            if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
+            return self.sendbody(302,b"",extra={"Location":"/"})
         if path=="/admin/logout":
             c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session")
             if s: SESSIONS.pop(s.value,None)
@@ -2058,7 +2061,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                 sid=secrets.token_urlsafe(32); SESSIONS[sid]={"username":username,"role":admin["role"] if admin else "Administrator","created_at":time.time(),"last_seen":time.time()}
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"
                 if self.headers.get("X-Forwarded-Proto","").lower()=="https": ck["admin_session"]["Secure"]=True
-                return self.sendbody(302,b"",extra={"Location":"/dashboard","Set-Cookie":ck["admin_session"].OutputString()})
+                return self.sendbody(302,b"",extra={"Location":"/","Set-Cookie":ck["admin_session"].OutputString()})
             self.login_failed()
             return self.sendbody(401,self.login_page("Invalid username or password"))
         if p.path.startswith("/admin/") and p.path!="/admin/login" and not self.csrf_origin_ok():
