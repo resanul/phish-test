@@ -412,7 +412,7 @@ def db():
         ("campaign","view","View campaigns","View campaign configuration and status."),("campaign","create","Create campaigns","Create new simulation campaigns."),("campaign","edit","Edit campaigns","Modify campaign configuration before launch."),("campaign","launch","Launch campaigns","Start an authorized simulation campaign."),("campaign","delete","Delete campaigns","Delete campaigns when allowed by lifecycle rules."),
         ("template","view","View templates","View reusable email template definitions."),("template","create","Create templates","Create reusable simulation email templates."),("template","edit","Edit templates","Modify reusable simulation email templates."),("template","archive","Archive templates","Archive reusable email templates."),
         ("landing_page","view","View landing pages","View simulation landing-page definitions."),("landing_page","create","Create landing pages","Create authorized simulation landing pages."),("landing_page","edit","Edit landing pages","Modify authorized simulation landing pages."),
-        ("recipient","view","View recipients","View recipient and organizational metadata."),("recipient","create","Create recipients","Create recipient records for simulations."),("recipient","edit","Edit recipients","Modify recipient metadata."),("recipient","import","Import recipients","Import recipient metadata from approved sources."),
+        ("recipient","view","View recipients","View recipient and organizational metadata."),("recipient","create","Create recipients","Create recipient records for simulations."),("recipient","edit","Edit recipients","Modify recipient metadata."),("recipient","delete","Delete recipients","Delete recipient records from directory."),("recipient","import","Import recipients","Import recipient metadata from approved sources."),
         ("group","view","View groups","View recipient groups and departments."),("group","manage","Manage groups","Create, update, and organize recipient groups."),
         ("training","view","View training","View training courses and assignments."),("training","manage","Manage training","Create and manage awareness training content."),("training","assign","Assign training","Assign approved training to recipients."),
         ("report","view","View reports","View campaign, risk, and training reports."),("report","export","Export reports","Export authorized reporting data."),("report","schedule","Schedule reports","Create and manage scheduled reports."),
@@ -427,6 +427,7 @@ def db():
         ("campaign","delete"):"elevated",
         ("template","archive"):"elevated",
         ("recipient","import"):"elevated",
+        ("recipient","delete"):"elevated",
         ("group","manage"):"elevated",
         ("training","manage"):"elevated",
         ("training","assign"):"elevated",
@@ -1358,6 +1359,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/training/new":"training.assign",
         "/admin/training/course/new":"training.manage",
         "/admin/recipients/import":"recipient.import",
+        "/admin/recipients/new":"recipient.create",
         "/admin/groups/new":"group.manage",
         "/admin/templates/test-send":"template.edit",
         "/admin/campaigns/test-send":"campaign.launch",
@@ -1387,6 +1389,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/training/course/save":"training.manage",
         "/admin/training/assign":"training.assign",
         "/admin/recipients/save":{"create":"recipient.create","edit":"recipient.edit"},
+        "/admin/recipients/delete":"recipient.delete",
         "/admin/recipients/import":"recipient.import",
         "/admin/groups/save":"group.manage",
         "/admin/campaigns/control":"campaign.edit",
@@ -1401,7 +1404,7 @@ def route_permission(path,method,form=None):
     value=mapping.get(path)
     if isinstance(value,dict):
         record_id=(form or {}).get("id",[""])[0].strip()
-        return value["edit"] if record_id else value["create"]
+        return value["edit"] if (record_id and record_id!="new") else value["create"]
     return value
 
 class Handler(BaseHTTPRequestHandler):
@@ -2353,7 +2356,7 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
             active_rec=total - suppressed
             imports=c.execute("SELECT id,source_name,processed,created,updated,skipped,errors,created_at FROM recipient_import_history ORDER BY id DESC LIMIT 20").fetchall()
             c.close()
-            table="".join('<tr><td><b>#%s</b></td><td><b>%s</b></td><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/recipients?id=%s">✏️ Profile</a></td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["designation"]),esc(r["location"]),"status-draft" if r["status"]=="Suppressed" else "status-active",esc(r["status"]),r["id"]) for r in rows) or '<tr><td colspan="9">No recipients imported.</td></tr>'
+            table="".join('<tr><td><b>#%s</b></td><td><b>%s</b></td><td>%s</td><td><code>%s</code></td><td>%s</td><td>%s</td><td>%s</td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right;white-space:nowrap"><a class="btn" style="padding:4px 9px;font-size:11.5px;margin-right:4px" href="/admin/recipients?id=%s">✏️ Edit</a><form method="post" action="/admin/recipients/delete" style="display:inline" onsubmit="return confirm(\'Delete recipient #%s (%s)?\');"><input type="hidden" name="id" value="%s"><button class="btn" style="color:#b91c1c;border-color:#fca5a5;background:#fef2f2;padding:4px 8px;font-size:11px" type="submit" title="Delete Recipient">🗑️</button></form></td></tr>'%(r["id"],esc(r["email"]),esc(r["name"]),esc(r["employee_id"]),esc(r["department"]),esc(r["designation"]),esc(r["location"]),"status-draft" if r["status"]=="Suppressed" else "status-active",esc(r["status"]),r["id"],r["id"],esc(r["email"]),r["id"]) for r in rows) or '<tr><td colspan="9">No recipients in directory yet. <a href="/admin/recipients?id=new">Add single recipient</a> or <a href="/admin/recipients/import">import CSV</a>.</td></tr>'
             ih="".join('<tr><td><b>#%s</b></td><td>%s</td><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td><span style="color:#a12d2d">%s</span></td><td>%s</td></tr>'%(r["id"],esc(r["source_name"] or "Manual/CSV"),r["processed"],r["created"],r["updated"],r["skipped"],esc(r["errors"] or ""),esc(r["created_at"])) for r in imports) or '<tr><td colspan="8">No import history.</td></tr>'
             body=f'''<div class="camp-header">
   <div>
@@ -2363,8 +2366,10 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
       <span class="camp-status-badge status-active">{active_rec} Active</span>
     </div>
   </div>
-  <div class="camp-actions">
-    <a class="btn primary" href="/admin/recipients/import">📥 Import CSV</a>
+  <div class="camp-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <a class="btn primary" href="/admin/recipients?id=new" style="display:inline-flex;align-items:center;gap:6px">➕ Add Recipient</a>
+    <button class="btn" type="button" onclick="openQuickAddModal()" style="display:inline-flex;align-items:center;gap:6px">⚡ Quick Add</button>
+    <a class="btn" href="/admin/recipients/import" style="display:inline-flex;align-items:center;gap:6px">📥 Import CSV</a>
   </div>
 </div>
 
@@ -2377,8 +2382,14 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
 
 <div class="card">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-    <h3 style="margin:0">Active Recipients</h3>
-    <input id="qRec" oninput="filterRecTable()" placeholder="Filter by email, name, dept, id..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12px;width:280px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h3 style="margin:0">Active Recipients</h3>
+      <span style="font-size:12px;color:#59776b">({active_rec} targets)</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <input id="qRec" oninput="filterRecTable()" placeholder="Filter by email, name, dept, id..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12px;width:280px">
+      <a class="btn" href="/admin/recipients?id=new" style="font-size:12px;padding:7px 11px">+ Add Single</a>
+    </div>
   </div>
   <div class="table-wrap">
     <table class="table" style="width:100%">
@@ -2397,8 +2408,63 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
     </table>
   </div>
 </div>
+
+<!-- Quick Add Modal -->
+<div id="quickAddModal" style="display:none;position:fixed;inset:0;background:rgba(8,30,22,0.5);backdrop-filter:blur(3px);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#ffffff;border-radius:12px;max-width:520px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.2);border:1px solid #d3e4dc;overflow:hidden">
+    <div style="padding:15px 20px;background:#f3f8f5;border-bottom:1px solid #deebe3;display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:17px">⚡</span>
+        <h3 style="margin:0;font-size:15px;color:#102b20">Quick Add Target Employee</h3>
+      </div>
+      <button type="button" onclick="closeQuickAddModal()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#658274;line-height:1">&times;</button>
+    </div>
+    <form method="post" action="/admin/recipients/save" style="padding:18px 20px">
+      <input type="hidden" name="id" value="">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#1a3528">
+          <span>Email Address <span style="color:#dc2626">*</span></span>
+          <input type="email" name="email" required placeholder="target.user@company.com" style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:7px;font-size:13px">
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#1a3528">
+            Full Name
+            <input name="name" placeholder="Target User" style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:7px;font-size:13px">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#1a3528">
+            Employee ID
+            <input name="employee_id" placeholder="EMP-1001" style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:7px;font-size:13px">
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#1a3528">
+            Department
+            <input name="department" placeholder="Finance / IT / HR" style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:7px;font-size:13px">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:#1a3528">
+            Designation
+            <input name="designation" placeholder="Officer / Analyst" style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:7px;font-size:13px">
+          </label>
+        </div>
+        <div style="font-size:11px;color:#678275;background:#f5faf7;padding:8px 10px;border-radius:6px;border:1px solid #e1eee7">
+          ✓ Target will be saved with default Active status and eligible for assigned simulation drills.
+        </div>
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #e7eee9;display:flex;justify-content:space-between;align-items:center">
+        <a href="/admin/recipients?id=new" style="font-size:12px;color:#087b59;font-weight:700;text-decoration:none">Open full form →</a>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn" onclick="closeQuickAddModal()">Cancel</button>
+          <button type="submit" class="btn primary">Save Target</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 function filterRecTable(){{const q=document.getElementById('qRec').value.toLowerCase();document.querySelectorAll('#recRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
+function openQuickAddModal(){{document.getElementById('quickAddModal').style.display='flex'}}
+function closeQuickAddModal(){{document.getElementById('quickAddModal').style.display='none'}}
 </script>'''
             return self.admin_shell("Recipients",body,"Recipients")
         if path=="/admin/groups":
@@ -2802,16 +2868,134 @@ function filterRecTable(){{const q=document.getElementById('qRec').value.toLower
         body='<h1>%s</h1><p>SMTP: %s · Landing Page: %s · Targeted: %s</p><div class="card"><b>Sent</b> %s &nbsp; <b>Failed</b> %s &nbsp; <b>Clicks</b> %s &nbsp; <b>Actions</b> %s</div><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Delivery</th><th>Sent At</th></tr>%s</table></div><p><a class="btn" href="/admin/reports">Back to Reports</a></p>'%(esc(camp["name"]),esc(camp["smtp_name"] or "Not set"),esc(camp["landing_name"] or "Not set"),camp["targeted"],sent,failed,counts.get("click",0),counts.get("submitted",0),rows)
         return self.admin_shell("Campaign Report",body,"Reports")
 
-    def recipient_profile_form(self,rid):
-        c=db(); r=c.execute("SELECT * FROM recipients WHERE id=?",(rid,)).fetchone(); c.close()
-        if not r:
-            return self.admin_shell("Recipient Profile","<h1>Recipient not found</h1><p><a class='btn' href='/admin/recipients'>Back</a></p>","Recipients")
-        def v(k): return esc(r[k] or "")
-        langs=["English","Bangla","Bengali-English","Arabic","Hindi"]
-        langopts="".join('<option value="%s" %s>%s</option>'%(esc(x),"selected" if r["language"]==x else "",esc(x)) for x in langs)
-        statusopts="".join('<option value="%s" %s>%s</option>'%(x,"selected" if r["status"]==x else "",x) for x in ("Active","Suppressed"))
-        body='<h1>Recipient Profile</h1><p>Edit identity, organizational and targeting metadata. No credential fields are supported.</p><div class="card"><form class="form" method="post" action="/admin/recipients/save"><input type="hidden" name="id" value="%s"><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><label>Email<input type="email" name="email" value="%s" required maxlength="255"></label><label>Employee ID<input name="employee_id" value="%s" maxlength="100"></label><label>Name<input name="name" value="%s" maxlength="150"></label><label>Designation<input name="designation" value="%s" maxlength="150"></label><label>Department<input name="department" value="%s" maxlength="100"></label><label>Location<input name="location" value="%s" maxlength="150"></label><label>Manager<input name="manager" value="%s" maxlength="150"></label><label>Group<input name="group_name" value="%s" maxlength="100"></label><label>Language<select name="language">%s</select></label><label>Timezone<input name="timezone" value="%s" maxlength="80" placeholder="Asia/Dhaka"></label><label>Status<select name="status">%s</select></label></div><button class="btn primary">Save Profile</button> <a class="btn" href="/admin/recipients">Cancel</a></form></div>'%(r["id"],v("email"),v("employee_id"),v("name"),v("designation"),v("department"),v("location"),v("manager"),v("group_name"),langopts,v("timezone"),statusopts)
-        return self.admin_shell("Recipient Profile",body,"Recipients")
+    def recipient_profile_form(self,rid=None):
+        c=db()
+        r=c.execute("SELECT * FROM recipients WHERE id=?",(rid,)).fetchone() if (rid and str(rid).lower()!="new") else None
+        depts=[row[0] for row in c.execute("SELECT DISTINCT department FROM recipients WHERE department!='' UNION SELECT department FROM groups_tbl WHERE department!=''").fetchall()]
+        groups=[row[0] for row in c.execute("SELECT name FROM groups_tbl ORDER BY name").fetchall()]
+        c.close()
+
+        is_new=(r is None)
+        if not is_new:
+            page_title=f"Edit Recipient: {esc(r['name'] or r['email'])}"
+            form_title=f"Edit Target Profile #{r['id']}"
+            crumb_sub="Edit Profile"
+            submit_lbl="💾 Save Changes"
+        else:
+            page_title="Add Single Recipient"
+            form_title="➕ Add Target Employee"
+            crumb_sub="New Recipient"
+            submit_lbl="➕ Add Recipient to Directory"
+
+        def v(k, default=""):
+            if is_new: return default
+            return esc(r[k] or "")
+
+        langs=["English","Bangla","Bengali-English","Arabic","Hindi","Spanish","French"]
+        curr_lang=v("language","English")
+        langopts="".join('<option value="%s" %s>%s</option>'%(esc(x),"selected" if curr_lang==x else "",esc(x)) for x in langs)
+        curr_status=v("status","Active")
+        statusopts="".join('<option value="%s" %s>%s</option>'%(x,"selected" if curr_status==x else "",x) for x in ("Active","Suppressed"))
+
+        dept_datalist="".join('<option value="%s">'%esc(d) for d in depts)
+        group_datalist="".join('<option value="%s">'%esc(g) for g in groups)
+
+        delete_btn=""
+        if not is_new:
+            delete_btn=f'''<button class="btn" style="color:#b91c1c;border-color:#fca5a5;background:#fef2f2" type="submit" formaction="/admin/recipients/delete" onclick="return confirm('Are you sure you want to delete this recipient profile?');">🗑️ Delete Recipient</button>'''
+
+        body=f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin/recipients">Recipients</a> <span>/</span> <span>{crumb_sub}</span></div>
+    <div class="camp-title-row">
+      <h1>{form_title}</h1>
+      <span class="camp-status-badge status-active">{'Active Target' if curr_status=='Active' else 'Suppressed'}</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn" href="/admin/recipients">← Back to Directory</a>
+  </div>
+</div>
+
+<div class="card" style="max-width:920px;margin:0 auto">
+  <div style="margin-bottom:18px;border-bottom:1px solid #e2ede7;padding-bottom:14px">
+    <h3 style="margin:0 0 6px 0">{form_title}</h3>
+    <p style="margin:0;font-size:12.5px;color:#5c786c">Enter employee organizational and simulation targeting metadata. <b>Compliance guarantee:</b> Zero credential storage policy strictly enforced.</p>
+  </div>
+
+  <form class="form" method="post" action="/admin/recipients/save">
+    <input type="hidden" name="id" value="{'' if is_new else r['id']}">
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 20px">
+      <label>
+        <span style="font-weight:700;color:#183227;display:flex;align-items:center;gap:4px">Corporate Email Address <span style="color:#dc2626">*</span></span>
+        <input type="email" name="email" value="{v('email')}" required maxlength="255" placeholder="alex.morgan@company.com" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Full Name</span>
+        <input name="name" value="{v('name')}" maxlength="150" placeholder="Alex Morgan" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Employee ID</span>
+        <input name="employee_id" value="{v('employee_id')}" maxlength="100" placeholder="EMP-5082" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Designation / Role</span>
+        <input name="designation" value="{v('designation')}" maxlength="150" placeholder="Senior Financial Analyst" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Department</span>
+        <input name="department" value="{v('department')}" list="deptList" maxlength="100" placeholder="Finance & Operations" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+        <datalist id="deptList">{dept_datalist}</datalist>
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Group / Segment</span>
+        <input name="group_name" value="{v('group_name')}" list="grpList" maxlength="100" placeholder="Finance Dept Drill" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+        <datalist id="grpList">{group_datalist}</datalist>
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Office Location</span>
+        <input name="location" value="{v('location')}" maxlength="150" placeholder="Dhaka HQ / Floor 7" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Reporting Manager</span>
+        <input name="manager" value="{v('manager')}" maxlength="150" placeholder="Sarah Jenkins" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Preferred Language</span>
+        <select name="language" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px;background:#fff">{langopts}</select>
+      </label>
+
+      <label>
+        <span style="font-weight:700;color:#183227">Local Timezone</span>
+        <input name="timezone" value="{v('timezone', 'Asia/Dhaka')}" maxlength="80" placeholder="Asia/Dhaka" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      </label>
+
+      <label style="grid-column:span 2">
+        <span style="font-weight:700;color:#183227">Simulation Targeting Status</span>
+        <select name="status" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px;background:#fff">{statusopts}</select>
+        <span style="font-size:11.5px;color:#678275;margin-top:4px;display:block">Active targets will receive assigned campaign drills. Suppressed profiles are excluded from delivery.</span>
+      </label>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;border-top:1px solid #e2ede7;padding-top:18px;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn primary" type="submit" style="padding:9px 20px;font-weight:700">{submit_lbl}</button>
+        <a class="btn" href="/admin/recipients">Cancel</a>
+      </div>
+      {delete_btn}
+    </div>
+  </form>
+</div>'''
+        return self.admin_shell(page_title,body,"Recipients")
 
     def recipient_import_form(self):
         return self.admin_shell("Import Recipients",'<h1>Import Recipients</h1><div class="card"><form class="form" method="post" action="/admin/recipients/import"><label>Source Name<input name="source_name" maxlength="150" placeholder="HR recipient export - October 2026"></label><label>CSV data<textarea name="csv_data" rows="16" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px" placeholder="email,name,employee_id,department,designation,location,manager,language,timezone,group_name"></textarea></label><button class="btn primary">Validate & Import</button></form><p style="font-size:12px;color:#71817b">Supported metadata: email, name, employee_id, department, designation, location, manager, language, timezone, group_name. Duplicate emails are updated; conflicting employee IDs are skipped. Never place passwords, OTPs, PINs, CVVs or card data here.</p></div>',"Recipients")
@@ -4190,7 +4374,7 @@ syncAudience();
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
@@ -4203,6 +4387,10 @@ syncAudience();
                 return self.sendbody(200,self.template_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/landing-pages" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.landing_page_form(parse_qs(p.query).get("id",[None])[0]))
+            if path=="/admin/recipients" and parse_qs(p.query).get("id",[None])[0]:
+                return self.sendbody(200,self.recipient_profile_form(parse_qs(p.query).get("id",[None])[0]))
+            if path=="/admin/recipients/new":
+                return self.sendbody(200,self.recipient_profile_form("new"))
         if path=="/admin/landing-pages/preview":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             lid=parse_qs(p.query).get("id",[""])[0]
@@ -4251,7 +4439,7 @@ syncAudience();
             if mode=="realistic":
                 rendered=re.sub(r'style="background-color:\s*#[a-fA-F0-9]+;\s*outline:\s*3px solid\s*#[a-fA-F0-9]+"', 'style="background-color:transparent;outline:none"', rendered)
             return self.sendbody(200,rendered,"text/html; charset=utf-8",extra={"X-Frame-Options":"SAMEORIGIN"})
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             return self.sendbody(200,self.feature_page(path,p.query))
         if path=="/admin/smtp/diagnostics":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -4277,6 +4465,9 @@ syncAudience();
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             body='<h1>New Training Course</h1><div class="card"><form class="form" method="post" action="/admin/training/course/save"><label>Course Name<input name="name" required maxlength="150"></label><label>Description<textarea name="description" rows="5" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px"></textarea></label><label>Duration (minutes)<input type="number" name="duration_minutes" value="15" min="1" max="480"></label><label>Passing Score %<input type="number" name="passing_score" value="80" min="0" max="100"></label><button class="btn primary">Save Course</button></form></div>'
             return self.sendbody(200,self.admin_shell("New Training Course",body,"Training"))
+        if path=="/admin/recipients/new":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            return self.sendbody(200,self.recipient_profile_form("new"))
         if path=="/admin/recipients" and parse_qs(p.query).get("id",[None])[0]:
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.recipient_profile_form(parse_qs(p.query).get("id",[None])[0]))
@@ -4938,16 +5129,55 @@ syncAudience();
             return self.sendbody(302,b"",extra={"Location":"/admin/training"})
         if p.path=="/admin/recipients/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            rid=form.get("id",[""])[0]; email=form.get("email",[""])[0].strip().lower()
+            if not self.permission_allowed(p.path,"POST",form=form): return self.sendbody(403,"Insufficient role permission","text/plain")
+            rid=form.get("id",[""])[0].strip()
+            email=form.get("email",[""])[0].strip().lower()
             if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): return self.sendbody(400,"Invalid email address","text/plain")
             c=db()
-            existing=c.execute("SELECT id FROM recipients WHERE email=? AND id!=?",(email,rid)).fetchone()
             employee=form.get("employee_id",[""])[0].strip()[:100]
-            employee_conflict=c.execute("SELECT id FROM recipients WHERE employee_id=? AND id!=? AND employee_id!=''",(employee,rid)).fetchone() if employee else None
-            if existing: c.close(); return self.sendbody(409,"A recipient with this email already exists","text/plain")
-            if employee_conflict: c.close(); return self.sendbody(409,"Employee ID is already assigned to another recipient","text/plain")
-            c.execute("UPDATE recipients SET email=?,name=?,employee_id=?,department=?,designation=?,location=?,manager=?,language=?,timezone=?,group_name=?,status=? WHERE id=?",(email,form.get("name",[""])[0][:150],employee,form.get("department",[""])[0][:100],form.get("designation",[""])[0][:150],form.get("location",[""])[0][:150],form.get("manager",[""])[0][:150],form.get("language",["English"])[0][:50],form.get("timezone",["Asia/Dhaka"])[0][:80],form.get("group_name",[""])[0][:100],form.get("status",["Active"])[0] if form.get("status",["Active"])[0] in ("Active","Suppressed") else "Active",rid))
-            c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_PROFILE_UPDATE","recipient=%s email=%s"%(rid,email),ip)
+            name=form.get("name",[""])[0].strip()[:150]
+            department=form.get("department",[""])[0].strip()[:100]
+            designation=form.get("designation",[""])[0].strip()[:150]
+            location=form.get("location",[""])[0].strip()[:150]
+            manager=form.get("manager",[""])[0].strip()[:150]
+            group_name=form.get("group_name",[""])[0].strip()[:100]
+            language=form.get("language",["English"])[0].strip()[:50]
+            timezone_val=form.get("timezone",["Asia/Dhaka"])[0].strip()[:80] or "Asia/Dhaka"
+            status_val=form.get("status",["Active"])[0] if form.get("status",["Active"])[0] in ("Active","Suppressed") else "Active"
+
+            if not rid or rid=="new":
+                existing=c.execute("SELECT id FROM recipients WHERE lower(email)=?",(email,)).fetchone()
+                if existing: c.close(); return self.sendbody(409,"A recipient with this email already exists","text/plain")
+                if employee:
+                    emp_conflict=c.execute("SELECT id FROM recipients WHERE employee_id=? AND employee_id!=''",(employee,)).fetchone()
+                    if emp_conflict: c.close(); return self.sendbody(409,"Employee ID is already assigned to another recipient","text/plain")
+                c.execute("""INSERT INTO recipients(email,name,employee_id,department,designation,location,manager,language,timezone,group_name,status,created_at)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (email,name,employee,department,designation,location,manager,language,timezone_val,group_name,status_val,now()))
+                new_id=c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+                c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_CREATE",f"recipient={new_id} email={email}",ip)
+                return self.sendbody(302,b"",extra={"Location":"/admin/recipients"})
+            else:
+                existing=c.execute("SELECT id FROM recipients WHERE lower(email)=? AND id!=?",(email,rid)).fetchone()
+                if existing: c.close(); return self.sendbody(409,"A recipient with this email already exists","text/plain")
+                if employee:
+                    emp_conflict=c.execute("SELECT id FROM recipients WHERE employee_id=? AND employee_id!=''",(employee,rid)).fetchone()
+                    if emp_conflict: c.close(); return self.sendbody(409,"Employee ID is already assigned to another recipient","text/plain")
+                c.execute("UPDATE recipients SET email=?,name=?,employee_id=?,department=?,designation=?,location=?,manager=?,language=?,timezone=?,group_name=?,status=? WHERE id=?",
+                          (email,name,employee,department,designation,location,manager,language,timezone_val,group_name,status_val,rid))
+                c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_PROFILE_UPDATE","recipient=%s email=%s"%(rid,email),ip)
+                return self.sendbody(302,b"",extra={"Location":"/admin/recipients"})
+        if p.path=="/admin/recipients/delete":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            if not self.permission_allowed(p.path,"POST",form=form): return self.sendbody(403,"Insufficient role permission","text/plain")
+            rid=form.get("id",[""])[0].strip()
+            c=db()
+            rec=c.execute("SELECT email FROM recipients WHERE id=?",(rid,)).fetchone()
+            if rec:
+                c.execute("DELETE FROM recipients WHERE id=?",(rid,))
+                c.commit()
+                audit(ADMIN_USERNAME,"RECIPIENT_DELETE","recipient=%s email=%s"%(rid,rec["email"]),ip)
+            c.close()
             return self.sendbody(302,b"",extra={"Location":"/admin/recipients"})
         if p.path=="/admin/recipients/import":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
