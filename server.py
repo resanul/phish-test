@@ -741,8 +741,10 @@ def record(ip,t,event,name="",email="",mobile="",ua="",employee_id="",card_type=
     if event not in EVENT_TAXONOMY: raise ValueError("Unsupported event taxonomy: %s" % event)
     c=db()
     if token and event in ("click","form_action","report","QR_scan","open"):
-        try: c.execute("INSERT INTO event_dedup(token,event,first_seen_at) VALUES(?,?,?)",(token,event,now()))
-        except sqlite3.IntegrityError: c.close(); return False
+        try:
+            c.execute("INSERT OR IGNORE INTO event_dedup(token,event,first_seen_at) VALUES(?,?,?)",(token,event,now()))
+        except Exception:
+            pass
     c.execute("INSERT INTO events(ts,ip,template,event,name,email,mobile,user_agent,employee_id,card_type,campaign_id,recipient_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(datetime.now(timezone.utc).isoformat(),ip,t,event,name,email,mobile,ua,employee_id,card_type,campaign_id,recipient_id))
     c.commit(); c.close()
     if email and event in ("click","form_action","report"): risk_recalculate(email)
@@ -1292,8 +1294,9 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .table tbody tr:last-child td{border-bottom:none}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:750}
 .pill.click{background:#e6f7f0;color:#087b59;border:1px solid #c2ebd9}
-.pill.submitted{background:#edf3ff;color:#2563eb;border:1px solid #c7dcfe}
+.pill.submitted,.pill.form_action{background:#edf3ff;color:#2563eb;border:1px solid #c7dcfe}
 .pill.report{background:#fdf4ff;color:#9333ea;border:1px solid #f5d0fe}
+.pill.bot_detected{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1.5px solid #d0e0d8;background:#fff;color:#193026;text-decoration:none;font-size:12px;font-weight:650;cursor:pointer;transition:all 0.15s ease}
 .btn:hover{border-color:#087b59;background:#f5faf7;color:#087b59;transform:translateY(-1px)}
 .btn.primary{background:#087b59;border-color:#087b59;color:#fff;box-shadow:0 2px 6px rgba(8,123,89,0.2)}
@@ -1854,7 +1857,7 @@ class Handler(BaseHTTPRequestHandler):
         c=db()
         total=c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]
         clicks=c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]
-        subs=c.execute("SELECT COUNT(*) n FROM events WHERE event='submitted'").fetchone()["n"]
+        subs=c.execute("SELECT COUNT(*) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
         ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]
         templates=c.execute("SELECT template, COUNT(*) n FROM events GROUP BY template ORDER BY n DESC").fetchall()
         recent=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 80").fetchall()
@@ -1862,9 +1865,22 @@ class Handler(BaseHTTPRequestHandler):
         trend=c.execute("SELECT substr(ts,1,10) d, COUNT(*) n FROM events WHERE ts>=? GROUP BY d ORDER BY d", (since,)).fetchall()
         c.close()
 
+        tpl_labels = {
+            "1": "1 (Apex Rewards)", "1.html": "1 (Apex Rewards)",
+            "2": "2 (Trust Bank PLC)", "2.html": "2 (Trust Bank PLC)",
+            "3": "3 (Microsoft 365)", "3.html": "3 (Microsoft 365)",
+            "4": "4 (Google Workspace)", "4.html": "4 (Google Workspace)",
+            "5": "5 (HR Portal)", "5.html": "5 (HR Portal)",
+            "6": "6 (GlobalProtect IT)", "6.html": "6 (GlobalProtect IT)",
+            "7": "7 (bKash & Banking)", "7.html": "7 (bKash & Banking)",
+            "8": "8 (Zoom Meetings)", "8.html": "8 (Zoom Meetings)",
+            "9": "9 (AWS IAM Console)", "9.html": "9 (AWS IAM Console)",
+            "10": "10 (Awareness Drill)", "10.html": "10 (Awareness Drill)",
+        }
+
         rate=(subs/clicks*100) if clicks else 0
         max_t=max([r["n"] for r in templates],default=1) or 1
-        bars="".join(f'<div class="bar-row"><span>Template {esc(r["template"])}</span><div class="bar"><i style="width:{r["n"]/max_t*100:.0f}%"></i></div><b>{r["n"]}</b></div>' for r in templates[:8]) or '<div class="sub">No template activity yet.</div>'
+        bars="".join(f'<div class="bar-row"><span>{esc(tpl_labels.get(str(r["template"]), "Template " + str(r["template"])))}</span><div class="bar"><i style="width:{r["n"]/max_t*100:.0f}%"></i></div><b>{r["n"]}</b></div>' for r in templates[:8]) or '<div class="sub">No template activity yet.</div>'
 
         byday={r["d"]:r["n"] for r in trend}
         days=[]
@@ -1878,7 +1894,11 @@ class Handler(BaseHTTPRequestHandler):
         rows=[]
         for r in recent:
             d,t=format_datetime(r["ts"])
-            rows.append(f'<tr><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td><b>{esc(r["template"])}</b></td><td><code>{esc(r["ip"])}</code></td><td>{esc(r["name"])}</td><td>{esc(r["email"])}</td><td>{esc(r["mobile"])}</td></tr>')
+            display_tpl = tpl_labels.get(str(r["template"]), "Template " + str(r["template"]))
+            name_val = esc(r["name"]) if r["name"] else '<span style="color:#8ba59b">—</span>'
+            email_val = esc(r["email"]) if r["email"] else '<span style="color:#8ba59b">—</span>'
+            mobile_val = esc(r["mobile"]) if r["mobile"] else '<span style="color:#8ba59b">—</span>'
+            rows.append(f'<tr><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td><b>{esc(display_tpl)}</b></td><td><code>{esc(r["ip"])}</code></td><td>{name_val}</td><td>{email_val}</td><td>{mobile_val}</td></tr>')
         table="".join(rows) or '<tr><td colspan="8">No activity yet.</td></tr>'
 
         body=f"""<header class="topbar"><div class="topbrand"><div class="mark">🛡️</div>Trust PhishGuard</div><div class="top-actions"><span class="top-role-badge">ADMIN CONTROL CENTER</span><a href="/admin.csv">📥 Export CSV</a><a href="/admin/logout">🚪 Logout</a></div></header>
@@ -4493,12 +4513,18 @@ syncAudience();
                             pass
 
             if body is not None:
+                tpl_key = str(t_num or t or "1")
                 if tr:
                     c=db(); recrow=c.execute("SELECT * FROM recipients WHERE id=?",(recipient_id,)).fetchone(); c.close()
                     if is_bot_user_agent(ua):
-                        record(ip,t_num or t,"bot_detected",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                        record(ip,tpl_key,"bot_detected",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
                     else:
-                        record(ip,t_num or t,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                        record(ip,tpl_key,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                else:
+                    if is_bot_user_agent(ua):
+                        record(ip,tpl_key,"bot_detected",ua=ua)
+                    else:
+                        record(ip,tpl_key,"click",ua=ua)
                 access(ip,path,200)
                 if token:
                     action="/submit?"+urlencode({"t":token})
