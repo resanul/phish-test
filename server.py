@@ -597,7 +597,7 @@ def db():
             except Exception:
                 pass
     cols_recipient={row[1] for row in c.execute("PRAGMA table_info(recipients)").fetchall()}
-    for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'")):
+    for col,definition in (("designation","TEXT"),("location","TEXT"),("manager","TEXT"),("language","TEXT DEFAULT 'English'"),("timezone","TEXT DEFAULT 'Asia/Dhaka'"),("mobile","TEXT")):
         if col not in cols_recipient:
             c.execute("ALTER TABLE recipients ADD COLUMN %s %s"%(col,definition))
     c.execute("""CREATE TABLE IF NOT EXISTS recipient_import_history(
@@ -1099,7 +1099,8 @@ def _send_campaign_recipient(campaign,rec,queue_id):
         c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec_id,))
         c.commit()
         c.close()
-        record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",rec["mobile"] or "","campaign-delivery",rec["employee_id"] or "","",campaign["id"],rec_id,token)
+        mobile_val=(rec["mobile"] if ("mobile" in rec.keys() and rec["mobile"]) else "") or ""
+        record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",mobile_val,"campaign-delivery",rec["employee_id"] or "","",campaign["id"],rec_id,token)
         return True
     except Exception as e:
         err=str(e)[:500]
@@ -1171,8 +1172,7 @@ def send_campaign(campaign_id,scheduled=False,req_host=None):
     c.commit()
     limit=max(1,int(campaign["batch_size"] or 50)) if scheduled else -1
     qrows=c.execute("""SELECT q.id AS queue_id, q.attempts, q.next_attempt_at, q.campaign_id,
-                              r.id AS recipient_id, r.name, r.email, r.mobile, r.employee_id,
-                              r.department, r.designation, r.location, r.manager, r.language, r.timezone, r.status AS recipient_status
+                              r.id AS recipient_id, r.*
                        FROM campaign_queue q JOIN recipients r ON r.id=q.recipient_id
                        WHERE q.campaign_id=? AND q.status IN ('Pending','Failed')
                        AND (q.next_attempt_at IS NULL OR q.next_attempt_at<=?)
