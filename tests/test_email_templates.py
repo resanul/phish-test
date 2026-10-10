@@ -91,6 +91,25 @@ class EmailTemplatesTests(unittest.TestCase):
         self.assertNotIn("outline: 3px solid", clean_real)
         self.assertIn("Dear John,", clean_real)
 
+    def test_sendbody_allows_sameorigin_for_preview(self):
+        headers_sent = {}
+        handler = self.server.Handler.__new__(self.server.Handler)
+        handler.command = "GET"
+        handler.send_response = lambda code: None
+        handler.send_header = lambda k, v: headers_sent.setdefault(k, []).append(v)
+        handler.end_headers = lambda: None
+        handler.wfile = type("WFile", (), {"write": lambda self, b: None})()
+
+        # Default sendbody sets DENY
+        headers_sent.clear()
+        handler.sendbody(200, "hello")
+        self.assertEqual(headers_sent.get("X-Frame-Options"), ["DENY"])
+
+        # Preview sendbody sets SAMEORIGIN
+        headers_sent.clear()
+        handler.sendbody(200, "preview", extra={"X-Frame-Options": "SAMEORIGIN"})
+        self.assertEqual(headers_sent.get("X-Frame-Options"), ["SAMEORIGIN"])
+
     def test_campaign_form_groups_templates_by_brand(self):
         html = self.handler.campaign_form()
         self.assertIn("Email Template (Phishing Scenario)", html)

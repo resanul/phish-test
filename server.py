@@ -1411,7 +1411,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type",ctype)
         self.send_header("Content-Length",str(len(b)))
         self.send_header("X-Content-Type-Options","nosniff")
-        self.send_header("X-Frame-Options","DENY")
+        x_frame = "DENY"
+        if extra and "X-Frame-Options" in extra:
+            x_frame = extra.pop("X-Frame-Options")
+        if x_frame:
+            self.send_header("X-Frame-Options", x_frame)
         self.send_header("Referrer-Policy","same-origin")
         self.send_header("Permissions-Policy","camera=(),microphone=(),geolocation=()")
         if extra:
@@ -2118,7 +2122,26 @@ function setPreviewMode(mode) {{
 
 function refreshIframe() {{
   const ifr = document.getElementById('lsIframe');
-  ifr.src = '/admin/templates/preview?id=' + encodeURIComponent(currentTplId) + '&mode=' + encodeURIComponent(currentMode);
+  if(!ifr) return;
+  const targetUrl = '/admin/templates/preview?id=' + encodeURIComponent(currentTplId) + '&mode=' + encodeURIComponent(currentMode);
+  fetch(targetUrl)
+    .then(r => {{
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }})
+    .then(html => {{
+      ifr.srcdoc = html;
+    }})
+    .catch(err => {{
+      console.warn('Preview fallback to src', err);
+      ifr.src = targetUrl;
+    }});
+}}
+
+if(document.readyState === 'loading') {{
+  document.addEventListener('DOMContentLoaded', refreshIframe);
+}} else {{
+  refreshIframe();
 }}
 
 function lsFilterCat(cat) {{
@@ -4187,7 +4210,7 @@ syncAudience();
             if not row: return self.sendbody(404,"Landing page not found","text/plain")
             ok,msg=validate_landing_html(row["html_body"] or "")
             if not ok: return self.sendbody(400,msg,"text/plain")
-            return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>")
+            return self.sendbody(200,row["html_body"] or "<h1>Empty landing page</h1>",extra={"X-Frame-Options":"SAMEORIGIN"})
         if path=="/admin/templates/preview":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             tid=parse_qs(p.query).get("id",[""])[0]
@@ -4227,7 +4250,7 @@ syncAudience();
             rendered=render_template_variables(html_content,mock_recipient,mock_campaign,mock_links)
             if mode=="realistic":
                 rendered=re.sub(r'style="background-color:\s*#[a-fA-F0-9]+;\s*outline:\s*3px solid\s*#[a-fA-F0-9]+"', 'style="background-color:transparent;outline:none"', rendered)
-            return self.sendbody(200,rendered,"text/html; charset=utf-8")
+            return self.sendbody(200,rendered,"text/html; charset=utf-8",extra={"X-Frame-Options":"SAMEORIGIN"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             return self.sendbody(200,self.feature_page(path,p.query))
         if path=="/admin/smtp/diagnostics":
