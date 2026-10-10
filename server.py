@@ -1057,13 +1057,14 @@ def render_template_variables(body,recipient,campaign,links):
     return re.sub(r"\{\{\s*\.?([a-zA-Z0-9_]+)\s*\}\}",lambda m:esc(str(values.get(m.group(1),m.group(0)))),body or "")
 
 def _send_campaign_recipient(campaign,rec,queue_id):
+    rec_id = rec["recipient_id"] if ("recipient_id" in rec.keys()) else rec["id"]
     c=db()
     c.execute("UPDATE campaign_queue SET status='Sending',attempts=attempts+1,updated_at=? WHERE id=?",(now(),queue_id))
-    c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,attempted_at) VALUES(?,?,?,?)",(campaign["id"],rec["id"],"Attempted",now()))
+    c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,attempted_at) VALUES(?,?,?,?)",(campaign["id"],rec_id,"Attempted",now()))
     delivery_id=c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
     c.commit()
     c.close()
-    token=create_tracking_token(campaign["id"],rec["id"])
+    token=create_tracking_token(campaign["id"],rec_id)
     target_page=None
     if campaign["landing_page_id"]:
         c=db(); lrow=c.execute("SELECT template FROM landing_pages WHERE id=?",(campaign["landing_page_id"],)).fetchone(); c.close()
@@ -1095,10 +1096,10 @@ def _send_campaign_recipient(campaign,rec,queue_id):
         c=db()
         c.execute("UPDATE campaign_deliveries SET status='Sent',sent_at=?,error=NULL WHERE id=?",(now(),delivery_id))
         c.execute("UPDATE campaign_queue SET status='Sent',next_attempt_at=NULL,last_error=NULL,updated_at=? WHERE id=?",(now(),queue_id))
-        c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec["id"],))
+        c.execute("UPDATE recipients SET status='Sent' WHERE id=?",(rec_id,))
         c.commit()
         c.close()
-        record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",rec["mobile"] or "","campaign-delivery",rec["employee_id"] or "","",campaign["id"],rec["id"],token)
+        record("smtp",str(campaign["template"]),"delivered",rec["name"] or "",rec["email"] or "",rec["mobile"] or "","campaign-delivery",rec["employee_id"] or "","",campaign["id"],rec_id,token)
         return True
     except Exception as e:
         err=str(e)[:500]
@@ -1169,7 +1170,10 @@ def send_campaign(campaign_id,scheduled=False,req_host=None):
     c.execute("UPDATE campaigns SET status='Active',updated_at=? WHERE id=?",(now(),campaign_id))
     c.commit()
     limit=max(1,int(campaign["batch_size"] or 50)) if scheduled else -1
-    qrows=c.execute("""SELECT q.*,r.* FROM campaign_queue q JOIN recipients r ON r.id=q.recipient_id
+    qrows=c.execute("""SELECT q.id AS queue_id, q.attempts, q.next_attempt_at, q.campaign_id,
+                              r.id AS recipient_id, r.name, r.email, r.mobile, r.employee_id,
+                              r.department, r.designation, r.location, r.manager, r.language, r.timezone, r.status AS recipient_status
+                       FROM campaign_queue q JOIN recipients r ON r.id=q.recipient_id
                        WHERE q.campaign_id=? AND q.status IN ('Pending','Failed')
                        AND (q.next_attempt_at IS NULL OR q.next_attempt_at<=?)
                        AND r.status!='Suppressed' ORDER BY q.id LIMIT ?""",(campaign_id,now(),limit)).fetchall()
@@ -1182,7 +1186,7 @@ def send_campaign(campaign_id,scheduled=False,req_host=None):
         c.close()
         if not current or current["cancel_requested"] or current["status"] in ("Cancelled","Paused"):
             break
-        if not campaign_window_open(campaign):
+        if scheduled and not campaign_window_open(campaign):
             break
         if campaign["send_by"]:
             deadline=campaign_dt(campaign["send_by"],campaign_zone(campaign))
@@ -1196,7 +1200,7 @@ def send_campaign(campaign_id,scheduled=False,req_host=None):
         attempts=max(1,int(campaign["retry_max"] or 2)+1)
         ok=False
         for attempt in range(attempts):
-            ok=_send_campaign_recipient(campaign,q,q["id"])
+            ok=_send_campaign_recipient(campaign,q,q["queue_id"])
             if ok:
                 break
             if attempt < attempts-1:
@@ -4507,8 +4511,9 @@ syncAudience();
             errors=campaign_prelaunch_validation(campaign, req_host)
             current_base_url=get_public_base_url(req_host)
             checks="".join("<li style='color:%s'>%s</li>"%("#a12d2d" if e else "#087b59",esc(e or "Ready")) for e in errors) if errors else "<li style='color:#087b59'>All pre-launch checks passed.</li>"
-            disabled=" disabled" if errors else ""
-            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Eligible recipients: <b>%s</b></p><p>Simulation Base URL: <code>%s</code> (<a href="/admin/settings">Change in Settings</a>)</p><h3>Pre-launch validation</h3><ul>%s</ul><p>This action sends only to the configured authorized target scope.</p><p><a class="btn" href="/admin/campaigns/test-send?id=%s">Send Test Message</a></p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required%s> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary"%s>Launch Now</button></form></div>'%(esc(campaign["name"]),count,esc(current_base_url),checks,cid,cid,disabled,disabled)
+            in_window=campaign_window_open(campaign)
+            window_info='<p style="color:#087b59;font-size:12px;margin:5px 0">✓ Within configured sending window (%s, %s–%s %s)</p>'%(esc(campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu"),esc(campaign["window_start"] or "09:00"),esc(campaign["window_end"] or "17:00"),esc(campaign["timezone"] or "Asia/Dhaka")) if in_window else '<p style="color:#b37400;font-size:12px;margin:5px 0">ℹ Currently outside configured sending window (%s, %s–%s %s). <b>Manual launch will dispatch immediately.</b></p>'%(esc(campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu"),esc(campaign["window_start"] or "09:00"),esc(campaign["window_end"] or "17:00"),esc(campaign["timezone"] or "Asia/Dhaka"))
+            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Eligible recipients: <b>%s</b></p><p>Simulation Base URL: <code>%s</code> (<a href="/admin/settings">Change in Settings</a>)</p>%s<h3>Pre-launch validation</h3><ul>%s</ul><p>This action sends only to the configured authorized target scope.</p><p><a class="btn" href="/admin/campaigns/test-send?id=%s">Send Test Message</a></p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required%s> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary"%s>Launch Now</button></form></div>'%(esc(campaign["name"]),count,esc(current_base_url),window_info,checks,cid,cid,disabled,disabled)
             return self.sendbody(200,self.admin_shell("Launch Campaign",body,"Campaigns"))
         if path=="/admin/campaigns/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -5317,10 +5322,11 @@ syncAudience();
             try:
                 sent,failed,total=send_campaign(cid, req_host=self.headers.get("Host"))
                 audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH","campaign=%s sent=%s failed=%s total=%s"%(cid,sent,failed,total),ip)
-                return self.sendbody(200,page("Campaign Launch","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Campaign launch complete</h2><p>Attempted: %s · Sent: %s · Failed: %s</p><p><a href='/admin/campaigns'>Back to Campaigns</a></p></div>"%(total,sent,failed)))
-            except Exception:
-                audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH_FAILED","campaign=%s"%cid,ip)
-                return self.sendbody(502,page("Campaign Launch Failed","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px'><h2>Campaign launch failed</h2><p>Check PUBLIC_BASE_URL, SMTP configuration, target recipients and server logs. SMTP credentials are not displayed.</p><p><a href='/admin/campaigns'>Back to Campaigns</a></p></div>"))
+                fail_notice = "<p style='color:#a12d2d;margin-top:10px'>⚠️ %s delivery attempts failed. Check SMTP configuration and delivery logs.</p>"%failed if failed else ""
+                return self.sendbody(200,page("Campaign Launch","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Campaign launch complete</h2><p>Attempted: %s · Sent: %s · Failed: %s</p>%s<p style='margin-top:15px'><a class='btn primary' href='/admin/campaigns'>Back to Campaigns</a></p></div>"%(total,sent,failed,fail_notice)))
+            except Exception as e:
+                audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH_FAILED","campaign=%s error=%s"%(cid,str(e)[:200]),ip)
+                return self.sendbody(502,page("Campaign Launch Failed","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px'><h2>Campaign launch failed</h2><p style='color:#a12d2d'><b>Error:</b> %s</p><p>Check PUBLIC_BASE_URL, SMTP configuration, target recipients and server logs. SMTP credentials are not displayed.</p><p><a class='btn' href='/admin/campaigns'>Back to Campaigns</a></p></div>"%esc(str(e))))
         if p.path=="/admin/campaigns/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             action_mode=form.get("action_mode",[""])[0].strip().lower()
