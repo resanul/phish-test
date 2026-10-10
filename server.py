@@ -3890,12 +3890,15 @@ function insertTplVar(v) {{
 
         status_class={"Draft":"status-draft","Active":"status-active","Scheduled":"status-scheduled","Paused":"status-paused","Completed":"status-completed","Cancelled":"status-cancelled","Expired":"status-expired"}.get(status,"status-draft")
 
-        top_actions=""
+        top_actions='<a class="btn" href="/admin/campaigns">Cancel</a> '
+        top_actions+='<button class="btn" type="submit" form="campForm" name="action_mode" value="draft" style="display:inline-flex;align-items:center;gap:6px;font-weight:700;background:#ffffff;border:1.5px solid #cbdad2;color:#183227">📝 Save as Draft</button> '
+        top_actions+='<button class="btn primary" type="submit" form="campForm" name="action_mode" value="save" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">💾 %s</button> '%("Save Changes" if cid else "Save Campaign")
         if cid:
             top_actions+='<a class="btn" href="/admin/campaigns/test-send?id=%s">✉️ Test Send</a> '%cid
             top_actions+='<form method="post" action="/admin/campaigns/control" style="display:inline-flex;gap:6px"><input type="hidden" name="id" value="%s"><button class="btn" name="action" value="pause">⏸ Pause</button><button class="btn" name="action" value="resume">▶ Resume</button></form> '%cid
-            top_actions+='<a class="btn primary" href="/admin/campaigns/launch?id=%s">🚀 Launch Campaign</a> '%cid
-        top_actions+='<a class="btn" href="/admin/campaigns">Cancel</a>'
+            top_actions+='<a class="btn primary" href="/admin/campaigns/launch?id=%s" style="background:#10b981;border-color:#10b981">🚀 Launch Campaign</a> '%cid
+        else:
+            top_actions+='<button class="btn primary" type="submit" form="campForm" name="action_mode" value="launch" style="background:#10b981;border-color:#10b981;display:inline-flex;align-items:center;gap:6px;font-weight:700">🚀 Save &amp; Launch</button>'
 
         body=f"""<div class="camp-editor">
 <div class="camp-header">
@@ -3906,9 +3909,8 @@ function insertTplVar(v) {{
       <span class="camp-status-badge {status_class}" id="statusBadge">{status}</span>
     </div>
   </div>
-  <div class="camp-actions">
+  <div class="camp-actions" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     {top_actions}
-    <button class="btn primary" type="submit" form="campForm">Save Campaign</button>
   </div>
 </div>
 
@@ -3934,19 +3936,44 @@ function insertTplVar(v) {{
           <input name="name" value="{name}" placeholder="e.g. Q4 2026 Enterprise Phishing Simulation Drill" required maxlength="150" autocomplete="off">
           <div class="field-hint">A clear, descriptive title visible in administrative reporting and audit logs.</div>
         </div>
-        <div class="camp-label">
+        <div class="camp-label col-full">
           <span>Target Recipient Group</span>
           <select name="group_name" id="groupSelect" onchange="syncAudience()">
             {group_opts}
           </select>
           <div class="field-hint">Select a departmental employee group or target all active recipients.</div>
         </div>
-        <div class="camp-label">
-          <span>Simulation Status</span>
-          <select name="status" id="statusSelect" onchange="syncStatusBadge()">
+        <div class="camp-label col-full">
+          <span>Simulation Lifecycle Status</span>
+          <div class="status-segmented-control" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(210px, 1fr));gap:12px;margin-top:6px">
+            <div class="status-card" id="cardDraft" onclick="selectStatus('Draft')" style="cursor:pointer;border:2px solid {'#087b59' if status=='Draft' else '#d9e7e0'};border-radius:10px;padding:12px 14px;background:{'#f0f8f4' if status=='Draft' else '#ffffff'};display:flex;flex-direction:column;gap:5px;transition:all 0.15s ease">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-weight:800;font-size:13px;color:#122b20">📝 Draft (Safe Mode)</span>
+                <span class="camp-status-badge status-draft" style="font-size:10px">Draft</span>
+              </div>
+              <span style="font-size:11.5px;color:#557265;line-height:1.4">Safe to configure &amp; test. No simulated emails are sent to targets.</span>
+            </div>
+
+            <div class="status-card" id="cardActive" onclick="selectStatus('Active')" style="cursor:pointer;border:2px solid {'#087b59' if status=='Active' else '#d9e7e0'};border-radius:10px;padding:12px 14px;background:{'#f0f8f4' if status=='Active' else '#ffffff'};display:flex;flex-direction:column;gap:5px;transition:all 0.15s ease">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-weight:800;font-size:13px;color:#122b20">⚡ Active (Live Simulation)</span>
+                <span class="camp-status-badge status-active" style="font-size:10px">Active</span>
+              </div>
+              <span style="font-size:11.5px;color:#557265;line-height:1.4">Ready for deployment. Dispatches drills according to sending window.</span>
+            </div>
+
+            <div class="status-card" id="cardScheduled" onclick="selectStatus('Scheduled')" style="cursor:pointer;border:2px solid {'#087b59' if status=='Scheduled' else '#d9e7e0'};border-radius:10px;padding:12px 14px;background:{'#f0f8f4' if status=='Scheduled' else '#ffffff'};display:flex;flex-direction:column;gap:5px;transition:all 0.15s ease">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-weight:800;font-size:13px;color:#122b20">⏰ Scheduled (Future)</span>
+                <span class="camp-status-badge status-scheduled" style="font-size:10px">Scheduled</span>
+              </div>
+              <span style="font-size:11.5px;color:#557265;line-height:1.4">Waits until the specified Launch Date &amp; Time before sending.</span>
+            </div>
+          </div>
+          <select name="status" id="statusSelect" onchange="syncStatusBadge()" style="display:none">
             {stats}
           </select>
-          <div class="field-hint">Draft campaigns are safe to edit without sending emails.</div>
+          <div class="field-hint" style="margin-top:6px">Select how you want this simulation staged. You can also click <b>Save as Draft</b> directly from the top or bottom action buttons.</div>
         </div>
       </div>
     </div>
@@ -4111,9 +4138,16 @@ function insertTplVar(v) {{
     </div>
 
     <!-- Bottom Actions -->
-    <div class="camp-bottom-bar">
-      <a class="btn" href="/admin/campaigns">Cancel</a>
-      <button class="btn primary" type="submit">Save Campaign</button>
+    <div class="camp-bottom-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;background:#ffffff;padding:16px 20px;border-radius:12px;border:1px solid #dce7e2;margin-top:20px">
+      <div style="font-size:12.5px;color:#557265;display:flex;align-items:center;gap:6px">
+        <span>💡</span> <span><b>Pro-Tip:</b> Use <b>Save as Draft</b> to stage and verify recipients safely before triggering live simulation delivery.</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <a class="btn" href="/admin/campaigns">Cancel</a>
+        <button class="btn" type="submit" form="campForm" name="action_mode" value="draft" style="font-weight:700;background:#ffffff;border:1.5px solid #cbdad2;color:#183227">📝 Save as Draft</button>
+        <button class="btn primary" type="submit" form="campForm" name="action_mode" value="save" style="font-weight:700">💾 {"Save Changes" if cid else "Save Campaign"}</button>
+        {('<button class="btn primary" type="submit" form="campForm" name="action_mode" value="launch" style="background:#10b981;border-color:#10b981;font-weight:700">🚀 Save &amp; Launch</button>') if not cid else ('<a class="btn primary" href="/admin/campaigns/launch?id='+str(cid)+'" style="background:#10b981;border-color:#10b981;font-weight:700">🚀 Launch Campaign</a>')}
+      </div>
     </div>
 
   </div>
@@ -4297,6 +4331,14 @@ function syncLandingPreview() {{
   if (btn) btn.href = '/admin/landing-pages/preview?id=' + (val || '1');
 }}
 
+function selectStatus(st) {{
+  const sel = document.getElementById('statusSelect');
+  if (sel) {{
+    sel.value = st;
+    syncStatusBadge();
+  }}
+}}
+
 function syncStatusBadge() {{
   const sel = document.getElementById('statusSelect');
   const badge = document.getElementById('statusBadge');
@@ -4304,6 +4346,19 @@ function syncStatusBadge() {{
     badge.textContent = sel.value;
     badge.className = 'camp-status-badge status-' + sel.value.toLowerCase();
   }}
+  const curVal = sel ? sel.value : 'Draft';
+  ['Draft', 'Active', 'Scheduled'].forEach(function(s) {{
+    const card = document.getElementById('card' + s);
+    if (card) {{
+      if (curVal === s) {{
+        card.style.border = '2px solid #087b59';
+        card.style.background = '#f0f8f4';
+      }} else {{
+        card.style.border = '2px solid #d9e7e0';
+        card.style.background = '#ffffff';
+      }}
+    }}
+  }});
 }}
 
 function syncAudience() {{
@@ -4339,6 +4394,7 @@ document.addEventListener('DOMContentLoaded', function() {{
   syncAudience();
   syncTemplatePreview();
   syncLandingPreview();
+  syncStatusBadge();
 }});
 syncAudience();
 </script>"""
@@ -5271,10 +5327,15 @@ syncAudience();
                 return self.sendbody(502,page("Campaign Launch Failed","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px'><h2>Campaign launch failed</h2><p>Check PUBLIC_BASE_URL, SMTP configuration, target recipients and server logs. SMTP credentials are not displayed.</p><p><a href='/admin/campaigns'>Back to Campaigns</a></p></div>"))
         if p.path=="/admin/campaigns/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            action_mode=form.get("action_mode",[""])[0].strip().lower()
             cid=form.get("id",[""])[0]
             name=form.get("name",[""])[0][:150]
             template=form.get("template",["1"])[0]
             status=form.get("status",["Draft"])[0]
+            if action_mode=="draft":
+                status="Draft"
+            elif action_mode=="launch":
+                status="Active"
             smtp_id=form.get("smtp_profile_id",[""])[0]
             landing_id=form.get("landing_page_id",[""])[0]
             group_name=form.get("group_name",[""])[0][:100]
@@ -5298,22 +5359,33 @@ syncAudience();
             except Exception:
                 return self.sendbody(400,"Invalid scheduler settings or send-by deadline","text/plain")
             c=db()
-            if not smtp_id or not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(smtp_id,)).fetchone():
-                c.close(); return self.sendbody(400,"A valid SMTP provider is required","text/plain")
-            if not landing_id or not c.execute("SELECT 1 FROM landing_pages WHERE id=? AND status='Enabled'",(landing_id,)).fetchone():
-                c.close(); return self.sendbody(400,"A valid landing page is required","text/plain")
+            if status!="Draft":
+                if not smtp_id or not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(smtp_id,)).fetchone():
+                    c.close(); return self.sendbody(400,"A valid SMTP provider is required","text/plain")
+                if not landing_id or not c.execute("SELECT 1 FROM landing_pages WHERE id=? AND status='Enabled'",(landing_id,)).fetchone():
+                    c.close(); return self.sendbody(400,"A valid landing page is required","text/plain")
+            else:
+                if smtp_id and not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(smtp_id,)).fetchone():
+                    c.close(); return self.sendbody(400,"Invalid SMTP provider selected","text/plain")
+                if landing_id and not c.execute("SELECT 1 FROM landing_pages WHERE id=? AND status='Enabled'",(landing_id,)).fetchone():
+                    c.close(); return self.sendbody(400,"Invalid landing page selected","text/plain")
             if group_name:
                 targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE group_name=?",(group_name,)).fetchone()["n"]
             else:
                 targeted=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
+            smtp_val=int(smtp_id) if smtp_id and smtp_id.isdigit() else None
+            landing_val=int(landing_id) if landing_id and landing_id.isdigit() else None
             if cid:
-                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,timezone=?,business_days=?,window_start=?,window_end=?,batch_size=?,rate_per_minute=?,retry_max=?,retry_backoff_seconds=?,cancel_requested=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),cid))
+                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,timezone=?,business_days=?,window_start=?,window_end=?,batch_size=?,rate_per_minute=?,retry_max=?,retry_backoff_seconds=?,cancel_requested=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_val,landing_val,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),cid))
                 action="CAMPAIGN_UPDATE"
             else:
-                c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_id,landing_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),now()))
+                cur=c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_val,landing_val,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),now()))
+                cid=str(cur.lastrowid)
                 action="CAMPAIGN_CREATE"
             c.commit(); c.close()
-            audit(ADMIN_USERNAME,action,"%s targeted=%s group=%s"%(name,targeted,group_name or "all"),ip)
+            audit(ADMIN_USERNAME,action,"%s status=%s targeted=%s group=%s"%(name,status,targeted,group_name or "all"),ip)
+            if action_mode=="launch":
+                return self.sendbody(302,b"",extra={"Location":"/admin/campaigns/launch?id="+cid})
             return self.sendbody(302,b"",extra={"Location":"/admin/campaigns"})
 
         if p.path=="/submit":
