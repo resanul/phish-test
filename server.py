@@ -3208,14 +3208,27 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
     def campaign_report(self,cid):
         c=db()
         camp=c.execute("SELECT c.*,s.name smtp_name,l.name landing_name FROM campaigns c LEFT JOIN smtp_profiles s ON s.id=c.smtp_profile_id LEFT JOIN landing_pages l ON l.id=c.landing_page_id WHERE c.id=?",(cid,)).fetchone()
-        deliveries=c.execute("SELECT d.status,d.sent_at,r.email,r.name,r.department FROM campaign_deliveries d JOIN recipients r ON r.id=d.recipient_id WHERE d.campaign_id=? ORDER BY d.id DESC",(cid,)).fetchall()
+        deliveries=c.execute("""SELECT d.status,d.sent_at,r.email,r.name,r.department,
+                                       (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='click') as click_count,
+                                       (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event in ('form_action','submitted')) as action_count
+                                FROM campaign_deliveries d JOIN recipients r ON r.id=d.recipient_id WHERE d.campaign_id=? ORDER BY d.id DESC""",(cid,cid,cid)).fetchall()
         events=c.execute("SELECT event,COUNT(*) n FROM events WHERE campaign_id=? GROUP BY event",(cid,)).fetchall()
         c.close()
         if not camp: return self.sendbody(404,"Campaign not found","text/plain")
         counts={x["event"]:x["n"] for x in events}
         sent=sum(1 for x in deliveries if x["status"]=="Sent"); failed=sum(1 for x in deliveries if x["status"]=="Failed")
-        rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'%(esc(x["email"]),esc(x["name"]),esc(x["department"]),esc(x["status"]),esc(x["sent_at"] or "")) for x in deliveries) or '<tr><td colspan="5">No delivery records.</td></tr>'
-        body='<h1>%s</h1><p>SMTP: %s · Landing Page: %s · Targeted: %s</p><div class="card"><b>Sent</b> %s &nbsp; <b>Failed</b> %s &nbsp; <b>Clicks</b> %s &nbsp; <b>Actions</b> %s</div><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Delivery</th><th>Sent At</th></tr>%s</table></div><p><a class="btn" href="/admin/reports">Back to Reports</a></p>'%(esc(camp["name"]),esc(camp["smtp_name"] or "Not set"),esc(camp["landing_name"] or "Not set"),camp["targeted"],sent,failed,counts.get("click",0),counts.get("submitted",0),rows)
+        rows=[]
+        for x in deliveries:
+            ck_badge = f'<span class="pill click" style="background:#fff3cd;color:#856404;font-weight:700">⚠️ Clicked ({x["click_count"]})</span>' if x["click_count"] > 0 else '<span style="color:#8ba59b">—</span>'
+            act_badge = f'<span class="pill form_action" style="background:#f8d7da;color:#721c24;font-weight:700">🚨 Action ({x["action_count"]})</span>' if x["action_count"] > 0 else '<span style="color:#8ba59b">—</span>'
+            rows.append('<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td><span class="pill %s">%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>'%(
+                esc(x["email"]),esc(x["name"]),esc(x["department"]),
+                "delivered" if x["status"]=="Sent" else "failed",esc(x["status"]),
+                ck_badge,act_badge,esc(x["sent_at"] or "")
+            ))
+        rows_html="".join(rows) or '<tr><td colspan="7">No delivery records.</td></tr>'
+        total_actions=counts.get("form_action",0) + counts.get("submitted",0)
+        body='<h1>%s</h1><p>SMTP: %s · Landing Page: %s · Targeted: %s</p><div class="card" style="display:flex;gap:20px;flex-wrap:wrap"><div><b>Sent:</b> %s</div> <div><b>Failed:</b> %s</div> <div><b style="color:#b37400">Clicks:</b> %s</div> <div><b style="color:#c82333">Form Actions:</b> %s</div></div><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Delivery</th><th>Clicked</th><th>Form Action</th><th>Sent At</th></tr>%s</table></div><p><a class="btn" href="/admin/reports">Back to Reports</a></p>'%(esc(camp["name"]),esc(camp["smtp_name"] or "Not set"),esc(camp["landing_name"] or "Not set"),camp["targeted"],sent,failed,counts.get("click",0),total_actions,rows_html)
         return self.admin_shell("Campaign Report",body,"Reports")
 
     def recipient_profile_form(self,rid=None):
