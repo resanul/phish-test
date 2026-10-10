@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trust Bank PLC - Exclusive Employee Card Pre-Approval</title>
+  <style type="text/css">
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f5f8f6;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #18332a;
+    }
+    table {
+      border-collapse: collapse;
+    }
+    .wrapper {
+      width: 100%;
+      table-layout: fixed;
+      background-color: #f5f8f6;
+      padding: 30px 0 40px;
+    }
+    .main {
+      background-color: #ffffff;
+      margin: 0 auto;
+      max-width: 600px;
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #dce9e3;
+      box-shadow: 0 4px 18px rgba(0, 122, 75, 0.08);
+    }
+    .top-strip {
+      background-color: #007a4b;
+      color: #ffffff;
+      text-align: center;
+      padding: 7px 15px;
+      font-size: 11px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    .header {
+      background-color: #ffffff;
+      padding: 18px 30px;
+      border-bottom: 1px solid #e6eee9;
+    }
+    .logo-bank {
+      font-size: 24px;
+      font-weight: 900;
+      color: #007a4b;
+      letter-spacing: -0.5px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .logo-plc {
+      font-size: 13px;
+      font-weight: bold;
+      color: #e4002b;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .header-sub {
+      font-size: 11px;
+      color: #6d7d76;
+      float: right;
+      line-height: 28px;
+      font-weight: 600;
+    }
+    .banner {
+      background: linear-gradient(120deg, #006f47 0%, #008b59 100%);
+      color: #ffffff;
+      padding: 30px;
+      text-align: left;
+    }
+    .badge-gold {
+      background-color: #f4c84b;
+      color: #244631;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 5px 11px;
+      border-radius: 4px;
+      letter-spacing: 0.6px;
+      display: inline-block;
+      text-transform: uppercase;
+    }
+    .banner h1 {
+      margin: 14px 0 5px;
+      font-size: 26px;
+      line-height: 1.2;
+      color: #ffffff;
+      font-weight: 800;
+    }
+    .banner p {
+      margin: 0;
+      color: #e3f4eb;
+      font-size: 14px;
+    }
+    .limit-box {
+      margin-top: 16px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+      padding: 12px 18px;
+      color: #ffffff;
+    }
+    .limit-num {
+      font-size: 28px;
+      font-weight: 900;
+      color: #f4c84b;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 12px;
+    }
+    .limit-txt {
+      font-size: 12px;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1.4;
+      color: #ffffff;
+    }
+    .content {
+      padding: 28px 30px 32px;
+      line-height: 1.55;
+      font-size: 14px;
+      color: #2d453b;
+    }
+    .greeting {
+      font-size: 16px;
+      font-weight: bold;
+      color: #18332a;
+      margin-bottom: 12px;
+    }
+    .perks-table {
+      width: 100%;
+      margin: 20px 0;
+      border-collapse: separate;
+      border-spacing: 8px;
+    }
+    .perk-box {
+      background-color: #f7faf8;
+      border: 1px solid #dce9e3;
+      border-radius: 6px;
+      padding: 12px;
+      vertical-align: top;
+      width: 50%;
+    }
+    .perk-title {
+      font-size: 13px;
+      font-weight: bold;
+      color: #007a4b;
+      margin-bottom: 4px;
+    }
+    .perk-desc {
+      font-size: 11px;
+      color: #63776e;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .summary-card {
+      background-color: #eef8f3;
+      border: 1px solid #bce1ce;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 18px 0;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #1e4536;
+    }
+    .btn-wrap {
+      text-align: center;
+      margin: 28px 0 20px;
+    }
+    .btn-activate {
+      background-color: #007a4b;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: bold;
+      padding: 14px 36px;
+      border-radius: 6px;
+      display: inline-block;
+      box-shadow: 0 4px 14px rgba(0, 122, 75, 0.28);
+    }
+    .footer {
+      background-color: #f7faf8;
+      border-top: 1px solid #e6eee9;
+      padding: 20px 30px;
+      font-size: 11px;
+      color: #6d7d76;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .footer a {
+      color: #007a4b;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <table class="main" align="center" width="600" cellpadding="0" cellspacing="0" border="0">
+      <!-- Top mini bar -->
+      <tr>
+        <td class="top-strip">
+          TRUST BANK PLC &bull; CORPORATE EMPLOYEE CARD PRIVILEGES
+        </td>
+      </tr>
+
+      <!-- Header with Bank Logo -->
+      <tr>
+        <td class="header">
+          <div style="overflow: hidden;">
+            <div style="float: left;">
+              <span class="logo-bank">Trust Bank</span>
+              <span class="logo-plc">PLC</span>
+            </div>
+            <div class="header-sub">
+              Corporate Banking Division
+            </div>
+          </div>
+        </td>
+      </tr>
+
+      <!-- Hero Banner -->
+      <tr>
+        <td class="banner">
+          <span class="phish-technique authority-badge" data-name="Authority Figures" data-colour="#d9d2e9" style="background-color: #d9d2e9; outline: 3px solid #d9d2e9">
+            <span class="badge-gold">Pre-Approved Corporate Privilege</span>
+          </span>
+          <h1 style="margin: 14px 0 5px; font-size: 26px; line-height: 1.2; color: #ffffff; font-weight: 800;">Exclusive Employee Card Pre-Approval</h1>
+          <p style="margin: 0; color: #e3f4eb; font-size: 14px;">Special Corporate Partnership &bull; Zero Documentation Required</p>
+          
+          <div class="limit-box">
+            <span class="limit-num">৳5,00,000</span>
+            <span class="limit-txt">
+              <strong>Pre-Approved Limit Available</strong><br>
+              Mastercard World &bull; Visa Platinum &bull; Titanium
+            </span>
+          </div>
+        </td>
+      </tr>
+
+      <!-- Body Content -->
+      <tr>
+        <td class="content">
+          <div class="greeting">
+            <span class="phish-technique pers-greet" data-name="Personalized Information" data-colour="#c9daf8" style="background-color: #c9daf8; outline: 3px solid #c9daf8">Dear {{name}},</span>
+          </div>
+
+          <p>
+            Trust Bank PLC, under our premier corporate banking payroll agreement with your organization, is pleased to present your <strong>Pre-Approved Corporate Credit Card</strong> privilege with an approved credit limit of up to <strong>BDT 5,00,000</strong>.
+          </p>
+
+          <!-- Benefits Grid -->
+          <table class="perks-table" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td class="perk-box">
+                <div class="perk-title">&bull; Zero Annual Fee</div>
+                <p class="perk-desc">Enjoy 100% lifetime waiver on annual fees with zero maintenance charges under corporate agreement.</p>
+              </td>
+              <td class="perk-box">
+                <div class="perk-title">&bull; Balaka Lounge Access</div>
+                <p class="perk-desc">Complimentary executive access to Balaka Lounge at Hazrat Shahjalal International Airport.</p>
+              </td>
+            </tr>
+            <tr>
+              <td class="perk-box">
+                <div class="perk-title">&bull; Up to 50 Days Interest-Free</div>
+                <p class="perk-desc">Maximum repayment convenience, flexible credit tenure, and 0% Smart EMI facilities across 500+ merchants.</p>
+              </td>
+              <td class="perk-box">
+                <div class="perk-title">&bull; Dual Currency Global Access</div>
+                <p class="perk-desc">Instant worldwide acceptance for international travel and cross-border ecommerce payments.</p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Pre-Approval Details Summary -->
+          <div class="summary-card">
+            <strong>Your Pre-Approved Account Details:</strong><br>
+            &bull; <strong>Cardholder:</strong> {{name}}<br>
+            &bull; <strong>Official Email:</strong> {{email}}<br>
+            &bull; <strong>Employee Reference:</strong> <span class="phish-technique empid-tok" data-name="Personalized Information" data-colour="#c9daf8" style="background-color: #c9daf8; outline: 3px solid #c9daf8">{{employee_id}}</span><br>
+            &bull; <strong>Card Network:</strong> Visa Platinum / Mastercard World (Dual Currency)
+          </div>
+
+          <p>
+            <span class="phish-technique urgency-note" data-name="Urgency" data-colour="#ffe599" style="background-color: #ffe599; outline: 3px solid #ffe599">
+              This corporate pre-approval offer is pre-configured and active for the current enrollment window. No branch visit or physical paperwork is required.
+            </span>
+          </p>
+
+          <!-- Primary CTA Button -->
+          <div class="btn-wrap">
+            <a href="{{tracking_link}}" class="btn-activate" target="_blank">
+              <span class="phish-technique cta-btn" data-name="Call to action" data-colour="#99b8ff" style="background-color: #99b8ff; outline: 3px solid #99b8ff">
+                Activate Pre-Approved Card Now &rarr;
+              </span>
+            </a>
+          </div>
+
+          <p style="margin-top: 22px; font-size: 13px; color: #6d7d76;">
+            <span class="phish-technique imitation-note" data-name="Visual Imitation" data-colour="#ff9b99" style="background-color: #ff9b99; outline: 3px solid #ff9b99">
+              Trust Bank PLC values our institutional partnership. To activate or manage your card, simply click the activation link above and confirm your profile details.
+            </span>
+          </p>
+        </td>
+      </tr>
+
+      <!-- Footer -->
+      <tr>
+        <td class="footer">
+          <p style="margin: 0 0 6px;">
+            &copy; 2026 Trust Bank PLC &bull; Retail &amp; Corporate Cards Division.<br>
+            Shadhinata Tower, Bir Sreshtha Shaheed Jahangir Gate, Dhaka Cantonment, Dhaka-1206.
+          </p>
+          <p style="margin: 8px 0 0; color: #94a3b8; font-size: 10px;">
+            Security Notice: Trust Bank will never ask for your card PIN, CVV, or OTP via email. This message is part of an authorized organizational security awareness drill. If you suspect this email, please <a href="{{report_link}}">Report to Information Security</a>.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

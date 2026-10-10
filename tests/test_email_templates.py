@@ -117,5 +117,43 @@ class EmailTemplatesTests(unittest.TestCase):
         self.assertIn("zoom-urgent-account-update-required", html)
         self.assertIn("data-subject=", html)
 
+    def test_landing_page_1_and_2_email_templates_seeded_and_renderable(self):
+        c = self.server.db()
+        t1 = c.execute("SELECT * FROM template_library WHERE template='1'").fetchone()
+        t2 = c.execute("SELECT * FROM template_library WHERE template='2'").fetchone()
+        c.close()
+
+        self.assertIsNotNone(t1, "Template 1 should exist in template_library")
+        self.assertEqual(t1["brand"], "Apex")
+        self.assertIn("55%", t1["subject"])
+        self.assertIn("rewards@apex-corporate.com", t1["from_email"])
+        self.assertIn("55% OFF", t1["html_body"])
+        self.assertIn("{{tracking_link}}", t1["html_body"])
+
+        self.assertIsNotNone(t2, "Template 2 should exist in template_library")
+        self.assertEqual(t2["brand"], "Trust Bank")
+        self.assertIn("Corporate Credit Card", t2["subject"])
+        self.assertIn("cards@trustbank-corporate.com", t2["from_email"])
+        self.assertIn("5,00,000", t2["html_body"])
+        self.assertIn("{{tracking_link}}", t2["html_body"])
+
+        # Test variable rendering
+        rec = {"name": "Sadia Islam", "email": "sadia@corp.com", "employee_id": "EMP-3049"}
+        camp1 = {"name": "Apex Voucher Drill", "brand": "Apex"}
+        links = {"tracking_link": "https://sim.test/click?t=t1", "report_link": "https://sim.test/report?t=t1"}
+
+        r1 = self.server.render_template_variables(t1["html_body"], rec, camp1, links)
+        self.assertIn("Sadia Islam", r1)
+        self.assertIn("EMP-3049", r1)
+        self.assertIn("https://sim.test/click?t=t1", r1)
+        self.assertIn("https://sim.test/report?t=t1", r1)
+
+        camp2 = {"name": "Trust Bank Card Drill", "brand": "Trust Bank"}
+        r2 = self.server.render_template_variables(t2["html_body"], rec, camp2, links)
+        self.assertIn("Sadia Islam", r2)
+        self.assertIn("EMP-3049", r2)
+        self.assertIn("https://sim.test/click?t=t1", r2)
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -58,6 +58,8 @@ os.makedirs(DATA,exist_ok=True)
 os.makedirs(LOGS,exist_ok=True)
 
 LINKSEC_BRAND_MAP = {
+    "apex": ("Apex", "Retail & Rewards", "Apex Corporate Benefits", "rewards@apex-corporate.com", "Medium"),
+    "trust-bank": ("Trust Bank", "Banking & Finance", "Trust Bank Corporate Banking", "cards@trustbank-corporate.com", "Medium"),
     "amazon-web-services-aws": ("Amazon Web Services (AWS)", "Cloud Services & Infrastructure", "AWS Security Team", "aws-alerts@amazon-security.com", "Medium"),
     "bluejeans": ("BlueJeans", "Communication & Collaboration", "BlueJeans Support", "support@bluejeans-meetings.com", "Easy"),
     "cisco": ("Cisco Webex", "Communication & Collaboration", "Cisco Webex Team", "messenger@cisco-webex.com", "Medium"),
@@ -76,6 +78,8 @@ LINKSEC_BRAND_MAP = {
 }
 
 LINKSEC_KNOWN_TITLES = {
+    "apex-rewards-employee-voucher": ("Apex Rewards - Exclusive 55% Employee Gift Voucher", "[Exclusive] Claim Your Apex 55% Employee Discount Voucher", "Medium"),
+    "trust-bank-corporate-card": ("Trust Bank PLC - Exclusive Employee Card Pre-Approval", "[Pre-Approved] Exclusive Corporate Credit Card Privileges for {{name}}", "Medium"),
     "zoom-urgent-account-update-required": ("Zoom - Urgent Account Update Required", "Urgent: Immediate Action Required to Prevent Zoom Account Suspension", "Hard"),
     "zoom-urgent-zoom-account-security-alert": ("Zoom - Urgent Security Alert", "Zoom - Urgent Security Alert: Unusual Login Detected", "Medium"),
     "zoom-zoom-pro-subscription-offer": ("Zoom - Free Pro Subscription Offer", "Congratulations: Claim Your Complimentary 1-Year Zoom Pro Plan", "Easy"),
@@ -97,8 +101,8 @@ def get_linksec_catalog():
         return _LINKSEC_CATALOG_CACHE
 
     candidates = [
-        os.path.join(TEMPLATES, "email"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "email"),
+        os.path.join(TEMPLATES, "email"),
         r"C:\opt\phish-simulation\templates\email"
     ]
     email_dir = next((d for d in candidates if os.path.isdir(d)), None)
@@ -175,6 +179,106 @@ def seed_linksec_templates(c):
                        item["category"], item["difficulty"], item["language"], item["brand"],
                        item["industry"], item["tags"], item["html_body"], item["text_body"],
                        now(), ADMIN_USERNAME))
+
+CORE_EMAIL_TEMPLATES = [
+    {
+        "template": "1",
+        "name": "Apex Rewards — Exclusive 55% Employee Gift Voucher",
+        "subject": "[Exclusive] Claim Your Apex 55% Employee Discount Voucher",
+        "preheader": "Special corporate benefit: Exclusive 55% discount voucher available for limited time.",
+        "category": "Retail & Benefits Claim",
+        "difficulty": "Medium",
+        "language": "English",
+        "brand": "Apex",
+        "industry": "Retail & Lifestyle",
+        "tags": "Call to action, Visual Imitation, Generic details, Benefits, Employee Rewards, Urgency, FOMO",
+        "file": os.path.join("email", "apex", "apex-rewards-employee-voucher.html"),
+        "from_name": "Apex Corporate Benefits",
+        "from_email": "rewards@apex-corporate.com",
+        "reply_to": "rewards@apex-corporate.com",
+        "owner": "LinkSec Awareness Library",
+        "status": "Active",
+        "text_body": "Dear {{name}},\n\nAs part of our annual corporate employee appreciation initiative, you have been selected to receive an exclusive 55% Apex Employee Discount Voucher.\n\nVoucher Code: APEX-EMP-55X\nEligible: {{name}} (ID: {{employee_id}})\nValidity: Limited Time Only\n\nTo claim and activate your discount voucher, please visit the portal below:\n{{tracking_link}}\n\nIf you suspect this email is unauthorized, report it immediately:\n{{report_link}}\n\nApex Corporate Benefits & Employee Engagement\nApex Footwear Ltd."
+    },
+    {
+        "template": "2",
+        "name": "Trust Bank PLC — Exclusive Employee Card Pre-Approval",
+        "subject": "[Pre-Approved] Exclusive Corporate Credit Card Privileges for {{name}}",
+        "preheader": "Your pre-approved Trust Bank PLC Corporate Credit Card is ready for activation.",
+        "category": "Banking & Financial Services",
+        "difficulty": "Medium",
+        "language": "English",
+        "brand": "Trust Bank",
+        "industry": "Banking & Financial Services",
+        "tags": "Call to action, Visual Imitation, Personalized Information, Pre-Approved Card, Zero Annual Fee, Authority Figures, Urgency",
+        "file": os.path.join("email", "trust-bank", "trust-bank-corporate-card.html"),
+        "from_name": "Trust Bank Corporate Banking",
+        "from_email": "cards@trustbank-corporate.com",
+        "reply_to": "cards@trustbank-corporate.com",
+        "owner": "LinkSec Awareness Library",
+        "status": "Active",
+        "text_body": "Dear {{name}},\n\nCongratulations! You have been pre-approved for an exclusive Trust Bank PLC Corporate Credit Card with an approved limit of up to BDT 5,00,000.\n\nKey Benefits:\n- Zero Annual Fee for life under corporate arrangement\n- Complimentary Balaka Executive Lounge Access\n- Up to 50 Days Interest-Free Credit\n- Pre-approved for: {{name}} (Employee ID: {{employee_id}})\n\nTo activate your card online with zero paperwork, visit:\n{{tracking_link}}\n\nSecurity Notice: Trust Bank will never ask for your PIN or CVV. To report suspicious email:\n{{report_link}}\n\nTrust Bank PLC | Corporate Cards Division\nShadhinata Tower, Bir Sreshtha Shaheed Jahangir Gate, Dhaka Cantonment, Dhaka"
+    }
+]
+
+def seed_core_templates(c):
+    for item in CORE_EMAIL_TEMPLATES:
+        html_body = ""
+        cand_paths = [
+            os.path.join(TEMPLATES, item["file"]),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", item["file"]),
+            os.path.join(r"C:\opt\phish-simulation\templates", item["file"]),
+        ]
+        for p in cand_paths:
+            if os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                        html_body = f.read()
+                    break
+                except Exception:
+                    pass
+
+        row = c.execute("SELECT id, name, brand, html_body, version FROM template_library WHERE template=?", (item["template"],)).fetchone()
+        if row:
+            is_placeholder = (
+                (row["name"] or "").startswith("Template ")
+                or (row["brand"] or "") in ("Trust PhishGuard", "General")
+                or len(row["html_body"] or "") < 1200
+                or "Apex Rewards — Security Awareness Simulation" in (row["html_body"] or "")
+                or "Trust Bank PLC | Exclusive Employee Card Offer" in (row["html_body"] or "")
+            )
+            if is_placeholder and html_body:
+                c.execute("""UPDATE template_library
+                             SET name=?, subject=?, preheader=?, category=?, difficulty=?, language=?,
+                                 brand=?, industry=?, tags=?, html_body=?, text_body=?, from_name=?,
+                                 from_email=?, reply_to=?, owner=?, status=?, updated_at=?
+                             WHERE id=?""",
+                          (item["name"], item["subject"], item["preheader"], item["category"],
+                           item["difficulty"], item["language"], item["brand"], item["industry"],
+                           item["tags"], html_body, item["text_body"], item["from_name"],
+                           item["from_email"], item["reply_to"], item["owner"], item["status"],
+                           now(), row["id"]))
+                c.execute("""INSERT OR IGNORE INTO template_versions(template,version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,created_at,created_by)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (item["template"], row["version"] or 1, item["name"], item["subject"],
+                           item["preheader"], item["category"], item["difficulty"], item["language"],
+                           item["brand"], item["industry"], item["tags"], html_body,
+                           item["text_body"], now(), ADMIN_USERNAME))
+        else:
+            if html_body:
+                c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,from_name,from_email,reply_to,owner,status,updated_at)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (item["template"], item["name"], item["subject"], item["preheader"],
+                           item["category"], item["difficulty"], item["language"], item["brand"],
+                           item["industry"], item["tags"], html_body, item["text_body"],
+                           item["from_name"], item["from_email"], item["reply_to"], item["owner"],
+                           item["status"], now()))
+                c.execute("""INSERT OR IGNORE INTO template_versions(template,version,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,created_at,created_by)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (item["template"], 1, item["name"], item["subject"], item["preheader"],
+                           item["category"], item["difficulty"], item["language"], item["brand"],
+                           item["industry"], item["tags"], html_body, item["text_body"],
+                           now(), ADMIN_USERNAME))
 
 LANDING_PAGE_SEEDS = [
     {
@@ -621,19 +725,21 @@ def db():
               ("Security Awareness Fundamentals","Core security-awareness training following a phishing simulation.",15,80,"Active",now(),now()))
     for i in range(1,11):
         c.execute("INSERT OR IGNORE INTO landing_pages(name,template,status,created_at) VALUES(?,?,?,?)",(f"Landing Page {i}",str(i),"Enabled",datetime.now(timezone.utc).isoformat()))
-        fn=os.path.join(TEMPLATES,str(i)+".html")
-        existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()
-        if not existing:
-            body=""
-            try:
-                with open(fn,"r",encoding="utf-8") as tf: body=tf.read()
-            except Exception:
-                pass
-            c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                      (str(i),f"Template {i}","Security Awareness Simulation","Authorized security-awareness simulation",
-                       "General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,
-                       "This is an authorized security-awareness simulation.",now()))
+        if str(i) not in ("1", "2"):
+            fn=os.path.join(TEMPLATES,str(i)+".html")
+            existing=c.execute("SELECT id FROM template_library WHERE template=?",(str(i),)).fetchone()
+            if not existing:
+                body=""
+                try:
+                    with open(fn,"r",encoding="utf-8") as tf: body=tf.read()
+                except Exception:
+                    pass
+                c.execute("""INSERT INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (str(i),f"Template {i}","Security Awareness Simulation","Authorized security-awareness simulation",
+                           "General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,
+                           "This is an authorized security-awareness simulation.",now()))
+    seed_core_templates(c)
     seed_linksec_templates(c)
     seed_landing_pages(c)
     c.commit()
@@ -2060,7 +2166,7 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
                     </div>'''
 
             rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall()
-            templates_rows=c.execute("SELECT template, name, subject, brand FROM template_library WHERE status='Active' ORDER BY CASE WHEN brand='Zoom' THEN 0 WHEN brand='Microsoft Office 365' THEN 1 WHEN brand='Google Workspace' THEN 2 ELSE 3 END, brand, name").fetchall()
+            templates_rows=c.execute("SELECT template, name, subject, brand FROM template_library WHERE status='Active' ORDER BY CASE WHEN brand='Apex' THEN 0 WHEN brand='Trust Bank' THEN 1 WHEN brand='Zoom' THEN 2 WHEN brand='Microsoft Office 365' THEN 3 WHEN brand='Google Workspace' THEN 4 ELSE 5 END, brand, name").fetchall()
             groups_rows=c.execute("SELECT name FROM groups_tbl ORDER BY name").fetchall()
             active_recipients_cnt=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
             smtp_rows=c.execute("SELECT id, name, from_email FROM smtp_profiles WHERE enabled=1 ORDER BY id").fetchall()
@@ -2229,12 +2335,14 @@ document.getElementById('quickCampModal').addEventListener('click', function(e) 
         if path=="/admin/templates":
             rows=c.execute("""SELECT * FROM template_library
                               ORDER BY CASE
-                                WHEN brand='Zoom' THEN 0
-                                WHEN brand='Microsoft Office 365' THEN 1
-                                WHEN brand='Google Workspace' THEN 2
-                                WHEN brand='Amazon Web Services (AWS)' THEN 3
-                                WHEN brand='Slack' THEN 4
-                                ELSE 5 END, brand, name""").fetchall()
+                                WHEN brand='Apex' THEN 0
+                                WHEN brand='Trust Bank' THEN 1
+                                WHEN brand='Zoom' THEN 2
+                                WHEN brand='Microsoft Office 365' THEN 3
+                                WHEN brand='Google Workspace' THEN 4
+                                WHEN brand='Amazon Web Services (AWS)' THEN 5
+                                WHEN brand='Slack' THEN 6
+                                ELSE 7 END, brand, name""").fetchall()
             c.close()
             total_t=len(rows)
             categories_map={}
@@ -2246,7 +2354,7 @@ document.getElementById('quickCampModal').addEventListener('click', function(e) 
                 brands_map[b]=brands_map.get(b,0)+1
 
             cat_keys=sorted(categories_map.keys())
-            brand_keys=sorted(brands_map.keys(), key=lambda x: (0 if x=="Zoom" else 1 if x=="Microsoft Office 365" else 2 if x=="Google Workspace" else 3 if x=="Amazon Web Services (AWS)" else 4, x))
+            brand_keys=sorted(brands_map.keys(), key=lambda x: (0 if x=="Apex" else 1 if x=="Trust Bank" else 2 if x=="Zoom" else 3 if x=="Microsoft Office 365" else 4 if x=="Google Workspace" else 5 if x=="Amazon Web Services (AWS)" else 6, x))
 
             sel_param=parse_qs(query).get("select",[""])[0] if query else ""
             default_row=next((r for r in rows if r["template"]==sel_param), rows[0] if rows else None)
@@ -3765,13 +3873,18 @@ updateLivePreview();
                 "version":1
             }
         elif not r and tid:
-            fn=os.path.join(TEMPLATES,str(tid)+".html")
-            if os.path.isfile(fn):
-                with open(fn,"r",encoding="utf-8") as f: body=f.read()
-                c.execute("""INSERT OR IGNORE INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
-                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(str(tid),f"Template {tid}","Security Awareness Simulation","Authorized security-awareness simulation","General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,"This is an authorized security-awareness simulation.",now()))
+            if str(tid) in ("1", "2"):
+                seed_core_templates(c)
                 c.commit()
                 r=c.execute("SELECT * FROM template_library WHERE template=?",(str(tid),)).fetchone()
+            else:
+                fn=os.path.join(TEMPLATES,str(tid)+".html")
+                if os.path.isfile(fn):
+                    with open(fn,"r",encoding="utf-8") as f: body=f.read()
+                    c.execute("""INSERT OR IGNORE INTO template_library(template,name,subject,preheader,category,difficulty,language,brand,industry,tags,html_body,text_body,updated_at)
+                                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(str(tid),f"Template {tid}","Security Awareness Simulation","Authorized security-awareness simulation","General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,"This is an authorized security-awareness simulation.",now()))
+                    c.commit()
+                    r=c.execute("SELECT * FROM template_library WHERE template=?",(str(tid),)).fetchone()
         versions=c.execute("SELECT version,created_at,created_by FROM template_versions WHERE template=? ORDER BY version DESC LIMIT 20",(str(tid),)).fetchall() if r else []
         c.close()
         if not r:
@@ -3960,7 +4073,7 @@ function insertTplVar(v) {{
         lands=c.execute("SELECT id,name,template,version FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
         groups=c.execute("SELECT g.name,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.name ORDER BY g.name").fetchall()
         total_recipients=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
-        templates=c.execute("SELECT template,name,category,difficulty,subject,brand FROM template_library ORDER BY CASE WHEN brand='Zoom' THEN 0 WHEN brand='Microsoft Office 365' THEN 1 WHEN brand='Google Workspace' THEN 2 WHEN brand='Amazon Web Services (AWS)' THEN 3 ELSE 4 END, brand, name").fetchall()
+        templates=c.execute("SELECT template,name,category,difficulty,subject,brand FROM template_library ORDER BY CASE WHEN brand='Apex' THEN 0 WHEN brand='Trust Bank' THEN 1 WHEN brand='Zoom' THEN 2 WHEN brand='Microsoft Office 365' THEN 3 WHEN brand='Google Workspace' THEN 4 WHEN brand='Amazon Web Services (AWS)' THEN 5 ELSE 6 END, brand, name").fetchall()
         c.close()
 
         name=esc(r["name"]) if r else ""
