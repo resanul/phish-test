@@ -305,6 +305,11 @@ def db():
     );
     CREATE INDEX IF NOT EXISTS idx_events_campaign_event ON events(campaign_id,event);
     CREATE INDEX IF NOT EXISTS idx_events_recipient_event ON events(recipient_id,event);
+    CREATE TABLE IF NOT EXISTS system_settings(
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
     """)
     c.executescript("""
     CREATE TABLE IF NOT EXISTS rbac_roles(
@@ -666,6 +671,38 @@ def validate_landing_html(body):
         if re.search(pattern,body or ""):
             return False,"Blocked field policy: passwords, OTPs, PINs, CVV/CVC or card-number collection is not allowed."
     return True,""
+
+def get_public_base_url(fallback_host=None):
+    global PUBLIC_BASE_URL
+    env_val = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if env_val:
+        PUBLIC_BASE_URL = env_val
+        return env_val
+    try:
+        c = db()
+        r = c.execute("SELECT value FROM system_settings WHERE key='public_base_url'").fetchone()
+        c.close()
+        if r and r["value"] and r["value"].strip():
+            val = r["value"].strip().rstrip("/")
+            PUBLIC_BASE_URL = val
+            return val
+    except Exception:
+        pass
+    if fallback_host:
+        proto = "https" if str(fallback_host).endswith(":443") else "http"
+        detected = f"{proto}://{fallback_host}".rstrip("/")
+        try:
+            c = db()
+            c.execute("INSERT OR REPLACE INTO system_settings(key,value,updated_at) VALUES('public_base_url',?,?)", (detected, now()))
+            c.commit()
+            c.close()
+        except Exception:
+            pass
+        PUBLIC_BASE_URL = detected
+        return detected
+    if PUBLIC_BASE_URL:
+        return PUBLIC_BASE_URL
+    return f"http://127.0.0.1:{PORT}"
 
 def create_tracking_token(campaign_id,recipient_id):
     token=secrets.token_urlsafe(32)
@@ -1032,14 +1069,15 @@ def _send_campaign_recipient(campaign,rec,queue_id):
         c=db(); lrow=c.execute("SELECT template FROM landing_pages WHERE id=?",(campaign["landing_page_id"],)).fetchone(); c.close()
         if lrow and lrow["template"]: target_page=str(lrow["template"])
     if not target_page: target_page=str(campaign["template"] or "1")
-    link=PUBLIC_BASE_URL+"/"+target_page+".html?"+urlencode({"t":token})
+    pub_url = get_public_base_url()
+    link=pub_url+"/"+target_page+".html?"+urlencode({"t":token})
     msg=EmailMessage()
     msg["From"]=formataddr((campaign["template_from_name"] or campaign["from_name"] or "Trust PhishGuard",campaign["template_from_email"] or campaign["from_email"]))
     if campaign["template_reply_to"] or campaign["reply_to"]:
         msg["Reply-To"]=campaign["template_reply_to"] or campaign["reply_to"]
     msg["To"]=rec["email"]
     msg["Subject"]=campaign["subject"] or "Security Awareness Simulation"
-    links={"tracking_link":link,"report_link":PUBLIC_BASE_URL+"/report?t="+token,"qr_link":PUBLIC_BASE_URL+"/qr?t="+token}
+    links={"tracking_link":link,"report_link":pub_url+"/report?t="+token,"qr_link":pub_url+"/qr?t="+token}
     if campaign["template_status"] and campaign["template_status"]!="Active":
         raise RuntimeError("Selected template is archived")
     html_body=render_template_variables(campaign["template_html"],rec,campaign,links)
@@ -1076,10 +1114,10 @@ def _send_campaign_recipient(campaign,rec,queue_id):
             try: smtp.quit()
             except Exception: pass
 
-def campaign_prelaunch_validation(campaign):
+def campaign_prelaunch_validation(campaign, req_host=None):
     errors=[]
     if not campaign: return ["Campaign not found."]
-    if not os.environ.get("PUBLIC_BASE_URL","").strip(): errors.append("PUBLIC_BASE_URL is not configured.")
+    if not get_public_base_url(req_host): errors.append("PUBLIC_BASE_URL is not configured.")
     c=db()
     smtp=c.execute("SELECT * FROM smtp_profiles WHERE id=? AND enabled=1",(campaign["smtp_profile_id"],)).fetchone() if campaign["smtp_profile_id"] else None
     landing=c.execute("SELECT * FROM landing_pages WHERE id=? AND status='Enabled'",(campaign["landing_page_id"],)).fetchone() if campaign["landing_page_id"] else None
@@ -1109,8 +1147,8 @@ def campaign_prelaunch_validation(campaign):
         errors.append("Campaign timezone or sending-window settings are invalid.")
     return errors
 
-def send_campaign(campaign_id,scheduled=False):
-    if not PUBLIC_BASE_URL:
+def send_campaign(campaign_id,scheduled=False,req_host=None):
+    if not get_public_base_url(req_host):
         raise RuntimeError("PUBLIC_BASE_URL is not configured")
     c=db()
     campaign=c.execute("""SELECT c.*,s.host,s.port,s.security,s.username,s.password_enc,s.from_name,s.from_email,s.reply_to,s.auth_method,s.oauth_token_enc,
@@ -1505,6 +1543,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/campaigns/test-send":"campaign.launch",
         "/admin/campaigns/launch":"campaign.launch",
         "/admin/campaigns/save":{"create":"campaign.create","edit":"campaign.edit"},
+        "/admin/settings/base-url":"risk.manage",
     },
 }
 
@@ -3001,7 +3040,8 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
             return self.admin_shell("Admin Users",body,"Admin Users")
         if path=="/admin/settings":
             cfg=risk_settings(c); c.close()
-            body='<h1>Settings</h1><div class="card"><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'%(cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
+            cur_base_url = get_public_base_url(self.headers.get("Host"))
+            body='''<h1>Settings</h1><div class="card"><h3>Public Simulation Base URL</h3><p>The public base URL used for email tracking links, landing pages, and QR codes sent to target users.</p><form class="form" method="post" action="/admin/settings/base-url"><label>Base URL (e.g., http://192.168.10.242:8899 or https://phish.example.com)<input type="text" name="public_base_url" value="%s" required maxlength="255"></label><button class="btn primary" type="submit">Save Base URL</button></form><p class="sub" style="margin-top:8px">Currently active: <code>%s</code></p></div><div class="card" style="margin-top:15px"><h3>System Environment</h3><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'''%(esc(cur_base_url),esc(cur_base_url),cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
             return self.admin_shell("Settings",body,"Settings")
         c.close(); return None
 
@@ -4463,10 +4503,12 @@ syncAudience();
             count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(campaign["group_name"] if campaign else "",campaign["group_name"] if campaign else "")).fetchone()["n"] if campaign else 0
             c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
-            errors=campaign_prelaunch_validation(campaign)
+            req_host=self.headers.get("Host")
+            errors=campaign_prelaunch_validation(campaign, req_host)
+            current_base_url=get_public_base_url(req_host)
             checks="".join("<li style='color:%s'>%s</li>"%("#a12d2d" if e else "#087b59",esc(e or "Ready")) for e in errors) if errors else "<li style='color:#087b59'>All pre-launch checks passed.</li>"
             disabled=" disabled" if errors else ""
-            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Eligible recipients: <b>%s</b></p><h3>Pre-launch validation</h3><ul>%s</ul><p>This action sends only to the configured authorized target scope.</p><p><a class="btn" href="/admin/campaigns/test-send?id=%s">Send Test Message</a></p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required%s> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary"%s>Launch Now</button></form></div>'%(esc(campaign["name"]),count,checks,cid,cid,disabled,disabled)
+            body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Eligible recipients: <b>%s</b></p><p>Simulation Base URL: <code>%s</code> (<a href="/admin/settings">Change in Settings</a>)</p><h3>Pre-launch validation</h3><ul>%s</ul><p>This action sends only to the configured authorized target scope.</p><p><a class="btn" href="/admin/campaigns/test-send?id=%s">Send Test Message</a></p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required%s> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary"%s>Launch Now</button></form></div>'%(esc(campaign["name"]),count,esc(current_base_url),checks,cid,cid,disabled,disabled)
             return self.sendbody(200,self.admin_shell("Launch Campaign",body,"Campaigns"))
         if path=="/admin/campaigns/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
@@ -5009,6 +5051,18 @@ syncAudience();
             for k,v in vals.items(): c.execute("INSERT INTO risk_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(k,str(v)))
             c.commit(); c.close(); risk_recalculate(); audit(ADMIN_USERNAME,"RISK_SETTINGS_UPDATE","risk scoring configuration updated",ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/settings"})
+        if p.path=="/admin/settings/base-url":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            base_url=form.get("public_base_url",[""])[0].strip().rstrip("/")
+            if not base_url or not (base_url.startswith("http://") or base_url.startswith("https://")):
+                return self.sendbody(400,"Base URL must begin with http:// or https://","text/plain")
+            c=db()
+            c.execute("INSERT OR REPLACE INTO system_settings(key,value,updated_at) VALUES('public_base_url',?,?)",(base_url,now()))
+            c.commit(); c.close()
+            global PUBLIC_BASE_URL
+            PUBLIC_BASE_URL=base_url
+            audit(ADMIN_USERNAME,"SETTINGS_UPDATE","public_base_url updated to %s"%base_url,ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/settings"})
         if p.path=="/admin/smtp/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:100]; provider=form.get("provider",["Custom SMTP"])[0]
@@ -5235,7 +5289,7 @@ syncAudience();
             if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",to_email): return self.sendbody(400,"Invalid test recipient email","text/plain")
             c=db(); campaign=c.execute("SELECT c.*,s.* FROM campaigns c JOIN smtp_profiles s ON s.id=c.smtp_profile_id WHERE c.id=?",(cid,)).fetchone(); c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
-            errors=campaign_prelaunch_validation(campaign)
+            errors=campaign_prelaunch_validation(campaign, self.headers.get("Host"))
             if errors: return self.sendbody(409,"Test-send blocked by pre-launch validation: "+" ".join(errors),"text/plain")
             try:
                 msg=EmailMessage()
@@ -5257,11 +5311,11 @@ syncAudience();
             c=db(); campaign=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone(); c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
             if campaign["status"]=="Completed": return self.sendbody(409,"Campaign already completed","text/plain")
-            errors=campaign_prelaunch_validation(campaign)
+            errors=campaign_prelaunch_validation(campaign, self.headers.get("Host"))
             if errors:
                 return self.sendbody(409,"Pre-launch validation failed: "+" ".join(errors),"text/plain")
             try:
-                sent,failed,total=send_campaign(cid)
+                sent,failed,total=send_campaign(cid, req_host=self.headers.get("Host"))
                 audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH","campaign=%s sent=%s failed=%s total=%s"%(cid,sent,failed,total),ip)
                 return self.sendbody(200,page("Campaign Launch","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Campaign launch complete</h2><p>Attempted: %s · Sent: %s · Failed: %s</p><p><a href='/admin/campaigns'>Back to Campaigns</a></p></div>"%(total,sent,failed)))
             except Exception:
