@@ -1,1 +1,48 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security Awareness Simulation 7</title><style>body{font-family:Arial;background:#f3f4f6;padding:40px}.box{max-width:520px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px #0001}input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 14px}button{padding:12px 20px;background:#111;color:#fff;border:0;border-radius:6px}.notice{background:#111;color:#fff;padding:10px;margin:-30px -30px 25px}</style></head><body><div class="box"><div class="notice">SECURITY AWARENESS SIMULATION</div><h1>Security Awareness Simulation 7</h1><p>No password, OTP, PIN, CVV or card information is requested.</p><form method="post" action="/submit"><input type="hidden" name="template" value="7.html"><label>Name</label><input name="name" required><label>Email</label><input type="email" name="email" required><label>Mobile</label><input name="mobile" required><button>Continue</button></form></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security Alert — Transaction Verification</title>
+  <style>
+    body { margin:0; padding:20px; background:#f5f6f8; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#222; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }
+    .card { background:#fff; width:100%; max-width:460px; border-radius:14px; border:1px solid #e1e4e8; box-shadow:0 6px 20px rgba(0,0,0,0.06); padding:32px; box-sizing:border-box; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:999px; background:#fee2e2; color:#b91c1c; font-size:11px; font-weight:800; text-transform:uppercase; margin-bottom:12px; }
+    .sim-banner { background:#fef3c7; color:#92400e; font-size:11px; padding:7px 10px; border-radius:6px; margin-bottom:16px; font-weight:600; text-align:center; }
+    h1 { font-size:21px; margin:0 0 10px 0; color:#111; }
+    p { font-size:13.5px; color:#555; line-height:1.55; margin:0 0 20px 0; }
+    .field { margin-bottom:16px; }
+    label { display:block; font-size:12px; font-weight:600; color:#444; margin-bottom:6px; }
+    input { width:100%; box-sizing:border-box; padding:10px 12px; border:1.5px solid #cbd0d6; border-radius:8px; font-size:14px; }
+    input:focus { outline:none; border-color:#e11d48; box-shadow:0 0 0 3px rgba(225,29,72,0.12); }
+    button { width:100%; background:#e11d48; color:#fff; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }
+    button:hover { background:#be123c; }
+    .note { font-size:11px; color:#777; text-align:center; margin-top:14px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">Security Alert</span>
+    <div class="sim-banner">🔒 Authorised Security Awareness Simulation · No financial PIN or OTP requested</div>
+    <h1>Suspicious Transaction Flagged</h1>
+    <p>An unrecognized withdrawal of ৳ 14,500 was initiated from a new device. Verify your contact details to review and safeguard your account.</p>
+    <form method="post" action="/submit">
+      <input type="hidden" name="template" value="7.html">
+      <div class="field">
+        <label>Account Holder Name</label>
+        <input type="text" name="name" placeholder="Full Legal Name" required>
+      </div>
+      <div class="field">
+        <label>Registered Mobile Number</label>
+        <input type="text" name="mobile" placeholder="017XXXXXXXX" required>
+      </div>
+      <div class="field">
+        <label>Notification Email</label>
+        <input type="email" name="email" placeholder="user@example.com" required>
+      </div>
+      <button type="submit">Review &amp; Halt Suspicious Transaction</button>
+    </form>
+    <div class="note">Authorized Security Simulation · No financial credentials requested</div>
+  </div>
+</body>
+</html>

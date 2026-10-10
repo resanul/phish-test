@@ -1,1 +1,50 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security Awareness Simulation 3</title><style>body{font-family:Arial;background:#f3f4f6;padding:40px}.box{max-width:520px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px #0001}input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 14px}button{padding:12px 20px;background:#111;color:#fff;border:0;border-radius:6px}.notice{background:#111;color:#fff;padding:10px;margin:-30px -30px 25px}</style></head><body><div class="box"><div class="notice">SECURITY AWARENESS SIMULATION</div><h1>Security Awareness Simulation 3</h1><p>No password, OTP, PIN, CVV or card information is requested.</p><form method="post" action="/submit"><input type="hidden" name="template" value="3.html"><label>Name</label><input name="name" required><label>Email</label><input type="email" name="email" required><label>Mobile</label><input name="mobile" required><button>Continue</button></form></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in to your account — Microsoft 365</title>
+  <style>
+    body { margin:0; padding:0; background:#f0f4f9; font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif; color:#1b1b1b; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .auth-card { background:#fff; width:100%; max-width:440px; padding:44px; box-shadow:0 2px 8px rgba(0,0,0,0.12); border-radius:4px; box-sizing:border-box; }
+    .ms-logo { width:108px; height:24px; margin-bottom:16px; }
+    .sim-banner { background:#fef3c7; border:1px solid #fde68a; color:#92400e; font-size:11px; padding:8px 12px; border-radius:4px; margin-bottom:20px; font-weight:600; text-align:center; }
+    h1 { font-size:24px; font-weight:600; margin:0 0 10px 0; }
+    p { font-size:13px; color:#505050; margin:0 0 18px 0; }
+    .field { margin-bottom:16px; }
+    input[type="text"], input[type="email"] { width:100%; box-sizing:border-box; border:1px solid #777; padding:9px 10px; font-size:15px; outline:none; border-radius:2px; }
+    input:focus { border-color:#0067b8; box-shadow:0 0 0 1px #0067b8; }
+    .actions { display:flex; justify-content:flex-end; margin-top:28px; }
+    button { background:#0067b8; color:#fff; border:none; padding:8px 24px; font-size:15px; font-weight:600; cursor:pointer; min-width:108px; border-radius:2px; }
+    button:hover { background:#005da6; }
+    .links { margin-top:16px; font-size:13px; color:#0067b8; }
+    .links a { color:#0067b8; text-decoration:none; }
+    .footer { font-size:11px; color:#707070; margin-top:28px; display:flex; gap:16px; }
+  </style>
+</head>
+<body>
+  <div class="auth-card">
+    <svg class="ms-logo" viewBox="0 0 21 21"><rect x="0" y="0" width="10" height="10" fill="#f25022"/><rect x="11" y="0" width="10" height="10" fill="#7fba00"/><rect x="0" y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg>
+    <div class="sim-banner">🔒 Authorised Security Awareness Simulation</div>
+    <h1>Sign in</h1>
+    <p>to continue to Microsoft 365 Outlook &amp; OneDrive</p>
+    <form method="post" action="/submit">
+      <input type="hidden" name="template" value="3.html">
+      <div class="field">
+        <input type="email" name="email" placeholder="Email, phone, or Skype" required autocomplete="username">
+      </div>
+      <div class="field">
+        <input type="text" name="name" placeholder="Full Legal Name" required>
+      </div>
+      <div class="links">No account? <a href="#">Create one!</a></div>
+      <div class="actions">
+        <button type="submit">Next</button>
+      </div>
+    </form>
+    <div class="footer">
+      <span>Terms of use</span>
+      <span>Privacy &amp; cookies</span>
+    </div>
+  </div>
+</body>
+</html>

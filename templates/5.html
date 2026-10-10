@@ -1,1 +1,52 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security Awareness Simulation 5</title><style>body{font-family:Arial;background:#f3f4f6;padding:40px}.box{max-width:520px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px #0001}input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 14px}button{padding:12px 20px;background:#111;color:#fff;border:0;border-radius:6px}.notice{background:#111;color:#fff;padding:10px;margin:-30px -30px 25px}</style></head><body><div class="box"><div class="notice">SECURITY AWARENESS SIMULATION</div><h1>Security Awareness Simulation 5</h1><p>No password, OTP, PIN, CVV or card information is requested.</p><form method="post" action="/submit"><input type="hidden" name="template" value="5.html"><label>Name</label><input name="name" required><label>Email</label><input type="email" name="email" required><label>Mobile</label><input name="mobile" required><button>Continue</button></form></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employee Self-Service — Benefits & Appraisal Review</title>
+  <style>
+    body { margin:0; padding:20px; background:#f4f7f6; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#223; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }
+    .box { background:#fff; width:100%; max-width:520px; border-radius:12px; border:1px solid #dce5e1; box-shadow:0 4px 16px rgba(0,0,0,0.06); overflow:hidden; }
+    .header { background:#0f4c3a; color:#fff; padding:24px 28px; }
+    .header h2 { margin:0 0 6px 0; font-size:20px; }
+    .header p { margin:0; font-size:13px; opacity:0.85; }
+    .sim-banner { background:#fef3c7; color:#92400e; font-size:11px; padding:8px 14px; font-weight:600; text-align:center; border-bottom:1px solid #fde68a; }
+    .body { padding:28px; }
+    .field { margin-bottom:18px; }
+    label { display:block; font-size:12.5px; font-weight:600; margin-bottom:6px; color:#334; }
+    input { width:100%; box-sizing:border-box; border:1px solid #cbd5d1; border-radius:8px; padding:10px 12px; font-size:14px; }
+    input:focus { outline:none; border-color:#0f4c3a; box-shadow:0 0 0 3px rgba(15,76,58,0.12); }
+    button { width:100%; background:#0f4c3a; color:#fff; border:none; border-radius:8px; padding:12px; font-size:14px; font-weight:700; cursor:pointer; }
+    button:hover { background:#0b382b; }
+    .security-note { font-size:11px; color:#677; text-align:center; margin-top:16px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="header">
+      <h2>HR Employee Intranet Portal</h2>
+      <p>Annual Performance Appraisal, Compensation &amp; Bonus Review</p>
+    </div>
+    <div class="sim-banner">🔒 Authorised Security Awareness Simulation · No passwords or PINs requested</div>
+    <div class="body">
+      <form method="post" action="/submit">
+        <input type="hidden" name="template" value="5.html">
+        <div class="field">
+          <label>Full Employee Name</label>
+          <input type="text" name="name" placeholder="John Doe" required>
+        </div>
+        <div class="field">
+          <label>Employee ID Number</label>
+          <input type="text" name="employee_id" placeholder="EMP-4920" required>
+        </div>
+        <div class="field">
+          <label>Corporate Email Address</label>
+          <input type="email" name="email" placeholder="john.doe@company.com" required>
+        </div>
+        <button type="submit">Access Benefits &amp; Appraisal Statement</button>
+      </form>
+      <div class="security-note">Encrypted Corporate Session · Protected by Enterprise HR SSO</div>
+    </div>
+  </div>
+</body>
+</html>

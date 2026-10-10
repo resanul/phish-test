@@ -1,1 +1,58 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security Awareness Simulation 10</title><style>body{font-family:Arial;background:#f3f4f6;padding:40px}.box{max-width:520px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px #0001}input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 14px}button{padding:12px 20px;background:#111;color:#fff;border:0;border-radius:6px}.notice{background:#111;color:#fff;padding:10px;margin:-30px -30px 25px}</style></head><body><div class="box"><div class="notice">SECURITY AWARENESS SIMULATION</div><h1>Security Awareness Simulation 10</h1><p>No password, OTP, PIN, CVV or card information is requested.</p><form method="post" action="/submit"><input type="hidden" name="template" value="10.html"><label>Name</label><input name="name" required><label>Email</label><input type="email" name="email" required><label>Mobile</label><input name="mobile" required><button>Continue</button></form></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security Awareness Training — Phishing Drill</title>
+  <style>
+    body { margin:0; padding:30px 20px; background:#f8faf9; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#182e25; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }
+    .box { background:#fff; width:100%; max-width:640px; border-radius:16px; border:1px solid #d9e6e0; box-shadow:0 8px 30px rgba(0,0,0,0.06); overflow:hidden; }
+    .banner { background:#dc2626; color:#fff; padding:28px; text-align:center; }
+    .icon { font-size:48px; margin-bottom:8px; }
+    .banner h1 { margin:0 0 6px 0; font-size:24px; font-weight:800; }
+    .banner p { margin:0; font-size:14px; opacity:0.95; }
+    .content { padding:32px; }
+    .clues { background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:18px 20px; margin:20px 0; }
+    .clues h3 { margin:0 0 10px 0; font-size:15px; color:#991b1b; }
+    .clue-item { display:flex; gap:10px; font-size:13px; color:#450a0a; margin-bottom:8px; }
+    .field { margin-bottom:14px; }
+    label { display:block; font-size:12px; font-weight:600; color:#334; margin-bottom:5px; }
+    input { width:100%; box-sizing:border-box; border:1.5px solid #cbd5d1; border-radius:8px; padding:10px 12px; font-size:14px; }
+    input:focus { outline:none; border-color:#087b59; box-shadow:0 0 0 3px rgba(8,123,89,0.12); }
+    .btn { display:block; width:100%; box-sizing:border-box; background:#087b59; color:#fff; border:none; border-radius:9px; padding:13px; font-size:14px; font-weight:700; text-align:center; cursor:pointer; margin-top:14px; }
+    .btn:hover { background:#066347; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="banner">
+      <div class="icon">🎣</div>
+      <h1>Oops! You clicked a simulated phishing link!</h1>
+      <p>Don't worry — this was an authorized security training exercise.</p>
+    </div>
+    <div class="content">
+      <p style="font-size:14.5px;line-height:1.6;margin-top:0">
+        Your organization conducts routine phishing simulations to strengthen our collective defense against cyber attacks. No malicious software was installed and your computer is safe.
+      </p>
+      <div class="clues">
+        <h3>🔍 3 Red Flags to Watch for Next Time:</h3>
+        <div class="clue-item"><span>⚠️</span> <b>Suspicious Sender Address:</b> Check the exact sender domain carefully, not just the display name.</div>
+        <div class="clue-item"><span>⚠️</span> <b>Artificial Urgency:</b> Phishing emails often threaten account suspension or demand immediate action within 24 hours.</div>
+        <div class="clue-item"><span>⚠️</span> <b>Hover Before Clicking:</b> Always inspect destination links before opening attachments or URLs.</div>
+      </div>
+      <form method="post" action="/submit">
+        <input type="hidden" name="template" value="10.html">
+        <div class="field">
+          <label>Your Name</label>
+          <input type="text" name="name" placeholder="Enter your name" required>
+        </div>
+        <div class="field">
+          <label>Work Email</label>
+          <input type="email" name="email" placeholder="Enter your corporate email" required>
+        </div>
+        <button type="submit" class="btn">I Acknowledge This Security Drill ✓</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

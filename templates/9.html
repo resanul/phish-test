@@ -1,1 +1,49 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security Awareness Simulation 9</title><style>body{font-family:Arial;background:#f3f4f6;padding:40px}.box{max-width:520px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 2px 12px #0001}input{width:100%;box-sizing:border-box;padding:11px;margin:7px 0 14px}button{padding:12px 20px;background:#111;color:#fff;border:0;border-radius:6px}.notice{background:#111;color:#fff;padding:10px;margin:-30px -30px 25px}</style></head><body><div class="box"><div class="notice">SECURITY AWARENESS SIMULATION</div><h1>Security Awareness Simulation 9</h1><p>No password, OTP, PIN, CVV or card information is requested.</p><form method="post" action="/submit"><input type="hidden" name="template" value="9.html"><label>Name</label><input name="name" required><label>Email</label><input type="email" name="email" required><label>Mobile</label><input name="mobile" required><button>Continue</button></form></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Amazon Web Services Sign-In</title>
+  <style>
+    body { margin:0; padding:20px; background:#eaeded; font-family:"Amazon Ember",Arial,sans-serif; color:#16191f; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }
+    .card { background:#fff; width:100%; max-width:440px; border-radius:4px; border:1px solid #d5dbdb; box-shadow:0 1px 3px rgba(0,0,0,0.1); padding:32px; box-sizing:border-box; }
+    .aws-logo { font-size:28px; font-weight:900; color:#232f3e; margin-bottom:14px; letter-spacing:-1px; }
+    .aws-logo span { color:#ff9900; }
+    .sim-banner { background:#fff3cd; border:1px solid #ffeeba; color:#856404; font-size:11px; padding:7px 10px; border-radius:4px; margin-bottom:18px; font-weight:600; text-align:center; }
+    h1 { font-size:22px; font-weight:700; margin:0 0 6px 0; }
+    p { font-size:13px; color:#545b64; margin:0 0 20px 0; }
+    .field { margin-bottom:16px; }
+    label { display:block; font-size:12px; font-weight:700; margin-bottom:5px; color:#16191f; }
+    input { width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid #aab7b8; border-radius:3px; font-size:14px; }
+    input:focus { outline:none; border-color:#e77600; box-shadow:0 0 3px 2px rgba(228,121,17,.5); }
+    button { width:100%; background:#ff9900; color:#111; border:1px solid #a88734; padding:10px; border-radius:3px; font-size:14px; font-weight:700; cursor:pointer; }
+    button:hover { background:#f08800; }
+    .foot { font-size:11px; color:#767676; text-align:center; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="aws-logo">aws<span>✦</span></div>
+    <div class="sim-banner">🔒 Authorised Security Awareness Simulation</div>
+    <h1>Sign in as IAM user</h1>
+    <p>AWS Cloud Management Console</p>
+    <form method="post" action="/submit">
+      <input type="hidden" name="template" value="9.html">
+      <div class="field">
+        <label>Account ID (12 digits) or account alias</label>
+        <input type="text" name="employee_id" placeholder="123456789012" required>
+      </div>
+      <div class="field">
+        <label>IAM user name</label>
+        <input type="text" name="name" placeholder="cloud-admin" required>
+      </div>
+      <div class="field">
+        <label>Corporate Notification Email</label>
+        <input type="email" name="email" placeholder="admin@corp.aws" required>
+      </div>
+      <button type="submit">Sign in to AWS Console</button>
+    </form>
+    <div class="foot">Amazon Web Services, Inc. · Authorized Cloud Drill</div>
+  </div>
+</body>
+</html>

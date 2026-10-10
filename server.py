@@ -176,6 +176,106 @@ def seed_linksec_templates(c):
                        item["industry"], item["tags"], item["html_body"], item["text_body"],
                        now(), ADMIN_USERNAME))
 
+LANDING_PAGE_SEEDS = [
+    {
+        "template": "1",
+        "name": "Apex Rewards — Employee Gift Voucher & Benefits Portal",
+        "brand": "Apex",
+        "scenario": "Retail & Rewards Claim",
+        "file": "1.html"
+    },
+    {
+        "template": "2",
+        "name": "Trust Bank PLC — Exclusive Employee Card Portal",
+        "brand": "Trust Bank",
+        "scenario": "Corporate Banking & Card Privileges",
+        "file": "2.html"
+    },
+    {
+        "template": "3",
+        "name": "Microsoft 365 — Corporate Outlook & OneDrive Sign-In",
+        "brand": "Microsoft 365",
+        "scenario": "Cloud SSO & Mail Authentication",
+        "file": "3.html"
+    },
+    {
+        "template": "4",
+        "name": "Google Workspace — Enterprise SSO Authentication Portal",
+        "brand": "Google Workspace",
+        "scenario": "Identity & Drive Verification",
+        "file": "4.html"
+    },
+    {
+        "template": "5",
+        "name": "HR Employee Portal — Annual Appraisal & Benefits Statement",
+        "brand": "HR Portal",
+        "scenario": "Human Resources & Payroll Review",
+        "file": "5.html"
+    },
+    {
+        "template": "6",
+        "name": "GlobalProtect — IT Security Gateway & Remote VPN Login",
+        "brand": "GlobalProtect",
+        "scenario": "IT Infrastructure & Network Gateway",
+        "file": "6.html"
+    },
+    {
+        "template": "7",
+        "name": "bKash & Banking Alert — Suspicious Transaction Verification",
+        "brand": "bKash / Bank",
+        "scenario": "Financial Security & Fraud Alert",
+        "file": "7.html"
+    },
+    {
+        "template": "8",
+        "name": "Zoom Meeting — Security Verification & Meeting Access",
+        "brand": "Zoom",
+        "scenario": "Video Collaboration Security Update",
+        "file": "8.html"
+    },
+    {
+        "template": "9",
+        "name": "Amazon Web Services (AWS) — Cloud IAM Console Sign-In",
+        "brand": "AWS",
+        "scenario": "DevOps & Cloud Management Access",
+        "file": "9.html"
+    },
+    {
+        "template": "10",
+        "name": "Teachable Moment — Instant Awareness Training & Feedback",
+        "brand": "Security Awareness",
+        "scenario": "Educational Incident Drill",
+        "file": "10.html"
+    }
+]
+
+def seed_landing_pages(c):
+    for item in LANDING_PAGE_SEEDS:
+        html_body = ""
+        for cand in (os.path.join(TEMPLATES, item["file"]), os.path.join(os.path.dirname(__file__), "templates", item["file"])):
+            if os.path.isfile(cand):
+                try:
+                    with open(cand, "r", encoding="utf-8") as tf:
+                        html_body = tf.read()
+                    break
+                except Exception:
+                    pass
+
+        row = c.execute("SELECT id, name, html_body, version FROM landing_pages WHERE template=?", (item["template"],)).fetchone()
+        if row:
+            is_placeholder = row["name"].startswith("Landing Page ") or len(row["html_body"] or "") < 1200
+            if is_placeholder and html_body:
+                c.execute("UPDATE landing_pages SET name=?, html_body=?, text_body=?, updated_at=? WHERE id=?",
+                          (item["name"], html_body, "Authorized security-awareness simulation landing page.", now(), row["id"]))
+                c.execute("INSERT OR IGNORE INTO landing_page_versions(landing_page_id,version,html_body,text_body,created_at,created_by) VALUES(?,?,?,?,?,?)",
+                          (row["id"], row["version"] or 1, html_body, "Authorized security-awareness simulation landing page.", now(), ADMIN_USERNAME))
+        else:
+            c.execute("INSERT INTO landing_pages(name,template,status,html_body,text_body,version,created_at,updated_at) VALUES(?,?,'Enabled',?,?,1,?,?)",
+                      (item["name"], item["template"], html_body, "Authorized security-awareness simulation landing page.", now(), now()))
+            new_id = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+            c.execute("INSERT OR IGNORE INTO landing_page_versions(landing_page_id,version,html_body,text_body,created_at,created_by) VALUES(?,1,?,?,?,?)",
+                      (new_id, html_body, "Authorized security-awareness simulation landing page.", now(), ADMIN_USERNAME))
+
 def db():
     c=sqlite3.connect(DB)
     c.row_factory=sqlite3.Row
@@ -530,6 +630,7 @@ def db():
                        "General","Medium","English","Trust PhishGuard","Banking","simulation,awareness",body,
                        "This is an authorized security-awareness simulation.",now()))
     seed_linksec_templates(c)
+    seed_landing_pages(c)
     c.commit()
     return c
 
@@ -924,7 +1025,12 @@ def _send_campaign_recipient(campaign,rec,queue_id):
     c.commit()
     c.close()
     token=create_tracking_token(campaign["id"],rec["id"])
-    link=PUBLIC_BASE_URL+"/"+str(campaign["template"])+".html?"+urlencode({"t":token})
+    target_page=None
+    if campaign["landing_page_id"]:
+        c=db(); lrow=c.execute("SELECT template FROM landing_pages WHERE id=?",(campaign["landing_page_id"],)).fetchone(); c.close()
+        if lrow and lrow["template"]: target_page=str(lrow["template"])
+    if not target_page: target_page=str(campaign["template"] or "1")
+    link=PUBLIC_BASE_URL+"/"+target_page+".html?"+urlencode({"t":token})
     msg=EmailMessage()
     msg["From"]=formataddr((campaign["template_from_name"] or campaign["from_name"] or "Trust PhishGuard",campaign["template_from_email"] or campaign["from_email"]))
     if campaign["template_reply_to"] or campaign["reply_to"]:
@@ -2202,7 +2308,30 @@ function applyFilters() {{
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
             total_lp=len(rows)
             active_lp=sum(1 for r in rows if r["status"]=="Enabled")
-            table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#12251e">%s</div></td><td><span class="pill" style="background:#e8f4ef;color:#087b59">v%s</span></td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/landing-pages?id=%s">✏️ Edit</a> <a class="btn" target="_blank" href="/admin/landing-pages/preview?id=%s">👁️ Preview</a></td></tr>'%(r["id"],esc(r["name"]),r["version"] or 1,"status-active" if r["status"]=="Enabled" else "status-draft",esc(r["status"]),r["id"],r["id"]) for r in rows) or '<tr><td colspan="5">No landing pages found.</td></tr>'
+            brand_map={"1":"Apex","2":"Trust Bank","3":"Microsoft 365","4":"Google Workspace","5":"HR Portal","6":"GlobalProtect","7":"bKash / Bank","8":"Zoom","9":"AWS","10":"Awareness Training"}
+            table_rows=[]
+            for r in rows:
+                tpl_str=str(r["template"] or "")
+                b_name=brand_map.get(tpl_str,"Enterprise Portal")
+                test_link=f'/{tpl_str}.html' if tpl_str.isdigit() else f'/admin/landing-pages/preview?id={r["id"]}'
+                table_rows.append(f'''<tr>
+                  <td><b>#{r["id"]}</b></td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-weight:700;color:#12251e">{esc(r["name"])}</span>
+                      <span class="pill" style="font-size:10.5px;padding:2px 7px;background:#f0f5f2;color:#355346;border:1px solid #d9e6e0">{b_name}</span>
+                    </div>
+                  </td>
+                  <td><span class="pill" style="background:#eef5f8;color:#0369a1;font-weight:600">Template {esc(r["template"])}</span></td>
+                  <td><span class="pill" style="background:#e8f4ef;color:#087b59">v{r["version"] or 1}</span></td>
+                  <td><span class="camp-status-badge {'status-active' if r['status']=='Enabled' else 'status-draft'}">{esc(r['status'])}</span></td>
+                  <td style="text-align:right">
+                    <a class="btn" target="_blank" href="/admin/landing-pages/preview?id={r['id']}" style="display:inline-flex;align-items:center;gap:4px">👁️ Preview</a>
+                    <a class="btn primary" href="/admin/landing-pages?id={r['id']}" style="display:inline-flex;align-items:center;gap:4px">✏️ Edit</a>
+                    <a class="btn" target="_blank" href="{test_link}" title="Direct Simulation URL" style="font-size:11.5px">🔗 Test URL</a>
+                  </td>
+                </tr>''')
+            table="".join(table_rows) or '<tr><td colspan="6">No landing pages found.</td></tr>'
             body=f'''<div class="lp-list-page">
 <div class="camp-header">
   <div>
@@ -2220,7 +2349,7 @@ function applyFilters() {{
 <div class="stats">
   <div class="stat"><div class="stat-label">TOTAL PORTALS</div><div class="num">{total_lp}</div><div class="delta">Configured drill pages</div></div>
   <div class="stat"><div class="stat-label">ENABLED &amp; READY</div><div class="num">{active_lp}</div><div class="delta">Active for campaigns</div></div>
-  <div class="stat"><div class="stat-label">MARKET PRESETS</div><div class="num">6 Included</div><div class="delta">M365, Google, HR, bKash...</div></div>
+  <div class="stat"><div class="stat-label">MARKET PRESETS</div><div class="num">10 Included</div><div class="delta">Apex, Trust Bank, M365, Google...</div></div>
   <div class="stat"><div class="stat-label">SAFETY GUARD</div><div class="num" style="font-size:20px;color:#087b59;margin-top:14px">✓ Policy Active</div><div class="delta">Credentials blocked</div></div>
 </div>
 
@@ -2242,10 +2371,11 @@ function applyFilters() {{
       <thead>
         <tr>
           <th style="width:70px">ID</th>
-          <th>Portal Name</th>
-          <th style="width:100px">Version</th>
-          <th style="width:120px">Status</th>
-          <th style="text-align:right;width:180px">Actions</th>
+          <th>Portal Name &amp; Brand</th>
+          <th style="width:120px">Template Lure</th>
+          <th style="width:90px">Version</th>
+          <th style="width:110px">Status</th>
+          <th style="text-align:right;width:240px">Actions</th>
         </tr>
       </thead>
       <tbody id="lpRows">{table}</tbody>
@@ -3024,55 +3154,33 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
         if not r and lid:
             return self.admin_shell("Landing Page","<h1>Landing page not found</h1><p><a class='btn' href='/admin/landing-pages'>Back to Landing Pages</a></p>","Landing Pages")
 
-        default_m365="""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in to your account</title>
-  <style>
-    body { margin:0; padding:0; background:#f0f4f9; font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,sans-serif; color:#1b1b1b; display:flex; align-items:center; justify-content:center; min-height:100vh; }
-    .auth-card { background:#fff; width:100%; max-width:440px; padding:44px; box-shadow:0 2px 8px rgba(0,0,0,0.12); border-radius:4px; box-sizing:border-box; }
-    .ms-logo { width:108px; height:24px; margin-bottom:16px; }
-    h1 { font-size:24px; font-weight:600; margin:0 0 10px 0; }
-    p { font-size:13px; color:#505050; margin:0 0 18px 0; }
-    .field { margin-bottom:16px; }
-    input[type="text"], input[type="email"] { width:100%; box-sizing:border-box; border:1px solid #777; padding:9px 10px; font-size:15px; outline:none; }
-    input:focus { border-color:#0067b8; box-shadow:0 0 0 1px #0067b8; }
-    .actions { display:flex; justify-content:flex-end; margin-top:28px; }
-    button { background:#0067b8; color:#fff; border:none; padding:8px 24px; font-size:15px; font-weight:600; cursor:pointer; min-width:108px; border-radius:2px; }
-    button:hover { background:#005da6; }
-    .links { margin-top:16px; font-size:13px; color:#0067b8; }
-    .links a { color:#0067b8; text-decoration:none; }
-    .footer { font-size:11px; color:#707070; margin-top:28px; display:flex; gap:16px; }
-  </style>
-</head>
-<body>
-  <div class="auth-card">
-    <svg class="ms-logo" viewBox="0 0 21 21"><rect x="0" y="0" width="10" height="10" fill="#f25022"/><rect x="11" y="0" width="10" height="10" fill="#7fba00"/><rect x="0" y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg>
-    <h1>Sign in</h1>
-    <p>to continue to Microsoft 365 Outlook &amp; OneDrive</p>
-    <form method="post" action="/submit">
-      <input type="hidden" name="template" value="landing_m365">
-      <div class="field">
-        <input type="email" name="email" placeholder="Email, phone, or Skype" required autocomplete="username">
-      </div>
-      <div class="links">No account? <a href="#">Create one!</a></div>
-      <div class="actions">
-        <button type="submit">Next</button>
-      </div>
-    </form>
-    <div class="footer">
-      <span>Terms of use</span>
-      <span>Privacy &amp; cookies</span>
-    </div>
-  </div>
-</body>
-</html>"""
+        presets_dict = {}
+        for s in LANDING_PAGE_SEEDS:
+            t_num = s["template"]
+            h_body = ""
+            for cand in (os.path.join(TEMPLATES, s["file"]), os.path.join(os.path.dirname(__file__), "templates", s["file"])):
+                if os.path.isfile(cand):
+                    try:
+                        with open(cand, "r", encoding="utf-8") as f:
+                            h_body = f.read()
+                        break
+                    except Exception:
+                        pass
+            presets_dict[t_num] = {
+                "name": s["name"],
+                "brand": s["brand"],
+                "scenario": s["scenario"],
+                "html": h_body
+            }
+        aliases = {"m365": "3", "google": "4", "hr_portal": "5", "it_sso": "6", "fin_bkash": "7", "awareness": "10"}
+        for alias, target in aliases.items():
+            if target in presets_dict:
+                presets_dict[alias] = presets_dict[target]
+        presets_json = json.dumps(presets_dict)
 
         name=esc(r["name"]) if r else "New Simulation Portal"
         status=esc(r["status"]) if r else "Enabled"
-        html_body=r["html_body"] if (r and r["html_body"]) else default_m365
+        html_body=r["html_body"] if (r and r["html_body"]) else presets_dict.get("1", {}).get("html", "")
         text_body=esc(r["text_body"]) if (r and r["text_body"]) else "Authorized security-awareness simulation landing page."
         versions_html="".join("<tr><td><b>v%s</b></td><td>%s</td><td>%s</td></tr>"%(v["version"],esc(v["created_at"] or ""),esc(v["created_by"] or "system")) for v in versions) or "<tr><td colspan='3'>No saved versions yet.</td></tr>"
 
@@ -3137,46 +3245,70 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
       <div class="camp-card-header">
         <div class="camp-icon">⚡</div>
         <div class="camp-card-title">
-          <h3>One-Click Market Presets (Enterprise Scenarios)</h3>
-          <p>Load battle-tested, high-converting corporate phishing landing pages with authentic layouts.</p>
+          <h3>One-Click Authentic Market Presets (10 Enterprise Portals)</h3>
+          <p>Load battle-tested, high-converting corporate phishing simulation portals with authentic layouts and compliant fields.</p>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+        <div class="preset-card" onclick="loadPreset('1')">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🎁</span> Apex Rewards Voucher
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Exclusive employee gift voucher &amp; discount claim portal.</p>
+        </div>
+        <div class="preset-card" onclick="loadPreset('2')">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🏛️</span> Trust Bank Corporate
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Corporate banking privileges &amp; employee card claim.</p>
+        </div>
         <div class="preset-card" onclick="loadPreset('m365')">
           <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
             <span>🏢</span> Microsoft 365 Sign-In
           </div>
           <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Entra ID / Outlook corporate sign-in simulation.</p>
         </div>
-        <div class="preset-card" onclick="loadPreset('google')">
+        <div class="preset-card" onclick="loadPreset('4')">
           <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
             <span>🌐</span> Google Workspace SSO
           </div>
           <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Google Drive &amp; Workspace account verification.</p>
         </div>
-        <div class="preset-card" onclick="loadPreset('hr_portal')">
+        <div class="preset-card" onclick="loadPreset('5')">
           <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
             <span>👥</span> HR Benefits &amp; Appraisal
           </div>
           <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Employee portal compensation statement review.</p>
         </div>
-        <div class="preset-card" onclick="loadPreset('it_sso')">
+        <div class="preset-card" onclick="loadPreset('6')">
           <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
             <span>💻</span> GlobalProtect IT Gateway
           </div>
           <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Enterprise remote VPN &amp; identity gate verification.</p>
         </div>
-        <div class="preset-card" onclick="loadPreset('fin_bkash')">
+        <div class="preset-card" onclick="loadPreset('7')">
           <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>💳</span> Financial / Mobile Alert
+            <span>💳</span> bKash / Financial Alert
           </div>
           <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Suspicious transaction halt &amp; verify alert (bKash/Bank).</p>
         </div>
-        <div class="preset-card" onclick="loadPreset('awareness')">
+        <div class="preset-card" onclick="loadPreset('8')">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>📹</span> Zoom Meeting Gateway
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Executive conference pre-call check &amp; verification.</p>
+        </div>
+        <div class="preset-card" onclick="loadPreset('9')">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>☁️</span> AWS Cloud Console IAM
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Cloud infrastructure identity &amp; root device verification.</p>
+        </div>
+        <div class="preset-card" onclick="loadPreset('10')">
           <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
             <span>🎓</span> Teachable Moment (Awareness)
           </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">"Oops! You were phished" instant educational drill.</p>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Instant interactive drill with phishing red flag breakdown.</p>
         </div>
       </div>
     </div>
@@ -3303,251 +3435,7 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
 </style>
 
 <script>
-const PRESETS = {{
-  m365: {{
-    name: "Microsoft 365 Enterprise Sign-In",
-    html: {json.dumps(default_m365)}
-  }},
-  google: {{
-    name: "Google Workspace SSO Portal",
-    html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in - Google Accounts</title>
-  <style>
-    body {{ margin:0; padding:0; background:#fff; font-family:"Google Sans",Roboto,sans-serif; color:#202124; display:flex; align-items:center; justify-content:center; min-height:100vh; }}
-    .card {{ width:100%; max-width:448px; border:1px solid #dadce0; border-radius:8px; padding:48px 40px 36px; box-sizing:border-box; }}
-    .logo {{ text-align:center; margin-bottom:12px; }}
-    h1 {{ font-size:24px; font-weight:400; text-align:center; margin:0 0 10px 0; }}
-    .sub {{ font-size:16px; text-align:center; margin-bottom:30px; color:#202124; }}
-    input[type="email"], input[type="text"] {{ width:100%; box-sizing:border-box; padding:14px 16px; border:1px solid #dadce0; border-radius:4px; font-size:16px; outline:none; }}
-    input:focus {{ border-color:#1a73e8; border-width:2px; }}
-    .actions {{ display:flex; justify-content:space-between; align-items:center; margin-top:36px; }}
-    .link {{ color:#1a73e8; font-size:14px; text-decoration:none; font-weight:500; }}
-    button {{ background:#1a73e8; color:#fff; border:none; border-radius:4px; padding:10px 24px; font-size:14px; font-weight:500; cursor:pointer; }}
-    button:hover {{ background:#1557b0; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="logo">
-      <svg width="48" height="48" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-    </div>
-    <h1>Sign in</h1>
-    <div class="sub">to continue to Google Workspace</div>
-    <form method="post" action="/submit">
-      <input type="hidden" name="template" value="landing_google">
-      <input type="email" name="email" placeholder="Email or phone" required autocomplete="username">
-      <div style="margin-top:10px"><a class="link" href="#">Forgot email?</a></div>
-      <div class="actions">
-        <a class="link" href="#">Create account</a>
-        <button type="submit">Next</button>
-      </div>
-    </form>
-  </div>
-</body>
-</html>`
-  }},
-  hr_portal: {{
-    name: "HR Employee Benefits & Appraisal Portal",
-    html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Employee Self-Service - Benefits Review</title>
-  <style>
-    body {{ margin:0; padding:0; background:#f4f7f6; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#223; display:flex; align-items:center; justify-content:center; min-height:100vh; }}
-    .box {{ background:#fff; width:100%; max-width:500px; border-radius:12px; border:1px solid #dce5e1; box-shadow:0 4px 16px rgba(0,0,0,0.06); overflow:hidden; }}
-    .header {{ background:#0f4c3a; color:#fff; padding:24px 28px; }}
-    .header h2 {{ margin:0 0 6px 0; font-size:20px; }}
-    .header p {{ margin:0; font-size:13px; opacity:0.85; }}
-    .body {{ padding:28px; }}
-    .field {{ margin-bottom:18px; }}
-    label {{ display:block; font-size:12.5px; font-weight:600; margin-bottom:6px; color:#334; }}
-    input {{ width:100%; box-sizing:border-box; border:1px solid #cbd5d1; border-radius:8px; padding:10px 12px; font-size:14px; }}
-    input:focus {{ outline:none; border-color:#0f4c3a; box-shadow:0 0 0 3px rgba(15,76,58,0.12); }}
-    button {{ width:100%; background:#0f4c3a; color:#fff; border:none; border-radius:8px; padding:12px; font-size:14px; font-weight:700; cursor:pointer; }}
-    button:hover {{ background:#0b382b; }}
-    .security-note {{ font-size:11px; color:#677; text-align:center; margin-top:16px; }}
-  </style>
-</head>
-<body>
-  <div class="box">
-    <div class="header">
-      <h2>HR Employee Portal</h2>
-      <p>Annual Compensation &amp; Policy Review · Confidential</p>
-    </div>
-    <div class="body">
-      <form method="post" action="/submit">
-        <input type="hidden" name="template" value="landing_hr">
-        <div class="field">
-          <label>Full Employee Name</label>
-          <input type="text" name="name" placeholder="John Doe" required>
-        </div>
-        <div class="field">
-          <label>Employee ID Number</label>
-          <input type="text" name="employee_id" placeholder="EMP-4920" required>
-        </div>
-        <div class="field">
-          <label>Corporate Email Address</label>
-          <input type="email" name="email" placeholder="john.doe@company.com" required>
-        </div>
-        <button type="submit">Access Benefits &amp; Appraisal Statement</button>
-      </form>
-      <div class="security-note">Encrypted Corporate Session · Protected by Enterprise SSO</div>
-    </div>
-  </div>
-</body>
-</html>`
-  }},
-  it_sso: {{
-    name: "Enterprise IT Service Desk SSO",
-    html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Corporate Identity Verification - IT Gateway</title>
-  <style>
-    body {{ margin:0; padding:20px; background:#0f172a; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#f8fafc; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }}
-    .card {{ background:#1e293b; width:100%; max-width:440px; border-radius:14px; border:1px solid #334155; box-shadow:0 12px 40px rgba(0,0,0,0.4); padding:36px; box-sizing:border-box; }}
-    .icon {{ width:42px; height:42px; border-radius:10px; background:#0284c7; display:flex; align-items:center; justify-content:center; font-size:20px; margin-bottom:16px; }}
-    h1 {{ font-size:22px; margin:0 0 8px 0; }}
-    p {{ font-size:13px; color:#94a3b8; line-height:1.5; margin:0 0 24px 0; }}
-    .field {{ margin-bottom:16px; }}
-    label {{ display:block; font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:6px; }}
-    input {{ width:100%; box-sizing:border-box; padding:11px 13px; background:#0f172a; border:1px solid #475569; border-radius:8px; font-size:14px; color:#fff; }}
-    input:focus {{ outline:none; border-color:#38bdf8; box-shadow:0 0 0 3px rgba(56,189,248,0.2); }}
-    button {{ width:100%; background:#0284c7; color:#fff; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; margin-top:8px; }}
-    button:hover {{ background:#0369a1; }}
-    .foot {{ font-size:11px; color:#64748b; text-align:center; margin-top:18px; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">🛡️</div>
-    <h1>GlobalProtect IT Gateway</h1>
-    <p>Identity confirmation is required for remote network access and single sign-on authentication.</p>
-    <form method="post" action="/submit">
-      <input type="hidden" name="template" value="landing_it_sso">
-      <div class="field">
-        <label>Corporate Username</label>
-        <input type="text" name="name" placeholder="firstname.lastname" required>
-      </div>
-      <div class="field">
-        <label>Work Email Address</label>
-        <input type="email" name="email" placeholder="employee@corp.local" required>
-      </div>
-      <button type="submit">Verify Corporate Session</button>
-    </form>
-    <div class="foot">GlobalProtect Gateway v6.2 · Protected Endpoint</div>
-  </div>
-</body>
-</html>`
-  }},
-  fin_bkash: {{
-    name: "Financial Transaction Verification Alert",
-    html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Security Alert - Transaction Verification</title>
-  <style>
-    body {{ margin:0; padding:20px; background:#f5f6f8; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#222; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }}
-    .card {{ background:#fff; width:100%; max-width:460px; border-radius:14px; border:1px solid #e1e4e8; box-shadow:0 6px 20px rgba(0,0,0,0.06); padding:32px; box-sizing:border-box; }}
-    .badge {{ display:inline-block; padding:4px 10px; border-radius:999px; background:#fee2e2; color:#b91c1c; font-size:11px; font-weight:800; text-transform:uppercase; margin-bottom:12px; }}
-    h1 {{ font-size:21px; margin:0 0 10px 0; color:#111; }}
-    p {{ font-size:13.5px; color:#555; line-height:1.55; margin:0 0 20px 0; }}
-    .field {{ margin-bottom:16px; }}
-    label {{ display:block; font-size:12px; font-weight:600; color:#444; margin-bottom:6px; }}
-    input {{ width:100%; box-sizing:border-box; padding:10px 12px; border:1.5px solid #cbd0d6; border-radius:8px; font-size:14px; }}
-    input:focus {{ outline:none; border-color:#e11d48; box-shadow:0 0 0 3px rgba(225,29,72,0.12); }}
-    button {{ width:100%; background:#e11d48; color:#fff; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }}
-    button:hover {{ background:#be123c; }}
-    .note {{ font-size:11px; color:#777; text-align:center; margin-top:14px; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <span class="badge">Security Alert</span>
-    <h1>Suspicious Transaction Flagged</h1>
-    <p>An unrecognized withdrawal of ৳ 14,500 was initiated from a new device. Verify your contact details to review and safeguard your account.</p>
-    <form method="post" action="/submit">
-      <input type="hidden" name="template" value="landing_finance">
-      <div class="field">
-        <label>Account Holder Name</label>
-        <input type="text" name="name" placeholder="Full Name" required>
-      </div>
-      <div class="field">
-        <label>Registered Mobile Number</label>
-        <input type="text" name="mobile" placeholder="017XXXXXXXX" required>
-      </div>
-      <div class="field">
-        <label>Notification Email</label>
-        <input type="email" name="email" placeholder="user@example.com" required>
-      </div>
-      <button type="submit">Review &amp; Halt Suspicious Transaction</button>
-    </form>
-    <div class="note">Authorized Security Simulation · No financial credentials requested</div>
-  </div>
-</body>
-</html>`
-  }},
-  awareness: {{
-    name: "Instant Awareness Training (Teachable Moment)",
-    html: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Security Awareness Training - Phishing Drill</title>
-  <style>
-    body {{ margin:0; padding:30px 20px; background:#f8faf9; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#182e25; display:flex; align-items:center; justify-content:center; min-height:100vh; box-sizing:border-box; }}
-    .box {{ background:#fff; width:100%; max-width:640px; border-radius:16px; border:1px solid #d9e6e0; box-shadow:0 8px 30px rgba(0,0,0,0.06); overflow:hidden; }}
-    .banner {{ background:#dc2626; color:#fff; padding:28px; text-align:center; }}
-    .icon {{ font-size:48px; margin-bottom:8px; }}
-    .banner h1 {{ margin:0 0 6px 0; font-size:24px; font-weight:800; }}
-    .banner p {{ margin:0; font-size:14px; opacity:0.95; }}
-    .content {{ padding:32px; }}
-    .clues {{ background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:18px 20px; margin:20px 0; }}
-    .clues h3 {{ margin:0 0 10px 0; font-size:15px; color:#991b1b; }}
-    .clue-item {{ display:flex; gap:10px; font-size:13px; color:#450a0a; margin-bottom:8px; }}
-    .btn {{ display:block; width:100%; box-sizing:border-box; background:#087b59; color:#fff; border:none; border-radius:9px; padding:13px; font-size:14px; font-weight:700; text-align:center; cursor:pointer; }}
-    .btn:hover {{ background:#066347; }}
-  </style>
-</head>
-<body>
-  <div class="box">
-    <div class="banner">
-      <div class="icon">🎣</div>
-      <h1>Oops! You clicked a simulated phishing link!</h1>
-      <p>Don't worry — this was an authorized security training exercise.</p>
-    </div>
-    <div class="content">
-      <p style="font-size:14.5px;line-height:1.6;margin-top:0">
-        Your organization conducts routine phishing simulations to strengthen our collective defense against cyber attacks. No malicious software was installed and your computer is safe.
-      </p>
-      <div class="clues">
-        <h3>🔍 3 Red Flags to Watch for Next Time:</h3>
-        <div class="clue-item"><span>⚠️</span> <b>Suspicious Sender Address:</b> Check the exact sender domain carefully, not just the display name.</div>
-        <div class="clue-item"><span>⚠️</span> <b>Artificial Urgency:</b> Phishing emails often threaten account suspension or demand immediate action within 24 hours.</div>
-        <div class="clue-item"><span>⚠️</span> <b>Hover Before Clicking:</b> Always inspect destination links before opening attachments or URLs.</div>
-      </div>
-      <form method="post" action="/submit">
-        <input type="hidden" name="template" value="landing_awareness">
-        <button type="submit" class="btn">I Acknowledge This Security Drill ✓</button>
-      </form>
-    </div>
-  </div>
-</body>
-</html>`
-  }}
-}};
-
+const PRESETS = {presets_json};
 function loadPreset(key) {{
   const p = PRESETS[key];
   if (!p) return;
@@ -4571,19 +4459,47 @@ syncAudience();
             c=db(); recrow=c.execute("SELECT * FROM recipients WHERE id=?",(tr["recipient_id"],)).fetchone(); c.close()
             record(ip,str(tr["campaign_id"]),event,recrow["name"] if recrow else "",recrow["email"] if recrow else "", "",ua,recrow["employee_id"] if recrow else "", "",str(tr["campaign_id"]),str(tr["recipient_id"]),token)
             return self.sendbody(200,page("PhishGuard","<div style='max-width:700px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Thank you</h1><p>Your report has been recorded as part of the authorized security-awareness simulation.</p></div>"))
-        if path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit():
-            t=path[1:]; fn=os.path.join(TEMPLATES,t)
-            if os.path.isfile(fn):
-                q=parse_qs(p.query); token=q.get("t",[""])[0]; tr=resolve_tracking_token(token)
-                campaign_id=str(tr["campaign_id"]) if tr else ""; recipient_id=str(tr["recipient_id"]) if tr else ""
+        is_html_tpl = path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit()
+        is_landing_path = path in ("/landing", "/landing.html")
+        if is_html_tpl or is_landing_path:
+            q=parse_qs(p.query); token=q.get("t",[""])[0]; tr=resolve_tracking_token(token)
+            campaign_id=str(tr["campaign_id"]) if tr else ""; recipient_id=str(tr["recipient_id"]) if tr else ""
+            t=path[1:] if is_html_tpl else ""
+            t_num=path[1:-5] if is_html_tpl else ""
+            if not t_num and tr:
+                c=db()
+                crow=c.execute("SELECT c.template, c.landing_page_id, lp.template as lp_template FROM campaigns c LEFT JOIN landing_pages lp ON lp.id=c.landing_page_id WHERE c.id=?",(tr["campaign_id"],)).fetchone()
+                c.close()
+                if crow:
+                    t_num=str(crow["lp_template"] or crow["template"] or "1")
+                    t=f"{t_num}.html"
+            if not t_num:
+                t_num=q.get("id",["1"])[0]
+                t=f"{t_num}.html"
+
+            body=None
+            c=db()
+            lp_row=c.execute("SELECT html_body FROM landing_pages WHERE (template=? OR id=?) AND html_body IS NOT NULL AND length(html_body)>0",(t_num,t_num)).fetchone()
+            c.close()
+            if lp_row and lp_row["html_body"]:
+                body=lp_row["html_body"]
+            else:
+                for cand in (os.path.join(TEMPLATES,t), os.path.join(os.path.dirname(__file__),"templates",t), os.path.join(TEMPLATES,f"{t_num}.html"), os.path.join(os.path.dirname(__file__),"templates",f"{t_num}.html")):
+                    if os.path.isfile(cand):
+                        try:
+                            with open(cand,"rb") as f: body=f.read().decode("utf-8","replace")
+                            break
+                        except Exception:
+                            pass
+
+            if body is not None:
                 if tr:
                     c=db(); recrow=c.execute("SELECT * FROM recipients WHERE id=?",(recipient_id,)).fetchone(); c.close()
                     if is_bot_user_agent(ua):
-                        record(ip,t,"bot_detected",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                        record(ip,t_num or t,"bot_detected",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
                     else:
-                        record(ip,t,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
+                        record(ip,t_num or t,"click",ua=ua,campaign_id=campaign_id,recipient_id=recipient_id,token=token,email=recrow["email"] if recrow else "",name=recrow["name"] if recrow else "",employee_id=recrow["employee_id"] if recrow else "")
                 access(ip,path,200)
-                with open(fn,"rb") as f: body=f.read().decode("utf-8","replace")
                 if token:
                     action="/submit?"+urlencode({"t":token})
                     body=body.replace('action="/submit"','action="'+action+'"').replace("action='/submit'","action='"+action+"'")
