@@ -163,6 +163,14 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn("/admin/landing-pages/new", html)
         self.assertIn("+ Create Landing Page", html)
 
+    def test_quick_campaign_ui_and_modal(self):
+        self.handler.admin_shell = lambda title, body, active: body
+        html = self.handler.feature_page("/admin/campaigns")
+        self.assertIn("⚡ Quick Campaign", html)
+        self.assertIn("quickCampModal", html)
+        self.assertIn("/admin/campaigns/quick", html)
+        self.assertIn("⚡ Instant Launch Now", html)
+
 if __name__ == "__main__":
     unittest.main()
 

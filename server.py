@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlparse, parse_qs, urlencode, quote_plus
 from http import cookies
 from datetime import datetime, timezone, timedelta
 from email.message import EmailMessage
@@ -1547,6 +1547,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/campaigns/test-send":"campaign.launch",
         "/admin/campaigns/launch":"campaign.launch",
         "/admin/campaigns/save":{"create":"campaign.create","edit":"campaign.edit"},
+        "/admin/campaigns/quick":"campaign.launch",
         "/admin/settings/base-url":"risk.manage",
     },
 }
@@ -2028,13 +2029,59 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
     def feature_page(self,path,query=""):
         c=db()
         if path=="/admin/campaigns":
-            rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall(); c.close()
+            q_params=parse_qs(query) if query else {}
+            quick_launched_id=q_params.get("quick_launched",[""])[0]
+            quick_error=q_params.get("quick_error",[""])[0]
+            sent_n=q_params.get("sent",["0"])[0]
+            failed_n=q_params.get("failed",["0"])[0]
+            total_n=q_params.get("total",["0"])[0]
+            quick_banner=""
+            if quick_launched_id:
+                ql_camp=c.execute("SELECT name,targeted FROM campaigns WHERE id=?",(quick_launched_id,)).fetchone()
+                c_name=esc(ql_camp["name"]) if ql_camp else f"Campaign #{quick_launched_id}"
+                if quick_error:
+                    quick_banner=f'''<div style="background:#fff3f3;border:1.5px solid #dc3545;color:#842029;padding:14px 18px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(220,53,69,0.1)">
+                      <div style="display:flex;align-items:center;gap:12px">
+                        <span style="font-size:24px">⚠️</span>
+                        <div><b style="font-size:14px">Quick Campaign Created with Dispatch Notice</b><div style="font-size:12.5px;margin-top:3px;opacity:0.95">{esc(quick_error)}</div></div>
+                      </div>
+                      <a href="/admin/campaigns?id={quick_launched_id}" class="btn" style="background:#fff;color:#842029;border:1px solid #f5c2c7;font-size:12px;font-weight:600">Review Campaign</a>
+                    </div>'''
+                else:
+                    quick_banner=f'''<div style="background:#e8f8f0;border:1.5px solid #28a745;color:#155724;padding:14px 18px;border-radius:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(40,167,69,0.1)">
+                      <div style="display:flex;align-items:center;gap:12px">
+                        <span style="font-size:24px">⚡</span>
+                        <div><b style="font-size:14px">Quick Campaign Dispatched Successfully!</b><div style="font-size:12.5px;margin-top:3px;opacity:0.95">"{c_name}" is active. <b>Attempted:</b> {total_n} · <b style="color:#198754">Sent:</b> {sent_n} · <b>Failed:</b> {failed_n}</div></div>
+                      </div>
+                      <div style="display:flex;gap:8px">
+                        <a href="/admin/campaigns?id={quick_launched_id}" class="btn" style="background:#fff;color:#155724;border:1px solid #c3e6cb;font-size:12px;font-weight:600">View Campaign</a>
+                        <a href="/admin/reports?campaign_id={quick_launched_id}" class="btn primary" style="font-size:12px;font-weight:600">Live Analytics</a>
+                      </div>
+                    </div>'''
+
+            rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall()
+            templates_rows=c.execute("SELECT template, name, subject, brand FROM template_library WHERE status='Active' ORDER BY CASE WHEN brand='Zoom' THEN 0 WHEN brand='Microsoft Office 365' THEN 1 WHEN brand='Google Workspace' THEN 2 ELSE 3 END, brand, name").fetchall()
+            groups_rows=c.execute("SELECT name FROM groups_tbl ORDER BY name").fetchall()
+            active_recipients_cnt=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+            smtp_rows=c.execute("SELECT id, name, from_email FROM smtp_profiles WHERE enabled=1 ORDER BY id").fetchall()
+            landing_rows=c.execute("SELECT id, name, template FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
+            c.close()
+
+            template_options="".join(f'<option value="{esc(t["template"])}">[{esc(t["brand"] or "General")}] {esc(t["name"])}</option>' for t in templates_rows)
+            group_options="".join(f'<option value="{esc(g["name"])}">👥 Group: {esc(g["name"])}</option>' for g in groups_rows)
+            landing_options="".join(f'<option value="{l["id"]}" data-tpl="{esc(l["template"] or "")}">{esc(l["name"])} (Template {esc(l["template"] or "Default")})</option>' for l in landing_rows)
+            smtp_options="".join(f'<option value="{s["id"]}">{esc(s["name"])} &lt;{esc(s["from_email"])}&gt;</option>' for s in smtp_rows) or '<option value="">⚠️ No enabled SMTP profile (Configure in SMTP Providers)</option>'
+
+            tpl_dict={str(t["template"]): {"name": t["name"], "subject": t["subject"] or "Security Awareness Simulation", "brand": t["brand"] or ""} for t in templates_rows}
+            tpl_json_raw=json.dumps(tpl_dict).replace("'", "\\'")
+
             total_c=len(rows)
             active_c=sum(1 for r in rows if r["status"]=="Active")
             completed_c=sum(1 for r in rows if r["status"]=="Completed")
             targeted_sum=sum(r["targeted"] or 0 for r in rows)
             table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#10221a">%s</div></td><td><span class="pill" style="background:#f4f7f5;color:#1e352b">Template %s</span></td><td><b>%s</b></td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/campaigns?id=%s">✏️ Edit</a> <a class="btn" href="/admin/reports?campaign_id=%s">📊 Analytics</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["template"]),r["targeted"],"status-active" if r["status"]=="Active" else ("status-completed" if r["status"]=="Completed" else "status-draft"),esc(r["status"]),r["id"],r["id"]) for r in rows) or '<tr><td colspan="6">No campaigns yet.</td></tr>'
-            body=f'''<div class="camp-header">
+            body=f'''{quick_banner}
+<div class="camp-header">
   <div>
     <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Campaigns</span></div>
     <div class="camp-title-row">
@@ -2042,7 +2089,8 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
       <span class="camp-status-badge status-active">{active_c} Active</span>
     </div>
   </div>
-  <div class="camp-actions">
+  <div class="camp-actions" style="display:flex;gap:10px;align-items:center">
+    <button class="btn" type="button" onclick="openQuickModal()" style="background:linear-gradient(135deg,#ff9800,#f57c00);color:#fff;border:none;font-weight:700;display:inline-flex;align-items:center;gap:7px;box-shadow:0 3px 10px rgba(245,124,0,0.3);padding:9px 18px;border-radius:8px;cursor:pointer;font-size:13px">⚡ Quick Campaign</button>
     <a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a>
   </div>
 </div>
@@ -2066,8 +2114,116 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
     </table>
   </div>
 </div>
+
+<!-- Quick Campaign Modal -->
+<div id="quickCampModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.65);z-index:99999;backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;box-sizing:border-box">
+  <div style="background:#ffffff;border-radius:18px;width:100%;max-width:620px;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;animation:popIn 0.22s cubic-bezier(0.16,1,0.3,1)">
+    <div style="background:linear-gradient(135deg,#0d3829,#15543e);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="background:linear-gradient(135deg,#ffb74d,#ff9800);width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(0,0,0,0.25)">⚡</div>
+        <div>
+          <h2 style="margin:0;font-size:18px;font-weight:700;color:#fff">Quick Campaign Launch</h2>
+          <p style="margin:3px 0 0;font-size:12px;opacity:0.85;color:#d8efe5">Deploy instant simulation drills with 1-click execution</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeQuickModal()" style="background:none;border:none;color:#fff;font-size:26px;cursor:pointer;opacity:0.8;line-height:1">&times;</button>
+    </div>
+
+    <form class="form" method="post" action="/admin/campaigns/quick" style="padding:24px;display:flex;flex-direction:column;gap:14px;margin:0">
+      <div>
+        <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Campaign Name</label>
+        <input type="text" id="qcName" name="name" required maxlength="150" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px" placeholder="e.g. Quick Drill - Zoom Meeting (Instant)">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Email Template (Payload)</label>
+          <select id="qcTemplate" name="template" required onchange="onTemplateChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
+            {template_options}
+          </select>
+        </div>
+        <div>
+          <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Target Audience</label>
+          <select name="group_name" id="qcAudience" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
+            <option value="">🎯 All Active Recipients ({active_recipients_cnt} targets)</option>
+            {group_options}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Email Subject Line</label>
+        <input type="text" id="qcSubject" name="subject" required maxlength="250" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Landing Page</label>
+          <select id="qcLanding" name="landing_page_id" required style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
+            {landing_options}
+          </select>
+        </div>
+        <div>
+          <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">SMTP Profile</label>
+          <select id="qcSmtp" name="smtp_profile_id" required style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
+            {smtp_options}
+          </select>
+        </div>
+      </div>
+
+      <div style="background:#f4fbf7;border:1px solid #d4ece1;border-radius:10px;padding:11px 14px;font-size:11.5px;color:#225c46;line-height:1.5;display:flex;align-items:flex-start;gap:8px">
+        <span style="font-size:16px">⚡</span>
+        <div><b>Instant Dispatch Policy:</b> Quick campaigns bypass sending window restrictions and weekend blocks to immediately deliver test simulation emails to targets.</div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:6px">
+        <button type="button" class="btn" onclick="closeQuickModal()" style="cursor:pointer">Cancel</button>
+        <button type="submit" name="action_mode" value="draft" class="btn" style="background:#eef4f1;color:#1e3d31;font-weight:600;cursor:pointer">💾 Save as Draft</button>
+        <button type="submit" name="action_mode" value="launch" class="btn primary" style="background:linear-gradient(135deg,#ff9800,#f57c00);border:none;color:#fff;font-weight:700;box-shadow:0 3px 8px rgba(245,124,0,0.3);cursor:pointer">⚡ Instant Launch Now</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+@keyframes popIn {{
+  from {{ transform: scale(0.94); opacity: 0; }}
+  to {{ transform: scale(1); opacity: 1; }}
+}}
+</style>
+
 <script>
+const qcTemplates = {tpl_json_raw};
 function filterCampTable(){{const q=document.getElementById('qCamp').value.toLowerCase();document.querySelectorAll('#campRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
+
+function openQuickModal() {{
+  document.getElementById('quickCampModal').style.display = 'flex';
+  onTemplateChange();
+}}
+function closeQuickModal() {{
+  document.getElementById('quickCampModal').style.display = 'none';
+}}
+function onTemplateChange() {{
+  const selTpl = document.getElementById('qcTemplate').value;
+  const tInfo = qcTemplates[selTpl];
+  if (tInfo) {{
+    document.getElementById('qcSubject').value = tInfo.subject || 'Security Awareness Simulation';
+    const now = new Date();
+    const dStr = now.toLocaleDateString('en-GB', {{day:'2-digit', month:'short'}});
+    const tStr = now.toLocaleTimeString('en-GB', {{hour:'2-digit', minute:'2-digit'}});
+    document.getElementById('qcName').value = 'Quick Drill - ' + (tInfo.name || 'Template ' + selTpl) + ' (' + dStr + ' ' + tStr + ')';
+    const lpSel = document.getElementById('qcLanding');
+    for (let opt of lpSel.options) {{
+      if (opt.getAttribute('data-tpl') === selTpl) {{
+        lpSel.value = opt.value;
+        break;
+      }}
+    }}
+  }}
+}}
+document.getElementById('quickCampModal').addEventListener('click', function(e) {{
+  if (e.target === this) closeQuickModal();
+}});
 </script>'''
             return self.admin_shell("Campaigns",body,"Campaigns")
         if path=="/admin/templates":
@@ -5389,6 +5545,80 @@ syncAudience();
             if action_mode=="launch":
                 return self.sendbody(302,b"",extra={"Location":"/admin/campaigns/launch?id="+cid})
             return self.sendbody(302,b"",extra={"Location":"/admin/campaigns"})
+
+        if p.path=="/admin/campaigns/quick":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            name=form.get("name",[""])[0].strip()[:150]
+            template=form.get("template",["1"])[0]
+            landing_id=form.get("landing_page_id",[""])[0]
+            smtp_id=form.get("smtp_profile_id",[""])[0]
+            group_name=form.get("group_name",[""])[0].strip()[:100]
+            subject=form.get("subject",[""])[0].strip()[:250]
+            action_mode=form.get("action_mode",["launch"])[0].strip().lower()
+
+            c=db()
+            if not subject:
+                t_row=c.execute("SELECT subject, name FROM template_library WHERE template=?",(template,)).fetchone()
+                subject=(t_row["subject"] if t_row and t_row["subject"] else "") or "Security Awareness Simulation"
+            if not name:
+                name=f"Quick Drill - Template {template} ({datetime.now(TZ).strftime('%d %b %H:%M')})"
+
+            if not smtp_id:
+                s_row=c.execute("SELECT id FROM smtp_profiles WHERE enabled=1 ORDER BY id LIMIT 1").fetchone()
+                if s_row: smtp_id=str(s_row["id"])
+
+            if not landing_id:
+                l_row=c.execute("SELECT id FROM landing_pages WHERE template=? AND status='Enabled' LIMIT 1",(template,)).fetchone()
+                if not l_row:
+                    l_row=c.execute("SELECT id FROM landing_pages WHERE status='Enabled' ORDER BY id LIMIT 1").fetchone()
+                if l_row: landing_id=str(l_row["id"])
+
+            if not smtp_id or not c.execute("SELECT 1 FROM smtp_profiles WHERE id=? AND enabled=1",(smtp_id,)).fetchone():
+                c.close()
+                return self.sendbody(400,"A valid enabled SMTP profile is required for Quick Campaign","text/plain")
+            if not landing_id or not c.execute("SELECT 1 FROM landing_pages WHERE id=? AND status='Enabled'",(landing_id,)).fetchone():
+                c.close()
+                return self.sendbody(400,"A valid enabled landing page is required for Quick Campaign","text/plain")
+
+            smtp_val=int(smtp_id)
+            landing_val=int(landing_id)
+
+            if group_name:
+                targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND group_name=?",(group_name,)).fetchone()["n"]
+            else:
+                targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+
+            if targeted==0:
+                c.close()
+                return self.sendbody(400,"No eligible recipients found in selected target audience.","text/plain")
+
+            status="Active" if action_mode=="launch" else "Draft"
+            business_days="Mon,Tue,Wed,Thu,Fri,Sat,Sun"
+            window_start="00:00"
+            window_end="23:59"
+            timezone="Asia/Dhaka"
+
+            cur=c.execute("""INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,
+                             launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,
+                             rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at)
+                             VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                          (name,template,status,targeted,smtp_val,landing_val,subject,"","",group_name,
+                           timezone,business_days,window_start,window_end,50,60,2,5,0,now(),now()))
+            cid=str(cur.lastrowid)
+            c.commit(); c.close()
+            audit(ADMIN_USERNAME,"QUICK_CAMPAIGN_CREATE","name=%s status=%s targeted=%s"%(name,status,targeted),ip)
+
+            if action_mode=="launch":
+                try:
+                    sent,failed,total=send_campaign(cid, scheduled=False, req_host=self.headers.get("Host"))
+                    audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH","campaign=%s sent=%s failed=%s total=%s"%(cid,sent,failed,total),ip)
+                    return self.sendbody(302,b"",extra={"Location":f"/admin/campaigns?quick_launched={cid}&sent={sent}&failed={failed}&total={total}"})
+                except Exception as e:
+                    audit(ADMIN_USERNAME,"CAMPAIGN_LAUNCH_FAILED","campaign=%s error=%s"%(cid,str(e)[:200]),ip)
+                    err_msg=quote_plus(str(e)[:150])
+                    return self.sendbody(302,b"",extra={"Location":f"/admin/campaigns?quick_launched={cid}&quick_error={err_msg}"})
+            else:
+                return self.sendbody(302,b"",extra={"Location":f"/admin/campaigns?id={cid}"})
 
         if p.path=="/submit":
             t=form.get("template",["unknown"])[0][:50]
