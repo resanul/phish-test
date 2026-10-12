@@ -8,12 +8,12 @@ from email.message import EmailMessage
 from email.utils import formataddr
 from zoneinfo import ZoneInfo
 
-BASE="/opt/phish-simulation"
-TEMPLATES=BASE+"/templates"
-DATA=BASE+"/data"
-LOGS=BASE+"/logs"
-DB=DATA+"/phish.db"
-LOG=LOGS+"/access.log"
+BASE=os.environ.get("PHISH_BASE","/opt/phish-simulation" if os.path.isdir("/opt/phish-simulation") else os.path.dirname(os.path.abspath(__file__)))
+TEMPLATES=os.path.join(BASE,"templates")
+DATA=os.path.join(BASE,"data")
+LOGS=os.path.join(BASE,"logs")
+DB=os.path.join(DATA,"phish.db")
+LOG=os.path.join(LOGS,"access.log")
 PORT=int(os.environ.get("PORT","8899"))
 PUBLIC_BASE_URL=os.environ.get("PUBLIC_BASE_URL","").rstrip("/")
 SEND_DELAY=float(os.environ.get("SEND_DELAY_SECONDS","0.2"))
@@ -22,7 +22,7 @@ ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
 SESSIONS={}
 LOGIN_ATTEMPTS={}
 TZ=ZoneInfo("Asia/Dhaka")
-SMTP_KEY=DATA+"/.smtp_master_key"
+SMTP_KEY=os.path.join(DATA,".smtp_master_key")
 SMTP_PROVIDERS={
     "Gmail":{"host":"smtp.gmail.com","port":587,"security":"STARTTLS"},
     "Google Workspace Relay":{"host":"smtp-relay.gmail.com","port":587,"security":"STARTTLS"},
@@ -4795,6 +4795,7 @@ syncAudience();
             checks="".join("<li style='color:%s'>%s</li>"%("#a12d2d" if e else "#087b59",esc(e or "Ready")) for e in errors) if errors else "<li style='color:#087b59'>All pre-launch checks passed.</li>"
             in_window=campaign_window_open(campaign)
             window_info='<p style="color:#087b59;font-size:12px;margin:5px 0">✓ Within configured sending window (%s, %s–%s %s)</p>'%(esc(campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu"),esc(campaign["window_start"] or "09:00"),esc(campaign["window_end"] or "17:00"),esc(campaign["timezone"] or "Asia/Dhaka")) if in_window else '<p style="color:#b37400;font-size:12px;margin:5px 0">ℹ Currently outside configured sending window (%s, %s–%s %s). <b>Manual launch will dispatch immediately.</b></p>'%(esc(campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu"),esc(campaign["window_start"] or "09:00"),esc(campaign["window_end"] or "17:00"),esc(campaign["timezone"] or "Asia/Dhaka"))
+            disabled=" disabled" if errors else ""
             body='<h1>Launch Campaign</h1><div class="card"><h3>%s</h3><p>Eligible recipients: <b>%s</b></p><p>Simulation Base URL: <code>%s</code> (<a href="/admin/settings">Change in Settings</a>)</p>%s<h3>Pre-launch validation</h3><ul>%s</ul><p>This action sends only to the configured authorized target scope.</p><p><a class="btn" href="/admin/campaigns/test-send?id=%s">Send Test Message</a></p><form class="form" method="post" action="/admin/campaigns/launch"><input type="hidden" name="id" value="%s"><label><input type="checkbox" name="confirm" value="YES" required%s> I confirm this campaign is authorized and the target list is approved.</label><button class="btn primary"%s>Launch Now</button></form></div>'%(esc(campaign["name"]),count,esc(current_base_url),window_info,checks,cid,cid,disabled,disabled)
             return self.sendbody(200,self.admin_shell("Launch Campaign",body,"Campaigns"))
         if path=="/admin/campaigns/new":
@@ -5841,4 +5842,11 @@ def scheduler_loop():
 if __name__=="__main__":
     db().close()
     threading.Thread(target=scheduler_loop,daemon=True,name="campaign-scheduler").start()
+    print("=" * 60)
+    print(" Trust PhishGuard Simulation Platform")
+    print(f" Server running on: http://127.0.0.1:{PORT}")
+    print(f" Admin Login URL:   http://127.0.0.1:{PORT}/admin")
+    print(f" Default Username:  {ADMIN_USERNAME}")
+    print(f" Default Password:  {ADMIN_PASSWORD}")
+    print("=" * 60)
     ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
