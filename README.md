@@ -19,8 +19,8 @@ Recommended clone command:
 
 ```bash
 cd /opt
-git clone https://github.com/resanul/phish-test.git phish-simulation
-cd /opt/phish-simulation
+git clone https://github.com/resanul/phish-test.git phish-test
+cd /opt/phish-test
 chmod +x install.sh update.sh rollback.sh
 ./install.sh
 ```
@@ -30,7 +30,7 @@ If the application already exists from the older copy-based installer, back it u
 ## Normal update
 
 ```bash
-cd /opt/phish-simulation
+cd /opt/phish-test
 ./update.sh
 ```
 
@@ -50,7 +50,7 @@ For a simple HTML-only change, restart is harmless and keeps the workflow consis
 Rollback to the previous deployment:
 
 ```bash
-cd /opt/phish-simulation
+cd /opt/phish-test
 ./rollback.sh
 ```
 
@@ -74,18 +74,18 @@ Do not commit:
 
 Set the admin password only in the protected environment file:
 
-`/etc/phish-simulation.env`
+`/etc/phish-test.env`
 
 Example:
 
 ```bash
-printf 'ADMIN_PASSWORD=%s\n' '<strong-random-password>' > /etc/phish-simulation.env
-chmod 600 /etc/phish-simulation.env
+printf 'ADMIN_PASSWORD=%s\n' '<strong-random-password>' > /etc/phish-test.env
+chmod 600 /etc/phish-test.env
 systemctl daemon-reload
-systemctl restart phish-simulation
+systemctl restart phish-test
 ```
 
-The systemd unit loads this file with `EnvironmentFile=-/etc/phish-simulation.env`.
+The systemd unit loads this file with `EnvironmentFile=-/etc/phish-test.env`.
 
 ## Trust PhishGuard enterprise capabilities
 

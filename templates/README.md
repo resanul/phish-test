@@ -41,7 +41,7 @@ http://abcd.com/1.html
 Requests are written locally to:
 
 ```
-/opt/phish-simulation/logs/access.log
+/opt/phish-test/logs/access.log
 ```
 
 Each entry records timestamp, source IP, requested path and HTTP status.
@@ -49,9 +49,9 @@ Each entry records timestamp, source IP, requested path and HTTP status.
 ## Service
 
 ```bash
-systemctl status phish-simulation
-systemctl restart phish-simulation
-journalctl -u phish-simulation -f
+systemctl status phish-test
+systemctl restart phish-test
+journalctl -u phish-test -f
 ```
 
 This project is intended for authorised internal security-awareness exercises. Do not use it to collect passwords, OTPs, PINs, card data, or other authentication/payment credentials.

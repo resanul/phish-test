@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-APP="/opt/phish-simulation"
-SERVICE="phish-simulation"
+APP="/opt/phish-test"
+SERVICE="phish-test"
 PORT="${PORT:-8899}"
 BASE_URL="http://127.0.0.1:${PORT}"
 

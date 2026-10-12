@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-APP="/opt/phish-simulation"
-SERVICE="phish-simulation"
+APP="/opt/phish-test"
+SERVICE="phish-test"
 PORT="${PORT:-8899}"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -33,10 +33,10 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/phish-simulation
-ExecStart=/usr/bin/python3 /opt/phish-simulation/server.py
+WorkingDirectory=/opt/phish-test
+ExecStart=/usr/bin/python3 /opt/phish-test/server.py
 Environment=PORT=8899
-EnvironmentFile=-/etc/phish-simulation.env
+EnvironmentFile=-/etc/phish-test.env
 Restart=always
 RestartSec=3
 
@@ -58,6 +58,6 @@ fi
 
 echo
 echo "Installation/service setup successful."
-echo "IMPORTANT: Configure ADMIN_PASSWORD in /etc/phish-simulation.env (mode 600)."
-echo "Example: printf 'ADMIN_PASSWORD=%s\\n' '<strong-random-password>' > /etc/phish-simulation.env"
-echo "Then run: chmod 600 /etc/phish-simulation.env && systemctl daemon-reload && systemctl restart $SERVICE"
+echo "IMPORTANT: Configure ADMIN_PASSWORD in /etc/phish-test.env (mode 600)."
+echo "Example: printf 'ADMIN_PASSWORD=%s\\n' '<strong-random-password>' > /etc/phish-test.env"
+echo "Then run: chmod 600 /etc/phish-test.env && systemctl daemon-reload && systemctl restart $SERVICE"

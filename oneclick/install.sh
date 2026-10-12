@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APP="/opt/phish-simulation"
-SERVICE="/etc/systemd/system/phish-simulation.service"
+APP="/opt/phish-test"
+SERVICE="/etc/systemd/system/phish-test.service"
 PORT="${PORT:-8080}"
 ADMIN_TOKEN="${ADMIN_TOKEN:-$(openssl rand -hex 24)}"
 [ "$(id -u)" -eq 0 ] || { echo "Run as root: sudo ./install.sh"; exit 1; }
@@ -36,6 +36,6 @@ User=root
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now phish-simulation.service
+systemctl enable --now phish-test.service
 echo "Installed: http://SERVER-IP:$PORT/"
 echo "Admin token: $ADMIN_TOKEN"

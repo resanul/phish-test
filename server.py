@@ -8,7 +8,7 @@ from email.message import EmailMessage
 from email.utils import formataddr
 from zoneinfo import ZoneInfo
 
-BASE=os.environ.get("PHISH_BASE","/opt/phish-simulation" if os.path.isdir("/opt/phish-simulation") else os.path.dirname(os.path.abspath(__file__)))
+BASE=os.environ.get("PHISH_BASE","/opt/phish-test" if os.path.isdir("/opt/phish-test") else os.path.dirname(os.path.abspath(__file__)))
 TEMPLATES=os.path.join(BASE,"templates")
 DATA=os.path.join(BASE,"data")
 LOGS=os.path.join(BASE,"logs")
@@ -103,7 +103,7 @@ def get_linksec_catalog():
     candidates = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "email"),
         os.path.join(TEMPLATES, "email"),
-        r"C:\opt\phish-simulation\templates\email"
+        r"C:\opt\phish-test\templates\email"
     ]
     email_dir = next((d for d in candidates if os.path.isdir(d)), None)
     if not email_dir:
@@ -227,7 +227,7 @@ def seed_core_templates(c):
         cand_paths = [
             os.path.join(TEMPLATES, item["file"]),
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", item["file"]),
-            os.path.join(r"C:\opt\phish-simulation\templates", item["file"]),
+            os.path.join(r"C:\opt\phish-test\templates", item["file"]),
         ]
         for p in cand_paths:
             if os.path.isfile(p):
@@ -4663,7 +4663,7 @@ syncAudience();
             w.writerow(["timestamp","event","template","local_ip","name","employee_id","email","mobile","card_type","user_agent"])
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
-            return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-simulation.csv"})
+            return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-test.csv"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")

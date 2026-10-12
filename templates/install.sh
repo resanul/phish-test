@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-APP="/opt/phish-simulation"
-SERVICE="/etc/systemd/system/phish-simulation.service"
+APP="/opt/phish-test"
+SERVICE="/etc/systemd/system/phish-test.service"
 PORT="${PORT:-8080}"
 [ "$(id -u)" -eq 0 ] || { echo "Run as root: sudo ./install.sh"; exit 1; }
 command -v python3 >/dev/null || { echo "python3 is required"; exit 1; }
@@ -27,7 +27,7 @@ User=root
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now phish-simulation.service
+systemctl enable --now phish-test.service
 echo "Ready: http://SERVER-IP:$PORT/1.html"
 echo "Templates: /1.html through /10.html"
 echo "Logs: $APP/logs/access.log"
