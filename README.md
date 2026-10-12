@@ -15,11 +15,11 @@ Runtime data is intentionally kept outside Git:
 
 The server must have Git access to this private repository.
 
-Recommended SSH remote:
+Recommended clone command:
 
 ```bash
 cd /opt
-git clone git@github.com:resanul/phish.git phish-simulation
+git clone https://github.com/resanul/phish-test.git phish-simulation
 cd /opt/phish-simulation
 chmod +x install.sh update.sh rollback.sh
 ./install.sh
