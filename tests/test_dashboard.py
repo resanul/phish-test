@@ -171,6 +171,58 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn("/admin/campaigns/quick", html)
         self.assertIn("⚡ Instant Launch Now", html)
 
+    def test_dashboard_clickable_stat_cards_and_drilldown_modal(self):
+        dash_html = self.handler.dashboard()
+        self.assertIn("stat clickable", dash_html)
+        self.assertIn("openStatDrilldown('total')", dash_html)
+        self.assertIn("openStatDrilldown('clicks')", dash_html)
+        self.assertIn("openStatDrilldown('submissions')", dash_html)
+        self.assertIn("openStatDrilldown('ips')", dash_html)
+        self.assertIn("stat-hint", dash_html)
+        self.assertIn("statDrilldownModal", dash_html)
+        self.assertIn("statModalSearch", dash_html)
+        self.assertIn("statModalTbody", dash_html)
+
+    def test_stat_details_api_all_types(self):
+        import json
+        c = self.server.db()
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,user_agent)
+                     VALUES('2026-10-13T10:00:00Z','172.31.10.5','1','click','Alice Doe','alice@example.com','Mozilla/5.0')""")
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,user_agent)
+                     VALUES('2026-10-13T10:05:00Z','172.31.10.5','1','submitted','Alice Doe','alice@example.com','Mozilla/5.0')""")
+        c.commit()
+        c.close()
+
+        for stype in ("total", "clicks", "submissions", "ips"):
+            sent = []
+            self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent.append((code, body))
+            self.handler.stat_details_api(f"type={stype}")
+            self.assertEqual(len(sent), 1, f"Should send 1 response for {stype}")
+            code, body = sent[0]
+            self.assertEqual(code, 200)
+            data = json.loads(body)
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["type"], stype)
+            self.assertIn("summary", data)
+            self.assertIn("items", data)
+            self.assertIn("columns", data)
+
+    def test_stat_details_api_route_dispatch_in_do_get(self):
+        import json
+        self.handler.path = "/admin/api/stat_details?type=total"
+        self.handler.client_address = ("127.0.0.1", 12345)
+        self.handler.headers = {}
+        self.handler.auth = lambda: True
+        self.handler.permission_allowed = lambda *a, **k: True
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent.append((code, body))
+        self.handler.do_GET()
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], 200)
+        data = json.loads(sent[0][1])
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["type"], "total")
+
 if __name__ == "__main__":
     unittest.main()
 

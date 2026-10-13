@@ -1519,6 +1519,33 @@ def format_datetime(ts):
     dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(TZ)
     return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
 
+def get_template_labels():
+    labels = {
+        "1": "1 (Apex Rewards)", "1.html": "1 (Apex Rewards)",
+        "2": "2 (Trust Bank PLC)", "2.html": "2 (Trust Bank PLC)",
+        "3": "3 (Microsoft 365)", "3.html": "3 (Microsoft 365)",
+        "4": "4 (Google Workspace)", "4.html": "4 (Google Workspace)",
+        "5": "5 (HR Portal)", "5.html": "5 (HR Portal)",
+        "6": "6 (GlobalProtect IT)", "6.html": "6 (GlobalProtect IT)",
+        "7": "7 (bKash & Banking)", "7.html": "7 (bKash & Banking)",
+        "8": "8 (Zoom Meetings)", "8.html": "8 (Zoom Meetings)",
+        "9": "9 (AWS IAM Console)", "9.html": "9 (AWS IAM Console)",
+        "10": "10 (Awareness Drill)", "10.html": "10 (Awareness Drill)",
+    }
+    try:
+        c = db()
+        for r in c.execute("SELECT template, name FROM template_library").fetchall():
+            t = str(r["template"])
+            name = str(r["name"])
+            if t not in labels:
+                labels[t] = f"{t} ({name})"
+            if not t.endswith(".html") and (t + ".html") not in labels:
+                labels[t + ".html"] = f"{t} ({name})"
+        c.close()
+    except Exception:
+        pass
+    return labels
+
 def access(ip,path,code):
     with open(LOG,"a",encoding="utf-8") as f:
         f.write(f"{datetime.now(timezone.utc).isoformat()} ip={ip} path={path} code={code}\n")
@@ -1602,6 +1629,11 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
 .stat{background:#fff;border:1px solid #e0ece6;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.02);transition:all 0.15s ease}
 .stat:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(8,123,89,0.06);border-color:#b8dad0}
+.stat.clickable{cursor:pointer;position:relative;user-select:none}
+.stat.clickable:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(8,123,89,0.12);border-color:#087b59}
+.stat.clickable:focus-visible{outline:2px solid #087b59;outline-offset:2px}
+.stat-hint{font-size:10px;font-weight:700;color:#087b59;background:#e6f7f0;border:1px solid #c2ebd9;border-radius:999px;padding:2px 7px;opacity:0.85;transition:all 0.15s ease}
+.stat.clickable:hover .stat-hint{opacity:1;background:#087b59;color:#fff;border-color:#087b59}
 .stat-label{font-size:11px;color:#5e776d;font-weight:750;text-transform:uppercase;letter-spacing:0.6px}
 .num{font-size:30px;font-weight:850;color:#10221a;margin-top:8px;letter-spacing:-0.5px}
 .delta{font-size:11.5px;color:#087b59;margin-top:8px;font-weight:600}
@@ -1774,6 +1806,196 @@ def report_metric_sql(alias="e"):
 COALESCE(SUM(CASE WHEN %s.event='form_action' THEN 1 ELSE 0 END),0) actions,
 COALESCE(SUM(CASE WHEN %s.event='report' THEN 1 ELSE 0 END),0) reports"""%(alias,alias,alias)
 
+DASHBOARD_DRILLDOWN_JS = """<script>
+function filterRows() {
+  const q = (document.getElementById('q').value || '').toLowerCase().trim();
+  document.querySelectorAll('#rows tr').forEach(r => {
+    r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+let currentStatType = 'total';
+let currentStatData = null;
+
+function openStatDrilldown(type) {
+  currentStatType = type;
+  const modal = document.getElementById('statDrilldownModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const titleEl = document.getElementById('statModalTitle');
+  const subEl = document.getElementById('statModalSubtitle');
+  const iconEl = document.getElementById('statModalIcon');
+  const sumEl = document.getElementById('statModalSummary');
+  const theadEl = document.getElementById('statModalThead');
+  const tbodyEl = document.getElementById('statModalTbody');
+  const searchInput = document.getElementById('statModalSearch');
+  const countBadge = document.getElementById('statRowCountBadge');
+
+  if (searchInput) searchInput.value = '';
+  if (countBadge) countBadge.innerText = 'Loading...';
+
+  const meta = {
+    'total': { icon: '📊', title: 'Total Simulation Events', sub: 'All recorded activity logs in chronological order · Asia/Dhaka (BST)' },
+    'clicks': { icon: '🔗', title: 'Simulation Clicks Telemetry', sub: 'Landing page visits and lure engagement · Asia/Dhaka (BST)' },
+    'submissions': { icon: '⚠️', title: 'Form Submissions & Compromise Telemetry', sub: 'Recorded employee interactions (Zero-Credential Policy) · Asia/Dhaka (BST)' },
+    'ips': { icon: '🌐', title: 'Action Rate & Source IP Breakdown', sub: 'Network origins, conversion rates, and target correlations · Asia/Dhaka (BST)' }
+  }[type] || { icon: '📊', title: 'Telemetry Details', sub: 'Simulation statistics · Asia/Dhaka (BST)' };
+
+  if (iconEl) iconEl.innerText = meta.icon;
+  if (titleEl) titleEl.innerText = meta.title;
+  if (subEl) subEl.innerText = meta.sub;
+  if (sumEl) sumEl.innerHTML = '<span style="color:#5f8273;font-size:12px">⏳ Fetching telemetry summary...</span>';
+  if (theadEl) theadEl.innerHTML = '';
+  if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:36px;color:#527867;font-size:13px">⏳ Loading detailed telemetry data...</td></tr>';
+
+  fetch('/admin/api/stat_details?type=' + encodeURIComponent(type))
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(data => {
+      if (!data.ok) throw new Error(data.error || 'Failed to load');
+      currentStatData = data;
+      renderStatModalContent(data);
+    })
+    .catch(err => {
+      if (sumEl) sumEl.innerHTML = '';
+      if (tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#c53030">⚠️ Failed to load details: ' + escHtml(err.message) + '</td></tr>';
+      if (countBadge) countBadge.innerText = 'Error';
+    });
+}
+
+function renderStatModalContent(data) {
+  const sumEl = document.getElementById('statModalSummary');
+  const theadEl = document.getElementById('statModalThead');
+  const tbodyEl = document.getElementById('statModalTbody');
+  const countBadge = document.getElementById('statRowCountBadge');
+
+  if (sumEl && data.summary) {
+    sumEl.innerHTML = data.summary.map(s => `
+      <div style="background:#fff;border:1px solid #d4e6dd;border-radius:10px;padding:8px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.03);min-width:110px">
+        <div style="font-size:10.5px;font-weight:750;color:#507164;text-transform:uppercase;letter-spacing:0.4px">${escHtml(s.label)}</div>
+        <div style="font-size:18px;font-weight:850;color:#0d281f;margin-top:2px">${escHtml(s.value)}</div>
+        <div style="font-size:10.5px;color:#087b59;margin-top:2px;font-weight:550">${escHtml(s.hint)}</div>
+      </div>
+    `).join('');
+  }
+
+  if (theadEl && data.columns) {
+    theadEl.innerHTML = '<tr>' + data.columns.map(c => `<th>${escHtml(c)}</th>`).join('') + '</tr>';
+  }
+
+  if (tbodyEl) {
+    if (!data.items || data.items.length === 0) {
+      tbodyEl.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:#6f887d">No records found for this category.</td></tr>';
+      if (countBadge) countBadge.innerText = '0 records';
+      return;
+    }
+
+    if (data.type === 'ips') {
+      tbodyEl.innerHTML = data.items.map(item => `
+        <tr class="stat-row">
+          <td><code style="background:#eaf4ef;color:#0b4d34;padding:3px 7px;border-radius:5px;font-weight:700;font-size:12px">${escHtml(item.ip)}</code></td>
+          <td><b>${item.total_events}</b></td>
+          <td><span class="pill click">${item.clicks}</span></td>
+          <td><span class="pill submitted">${item.submissions}</span></td>
+          <td><b style="color:${parseFloat(item.action_rate)>0?'#b91c1c':'#087b59'}">${escHtml(item.action_rate)}</b></td>
+          <td><span class="pill" style="background:#f1f5f9;color:#334155">${item.target_count} target(s)</span></td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(item.sample_emails)}"><small style="color:#2f4e41">${escHtml(item.sample_emails)}</small></td>
+          <td><small style="color:#4a685c">${escHtml(item.last_seen_date)} ${escHtml(item.last_seen_time)}</small></td>
+          <td>
+            <button type="button" onclick="applyDashboardFilter('${escHtml(item.ip)}')" style="background:#eaf5ef;border:1px solid #b2dbcb;color:#0d4d34;font-size:11px;font-weight:700;padding:4px 9px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px" title="Filter main activity table by this IP">🔍 Filter IP</button>
+          </td>
+        </tr>
+      `).join('');
+    } else {
+      tbodyEl.innerHTML = data.items.map(item => {
+        const evClass = escHtml(item.event);
+        return `
+          <tr class="stat-row">
+            <td>${escHtml(item.date)}</td>
+            <td>${escHtml(item.time)}</td>
+            <td><span class="pill ${evClass}">${evClass}</span></td>
+            <td><b>${escHtml(item.template)}</b></td>
+            <td><code style="background:#eaf4ef;color:#0b4d34;padding:2px 6px;border-radius:4px;cursor:pointer" onclick="applyDashboardFilter('${escHtml(item.ip)}')" title="Click to filter by IP">${escHtml(item.ip)}</code></td>
+            <td>${escHtml(item.name || '—')}</td>
+            <td><a href="javascript:void(0)" onclick="applyDashboardFilter('${escHtml(item.email)}')" style="color:#087b59;font-weight:600;text-decoration:none" title="Filter by email">${escHtml(item.email || '—')}</a></td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(item.ua)}"><small style="color:#5e776d">${escHtml(item.ua || '—')}</small></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    if (countBadge) countBadge.innerText = 'Showing ' + data.items.length + ' records';
+  }
+}
+
+function filterStatModalRows() {
+  const q = (document.getElementById('statModalSearch').value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#statModalTbody tr.stat-row');
+  let visible = 0;
+  rows.forEach(r => {
+    const text = r.innerText.toLowerCase();
+    const match = !q || text.includes(q);
+    r.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const countBadge = document.getElementById('statRowCountBadge');
+  if (countBadge) {
+    countBadge.innerText = q ? `Showing ${visible} of ${rows.length} records` : `Showing ${rows.length} records`;
+  }
+}
+
+function closeStatDrilldown() {
+  const modal = document.getElementById('statDrilldownModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function applyDashboardFilter(val) {
+  if (!val || val === '—') return;
+  closeStatDrilldown();
+  const qInput = document.getElementById('q');
+  if (qInput) {
+    qInput.value = val;
+    filterRows();
+    qInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    qInput.focus();
+  }
+}
+
+function filterDashboardFromModal() {
+  const sInput = document.getElementById('statModalSearch');
+  const term = sInput ? sInput.value.trim() : '';
+  if (term) {
+    applyDashboardFilter(term);
+  } else {
+    closeStatDrilldown();
+    const qInput = document.getElementById('q');
+    if (qInput) {
+      qInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      qInput.focus();
+    }
+  }
+}
+
+function escHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeStatDrilldown();
+});
+</script>"""
+
 RBAC_ROUTE_PERMISSION_MAP={
     "GET":{
         "/admin/campaigns":"campaign.view",
@@ -1786,6 +2008,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/users":"admin.view",
         "/admin/reports":"report.view",
         "/admin/reports.pdf":"report.export",
+        "/admin/api/stat_details":"report.view",
         "/admin/risk":"risk.view",
         "/admin/settings":"risk.manage",
         "/admin.csv":"report.export",
@@ -2200,18 +2423,7 @@ class Handler(BaseHTTPRequestHandler):
         trend=c.execute("SELECT substr(ts,1,10) d, COUNT(*) n FROM events WHERE ts>=? GROUP BY d ORDER BY d", (since,)).fetchall()
         c.close()
 
-        tpl_labels = {
-            "1": "1 (Apex Rewards)", "1.html": "1 (Apex Rewards)",
-            "2": "2 (Trust Bank PLC)", "2.html": "2 (Trust Bank PLC)",
-            "3": "3 (Microsoft 365)", "3.html": "3 (Microsoft 365)",
-            "4": "4 (Google Workspace)", "4.html": "4 (Google Workspace)",
-            "5": "5 (HR Portal)", "5.html": "5 (HR Portal)",
-            "6": "6 (GlobalProtect IT)", "6.html": "6 (GlobalProtect IT)",
-            "7": "7 (bKash & Banking)", "7.html": "7 (bKash & Banking)",
-            "8": "8 (Zoom Meetings)", "8.html": "8 (Zoom Meetings)",
-            "9": "9 (AWS IAM Console)", "9.html": "9 (AWS IAM Console)",
-            "10": "10 (Awareness Drill)", "10.html": "10 (Awareness Drill)",
-        }
+        tpl_labels = get_template_labels()
 
         rate=(subs/clicks*100) if clicks else 0
         max_t=max([r["n"] for r in templates],default=1) or 1
@@ -2239,10 +2451,38 @@ class Handler(BaseHTTPRequestHandler):
         body=f"""<header class="topbar"><div class="topbrand"><div class="mark">🛡️</div>Trust PhishGuard</div><div class="top-actions"><span class="top-role-badge">ADMIN CONTROL CENTER</span><a href="/admin.csv">📥 Export CSV</a><a href="/admin/logout">🚪 Logout</a></div></header>
 <main class="wrap"><div class="hero"><div><h1>Dashboard</h1><p>Simulation telemetry and engagement overview · Asia/Dhaka</p></div><div style="display:flex;gap:10px;align-items:center"><a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a><a class="btn" href="/admin/landing-pages/new">+ New Landing Page</a><a class="btn" href="/admin.csv">📥 Export CSV</a></div></div>
 <section class="stats">
-  <div class="stat"><div class="stat-label">TOTAL EVENTS</div><div class="num">{total}</div><div class="delta">All recorded activity</div></div>
-  <div class="stat"><div class="stat-label">CLICKS</div><div class="num">{clicks}</div><div class="delta">Simulation page visits</div></div>
-  <div class="stat"><div class="stat-label">SUBMISSIONS</div><div class="num">{subs}</div><div class="delta">Form actions recorded</div></div>
-  <div class="stat"><div class="stat-label">ACTION RATE</div><div class="num">{rate:.1f}%</div><div class="delta">{ips} unique source IPs</div></div>
+  <div class="stat clickable" onclick="openStatDrilldown('total')" onkeydown="if(event.key==='Enter'||event.key===' ')openStatDrilldown('total')" title="Click to view all events breakdown" role="button" tabindex="0">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="stat-label">TOTAL EVENTS</div>
+      <span class="stat-hint">👁️ View Details ↗</span>
+    </div>
+    <div class="num">{total}</div>
+    <div class="delta">All recorded activity</div>
+  </div>
+  <div class="stat clickable" onclick="openStatDrilldown('clicks')" onkeydown="if(event.key==='Enter'||event.key===' ')openStatDrilldown('clicks')" title="Click to view simulation click logs" role="button" tabindex="0">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="stat-label">CLICKS</div>
+      <span class="stat-hint">👁️ View Details ↗</span>
+    </div>
+    <div class="num">{clicks}</div>
+    <div class="delta">Simulation page visits</div>
+  </div>
+  <div class="stat clickable" onclick="openStatDrilldown('submissions')" onkeydown="if(event.key==='Enter'||event.key===' ')openStatDrilldown('submissions')" title="Click to view form submission telemetry" role="button" tabindex="0">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="stat-label">SUBMISSIONS</div>
+      <span class="stat-hint">👁️ View Details ↗</span>
+    </div>
+    <div class="num">{subs}</div>
+    <div class="delta">Form actions recorded</div>
+  </div>
+  <div class="stat clickable" onclick="openStatDrilldown('ips')" onkeydown="if(event.key==='Enter'||event.key===' ')openStatDrilldown('ips')" title="Click to view IP & action rate analytics" role="button" tabindex="0">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="stat-label">ACTION RATE</div>
+      <span class="stat-hint">👁️ View Details ↗</span>
+    </div>
+    <div class="num">{rate:.1f}%</div>
+    <div class="delta">{ips} unique source IPs</div>
+  </div>
 </section>
 <section class="grid">
   <div class="card"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div>
@@ -2256,10 +2496,45 @@ class Handler(BaseHTTPRequestHandler):
   <div class="table-wrap">
     <table class="table"><thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Source IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr></thead><tbody id="rows">{table}</tbody></table>
   </div>
-</section></main>
-<script>
-function filterRows(){{const q=document.getElementById('q').value.toLowerCase();document.querySelectorAll('#rows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
-</script>"""
+</section>
+
+<div id="statDrilldownModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.65);z-index:99999;backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;box-sizing:border-box" onclick="if(event.target===this)closeStatDrilldown()">
+  <div style="background:#ffffff;border-radius:18px;width:100%;max-width:980px;max-height:90vh;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;display:flex;flex-direction:column;animation:popIn 0.22s cubic-bezier(0.16,1,0.3,1)">
+    <div style="background:linear-gradient(135deg,#0d3829,#15543e);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="statModalIcon" style="background:linear-gradient(135deg,#10b981,#087b59);width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(0,0,0,0.25)">📊</div>
+        <div>
+          <h2 id="statModalTitle" style="margin:0;font-size:17.5px;font-weight:700;color:#fff">Telemetry Details</h2>
+          <p id="statModalSubtitle" style="margin:3px 0 0;font-size:12px;opacity:0.85;color:#d8efe5">Drilldown information and event logs · Asia/Dhaka (BST)</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeStatDrilldown()" style="background:none;border:none;color:#fff;font-size:28px;cursor:pointer;opacity:0.85;line-height:1" title="Close (Esc)">&times;</button>
+    </div>
+
+    <div id="statModalSummary" style="background:#f4faf7;border-bottom:1px solid #dbebe3;padding:12px 24px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;flex-shrink:0"></div>
+
+    <div style="padding:14px 24px 10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;flex-shrink:0;background:#fff">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;max-width:440px">
+        <input id="statModalSearch" type="text" placeholder="Filter this view (IP, email, template, name...)" oninput="filterStatModalRows()" style="width:100%;padding:8px 12px;border:1.5px solid #ccdcd5;border-radius:8px;font-size:12.5px;outline:none">
+        <button type="button" onclick="document.getElementById('statModalSearch').value='';filterStatModalRows()" style="border:none;background:#e3ede8;color:#1a3328;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:650">Clear</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="statRowCountBadge" style="font-size:12px;color:#527867;font-weight:600">Showing records</span>
+        <button type="button" onclick="filterDashboardFromModal()" style="border:1.5px solid #087b59;background:#fff;color:#087b59;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px">🔍 Filter Main Activity Table</button>
+      </div>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;padding:0 24px 20px">
+      <div class="table-wrap" style="margin-top:0">
+        <table class="table" style="margin:0">
+          <thead id="statModalThead"></thead>
+          <tbody id="statModalTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+""" + DASHBOARD_DRILLDOWN_JS + "</main>"
         dashboard_main=body[body.index("<main"):body.rindex("</main>")+7]
         return self.admin_shell("Overview",dashboard_main,"Overview")
 
@@ -4937,6 +5212,206 @@ syncAudience();
 </script>"""
         return self.admin_shell("Campaign",body,"Campaigns")
 
+    def stat_details_api(self, query=""):
+        try:
+            params = parse_qs(query or "")
+            stype = params.get("type", ["total"])[0].strip().lower()
+            if stype not in ("total", "clicks", "submissions", "ips"):
+                stype = "total"
+            c = db()
+            tpl_labels = get_template_labels()
+
+            if stype == "total":
+                total_cnt = c.execute("SELECT COUNT(*) n FROM events").fetchone()["n"]
+                clicks_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]
+                subs_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
+                ips_cnt = c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]
+                targets_cnt = c.execute("SELECT COUNT(DISTINCT email) n FROM events WHERE email IS NOT NULL AND email!=''").fetchone()["n"]
+                raw_rows = c.execute("SELECT id, ts, event, template, ip, name, email, mobile, user_agent, employee_id FROM events ORDER BY id DESC LIMIT 250").fetchall()
+                c.close()
+
+                items = []
+                for r in raw_rows:
+                    d, t = format_datetime(r["ts"])
+                    items.append({
+                        "id": r["id"],
+                        "date": d,
+                        "time": t,
+                        "event": r["event"],
+                        "template": tpl_labels.get(str(r["template"]), "Template " + str(r["template"])),
+                        "ip": r["ip"],
+                        "name": r["name"] or "—",
+                        "email": r["email"] or "—",
+                        "mobile": r["mobile"] or "—",
+                        "employee_id": r["employee_id"] or "—",
+                        "ua": r["user_agent"] or "—",
+                    })
+
+                payload = {
+                    "ok": True,
+                    "type": "total",
+                    "title": "Total Simulation Events",
+                    "subtitle": "Complete recorded event telemetry · Asia/Dhaka (BST)",
+                    "icon": "📊",
+                    "summary": [
+                        {"label": "Total Events", "value": str(total_cnt), "hint": "All recorded telemetry"},
+                        {"label": "Clicks", "value": str(clicks_cnt), "hint": "Landing page visits"},
+                        {"label": "Submissions", "value": str(subs_cnt), "hint": "Form interactions"},
+                        {"label": "Unique IPs", "value": str(ips_cnt), "hint": "Distinct source endpoints"},
+                        {"label": "Unique Targets", "value": str(targets_cnt), "hint": "Distinct recipient emails"},
+                    ],
+                    "columns": ["Date", "Time", "Event", "Template", "Source IP", "Recipient", "Email", "User Agent"],
+                    "items": items,
+                }
+                return self.sendbody(200, json.dumps(payload), "application/json; charset=utf-8")
+
+            elif stype == "clicks":
+                clicks_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]
+                targets_cnt = c.execute("SELECT COUNT(DISTINCT email) n FROM events WHERE event='click' AND email IS NOT NULL AND email!=''").fetchone()["n"]
+                ips_cnt = c.execute("SELECT COUNT(DISTINCT ip) n FROM events WHERE event='click'").fetchone()["n"]
+                top_tpl_row = c.execute("SELECT template, COUNT(*) n FROM events WHERE event='click' GROUP BY template ORDER BY n DESC LIMIT 1").fetchone()
+                top_tpl = tpl_labels.get(str(top_tpl_row["template"]), "Template " + str(top_tpl_row["template"])) if top_tpl_row else "—"
+                raw_rows = c.execute("SELECT id, ts, event, template, ip, name, email, mobile, user_agent, employee_id FROM events WHERE event='click' ORDER BY id DESC LIMIT 250").fetchall()
+                c.close()
+
+                items = []
+                for r in raw_rows:
+                    d, t = format_datetime(r["ts"])
+                    items.append({
+                        "id": r["id"],
+                        "date": d,
+                        "time": t,
+                        "event": "click",
+                        "template": tpl_labels.get(str(r["template"]), "Template " + str(r["template"])),
+                        "ip": r["ip"],
+                        "name": r["name"] or "—",
+                        "email": r["email"] or "—",
+                        "ua": r["user_agent"] or "—",
+                    })
+
+                payload = {
+                    "ok": True,
+                    "type": "clicks",
+                    "title": "Simulation Click Telemetry",
+                    "subtitle": "Landing page visits and link clicks · Asia/Dhaka (BST)",
+                    "icon": "🔗",
+                    "summary": [
+                        {"label": "Total Clicks", "value": str(clicks_cnt), "hint": "Simulation page visits"},
+                        {"label": "Unique Recipients", "value": str(targets_cnt), "hint": "Employees who clicked"},
+                        {"label": "Source IPs", "value": str(ips_cnt), "hint": "Unique origin addresses"},
+                        {"label": "Top Lure Template", "value": top_tpl, "hint": "Most clicked scenario"},
+                    ],
+                    "columns": ["Date", "Time", "Event", "Template", "Source IP", "Recipient Name", "Email Address", "Browser / Device"],
+                    "items": items,
+                }
+                return self.sendbody(200, json.dumps(payload), "application/json; charset=utf-8")
+
+            elif stype == "submissions":
+                subs_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
+                clicks_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]
+                targets_cnt = c.execute("SELECT COUNT(DISTINCT email) n FROM events WHERE event IN ('submitted','form_action') AND email IS NOT NULL AND email!=''").fetchone()["n"]
+                ips_cnt = c.execute("SELECT COUNT(DISTINCT ip) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
+                comp_rate = round(subs_cnt / clicks_cnt * 100, 1) if clicks_cnt else 0.0
+                raw_rows = c.execute("SELECT id, ts, event, template, ip, name, email, mobile, user_agent, employee_id, card_type FROM events WHERE event IN ('submitted','form_action') ORDER BY id DESC LIMIT 250").fetchall()
+                c.close()
+
+                items = []
+                for r in raw_rows:
+                    d, t = format_datetime(r["ts"])
+                    items.append({
+                        "id": r["id"],
+                        "date": d,
+                        "time": t,
+                        "event": r["event"],
+                        "template": tpl_labels.get(str(r["template"]), "Template " + str(r["template"])),
+                        "ip": r["ip"],
+                        "name": r["name"] or "—",
+                        "email": r["email"] or "—",
+                        "mobile": r["mobile"] or "—",
+                        "employee_id": r["employee_id"] or "—",
+                        "ua": r["user_agent"] or "—",
+                    })
+
+                payload = {
+                    "ok": True,
+                    "type": "submissions",
+                    "title": "Form Submissions & Compromise Telemetry",
+                    "subtitle": "Recorded employee form interactions (Zero-Credential Policy) · Asia/Dhaka (BST)",
+                    "icon": "⚠️",
+                    "summary": [
+                        {"label": "Submissions", "value": str(subs_cnt), "hint": "Form action records"},
+                        {"label": "Compromised Users", "value": str(targets_cnt), "hint": "Distinct employees"},
+                        {"label": "Compromise Rate", "value": f"{comp_rate}%", "hint": "Submissions per click"},
+                        {"label": "Origin IPs", "value": str(ips_cnt), "hint": "Unique source IPs"},
+                        {"label": "Credential Safety", "value": "Protected", "hint": "No credentials stored"},
+                    ],
+                    "columns": ["Date", "Time", "Action", "Template Scenario", "Source IP", "Employee Name", "Email Address", "Employee ID / Dept"],
+                    "items": items,
+                }
+                return self.sendbody(200, json.dumps(payload), "application/json; charset=utf-8")
+
+            elif stype == "ips":
+                clicks_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event='click'").fetchone()["n"]
+                subs_cnt = c.execute("SELECT COUNT(*) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
+                overall_rate = round(subs_cnt / clicks_cnt * 100, 1) if clicks_cnt else 0.0
+                raw_ips = c.execute("""
+                    SELECT 
+                        ip,
+                        COUNT(*) AS total_events,
+                        SUM(CASE WHEN event='click' THEN 1 ELSE 0 END) AS clicks,
+                        SUM(CASE WHEN event IN ('submitted','form_action') THEN 1 ELSE 0 END) AS submissions,
+                        COUNT(DISTINCT email) AS target_count,
+                        GROUP_CONCAT(DISTINCT email) AS emails,
+                        MAX(ts) AS last_seen
+                    FROM events
+                    GROUP BY ip
+                    ORDER BY total_events DESC
+                    LIMIT 150
+                """).fetchall()
+                c.close()
+
+                items = []
+                for r in raw_ips:
+                    r_clicks = r["clicks"] or 0
+                    r_subs = r["submissions"] or 0
+                    r_rate = round(r_subs / r_clicks * 100, 1) if r_clicks else 0.0
+                    d, t = format_datetime(r["last_seen"]) if r["last_seen"] else ("—", "—")
+                    raw_email_list = [e for e in (r["emails"] or "").split(",") if e]
+                    emails_clean = ", ".join(raw_email_list[:3])
+                    if len(raw_email_list) > 3:
+                        emails_clean += f" (+{len(raw_email_list)-3} more)"
+                    items.append({
+                        "ip": r["ip"],
+                        "total_events": r["total_events"],
+                        "clicks": r_clicks,
+                        "submissions": r_subs,
+                        "action_rate": f"{r_rate}%",
+                        "target_count": r["target_count"],
+                        "sample_emails": emails_clean or "—",
+                        "last_seen_date": d,
+                        "last_seen_time": t,
+                    })
+
+                payload = {
+                    "ok": True,
+                    "type": "ips",
+                    "title": "Action Rate & Source IP Breakdown",
+                    "subtitle": "Network activity, conversion rates, and origin telemetry · Asia/Dhaka (BST)",
+                    "icon": "🌐",
+                    "summary": [
+                        {"label": "Action Rate", "value": f"{overall_rate}%", "hint": f"{subs_cnt} subs / {clicks_cnt} clicks"},
+                        {"label": "Unique IPs", "value": str(len(raw_ips)), "hint": "Distinct source endpoints"},
+                        {"label": "Total Clicks", "value": str(clicks_cnt), "hint": "Across all source IPs"},
+                        {"label": "Total Submissions", "value": str(subs_cnt), "hint": "Across all source IPs"},
+                    ],
+                    "columns": ["Source IP", "Total Events", "Clicks", "Submissions", "Action Rate", "Targets", "Associated Recipient(s)", "Last Active (BST)", "Quick Action"],
+                    "items": items,
+                }
+                return self.sendbody(200, json.dumps(payload), "application/json; charset=utf-8")
+
+        except Exception as e:
+            return self.sendbody(500, json.dumps({"ok": False, "error": str(e)}), "application/json; charset=utf-8")
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -4967,6 +5442,8 @@ syncAudience();
             for r in rows:
                 w.writerow([r["ts"],r["event"],r["template"],r["ip"],r["name"] or "",r["employee_id"] or "",r["email"] or "",r["mobile"] or "",r["card_type"] or "",r["user_agent"] or ""])
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-test.csv"})
+        if path=="/admin/api/stat_details":
+            return self.stat_details_api(p.query)
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
