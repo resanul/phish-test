@@ -380,6 +380,21 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn("/admin/reports.pdf", html)
         self.assertIn("/admin/reports.csv", html)
 
+    def test_admin_shell_collapsible_responsive_sidebar(self):
+        # Instantiate handler without mocked admin_shell to test actual admin_shell rendering
+        handler = self.server.Handler.__new__(self.server.Handler)
+        html = handler.admin_shell("Test Page", "<p>Content Here</p>", "Campaigns")
+        self.assertIn('id="mainLayout"', html)
+        self.assertIn('id="adminSidebar"', html)
+        self.assertIn('id="sideCollapseBtn"', html)
+        self.assertIn('id="topbarToggleBtn"', html)
+        self.assertIn('class="side-backdrop"', html)
+        self.assertIn('data-tooltip="Campaigns"', html)
+        self.assertIn('class="side-text"', html)
+        self.assertIn('toggleSidebar', html)
+        self.assertIn('.layout.collapsed{grid-template-columns:68px 1fr}', html)
+        self.assertIn('localStorage.getItem', html)
+
 if __name__ == "__main__":
     unittest.main()
 

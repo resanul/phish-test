@@ -1595,8 +1595,12 @@ DASH_CSS="""
 :root{--primary:#087b59;--primary-hover:#066347;--bg:#f2f5f3;--card:#ffffff;--border:#e1ece6;--text:#10221a;--text-muted:#5e776d}
 *{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#10221a;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit}button,input,select,textarea{font:inherit}
-.topbar{height:68px;background:#051b14;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #0f382a;position:sticky;top:0;z-index:90}
+.topbar{height:68px;background:#051b14;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid #0f382a;position:sticky;top:0;z-index:90}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-toggle-btn{background:rgba(255,255,255,0.06);border:1px solid #1a4d3c;color:#a8d5c4;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s ease;padding:0}
+.topbar-toggle-btn:hover{background:#124433;color:#fff;border-color:#2a755a}
 .topbrand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:16px;color:#fff;text-decoration:none}
+.topbrand-text{letter-spacing:-0.3px}
 .mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
 .live-status-pill{display:inline-flex;align-items:center;gap:7px;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25);padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600}
 .pulse-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;display:inline-block}
@@ -1604,14 +1608,38 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .top-actions a{padding:7px 13px;border:1px solid #1c4b3a;background:rgba(255,255,255,0.05);border-radius:8px;text-decoration:none;font-size:12px;color:#d7ebe3;font-weight:600;transition:all 0.15s ease}
 .top-actions a:hover{background:#123e2f;border-color:#2a6952;color:#fff}
 .top-role-badge{font-size:11px;font-weight:750;background:rgba(255,255,255,0.08);color:#a8c7bc;padding:5px 9px;border-radius:6px;border:1px solid #1b4536;letter-spacing:0.5px}
-.layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 68px)}
-.side{background:#071c15;color:#b8d1c8;padding:18px 14px;border-right:1px solid #0f3327;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
-.side-group-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#497563;padding:12px 10px 4px;margin-top:4px}
-.side a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;text-decoration:none;font-size:12.5px;font-weight:550;color:#a8c4b9;margin:1px 0;transition:all 0.15s ease}
+
+.layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 68px);transition:grid-template-columns 0.22s cubic-bezier(0.4,0,0.2,1)}
+.side{background:#071c15;color:#b8d1c8;padding:14px 10px;border-right:1px solid #0f3327;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;position:sticky;top:68px;height:calc(100vh - 68px);box-sizing:border-box;transition:width 0.22s cubic-bezier(0.4,0,0.2,1),padding 0.22s ease}
+.side-header{display:flex;align-items:center;justify-content:space-between;padding:4px 8px 12px;border-bottom:1px solid #0f3327;margin-bottom:8px}
+.side-header-title{font-size:11px;font-weight:800;letter-spacing:0.8px;color:#497563;text-transform:uppercase}
+.side-collapse-btn{background:rgba(255,255,255,0.05);border:1px solid #144031;color:#9cc8b7;width:28px;height:28px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s ease;padding:0}
+.side-collapse-btn:hover{background:#114232;color:#fff;border-color:#247257}
+.side-toggle-arrow{transition:transform 0.22s ease}
+.side-nav-content{display:flex;flex-direction:column;gap:3px;flex:1}
+
+.side-group-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#497563;padding:12px 10px 4px;margin-top:4px;transition:opacity 0.15s ease}
+.side a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;text-decoration:none;font-size:12.5px;font-weight:550;color:#a8c4b9;margin:1px 0;transition:all 0.15s ease;position:relative}
 .side a:hover{background:#103528;color:#fff;transform:translateX(3px)}
 .side a.active{background:#164536;color:#ffffff;font-weight:700;box-shadow:inset 3px 0 0 #10b981}
-.side-ico{font-size:14px;width:18px;display:inline-block;text-align:center}
-.main{padding:28px 36px;max-width:1560px}
+.side-ico{font-size:14px;width:18px;display:inline-block;text-align:center;flex-shrink:0}
+.side-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-backdrop{display:none}
+.main{padding:28px 36px;max-width:1560px;min-width:0;box-sizing:border-box}
+
+/* Collapsed Icon Bar State */
+.layout.collapsed{grid-template-columns:68px 1fr}
+.layout.collapsed .side{width:68px;padding:14px 6px;align-items:center}
+.layout.collapsed .side-header{justify-content:center;padding:0 0 10px;border-bottom:none}
+.layout.collapsed .side-header-title{display:none}
+.layout.collapsed .side-collapse-btn .side-toggle-arrow{transform:rotate(180deg)}
+.layout.collapsed .side-group-title{font-size:0;height:1px;padding:0;margin:10px 4px;background:rgba(255,255,255,0.08);overflow:hidden;width:40px}
+.layout.collapsed .side-text{display:none}
+.layout.collapsed .side a{justify-content:center;width:44px;height:44px;padding:0;margin:3px auto;border-radius:10px}
+.layout.collapsed .side a .side-ico{font-size:18px;width:auto}
+.layout.collapsed .side a:hover{transform:scale(1.1)}
+.layout.collapsed .side a:hover::after{content:attr(data-tooltip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);background:#082a1f;color:#fff;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.35);border:1px solid #1a5e47;z-index:9999;pointer-events:none}
+.layout.collapsed .side a:hover::before{content:"";position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);border-width:5px 6px 5px 0;border-style:solid;border-color:transparent #1a5e47 transparent transparent;z-index:9999}
 .wrap{max-width:1440px;margin:auto;padding:28px}
 .hero{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;flex-wrap:wrap;gap:14px}
 .hero h1{margin:0;font-size:28px;font-weight:850;color:#10221a;letter-spacing:-0.7px}
@@ -1734,6 +1762,50 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .ls-iframe{width:100%;height:680px;border:none;background:#ffffff}
 @media(max-width:1200px){.ls-browser{grid-template-columns:200px 320px 1fr}}
 @media(max-width:960px){.ls-browser{grid-template-columns:1fr;height:auto;min-height:0}.ls-sidebar{display:none}}
+
+/* Responsive behavior ensuring sidebar stays on the left across all screen size changes */
+@media(max-width:1080px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .grid{grid-template-columns:1fr}
+}
+@media(max-width:860px){
+  .layout{grid-template-columns:68px 1fr}
+  .layout .side{width:68px;padding:14px 6px;align-items:center}
+  .layout .side-header{justify-content:center;padding:0 0 10px;border-bottom:none}
+  .layout .side-header-title{display:none}
+  .layout .side-collapse-btn .side-toggle-arrow{transform:rotate(180deg)}
+  .layout .side-group-title{font-size:0;height:1px;padding:0;margin:10px 4px;background:rgba(255,255,255,0.08);overflow:hidden;width:40px}
+  .layout .side-text{display:none}
+  .layout .side a{justify-content:center;width:44px;height:44px;padding:0;margin:3px auto;border-radius:10px}
+  .layout .side a .side-ico{font-size:18px;width:auto}
+  .layout .side a:hover::after{content:attr(data-tooltip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);background:#082a1f;color:#fff;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.35);border:1px solid #1a5e47;z-index:9999;pointer-events:none}
+  .layout .side a:hover::before{content:"";position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);border-width:5px 6px 5px 0;border-style:solid;border-color:transparent #1a5e47 transparent transparent;z-index:9999}
+
+  .layout.expanded{grid-template-columns:240px 1fr}
+  .layout.expanded .side{width:240px;padding:14px 10px;align-items:stretch}
+  .layout.expanded .side-header{justify-content:space-between;padding:4px 8px 12px;border-bottom:1px solid #0f3327}
+  .layout.expanded .side-header-title{display:inline}
+  .layout.expanded .side-collapse-btn .side-toggle-arrow{transform:rotate(0deg)}
+  .layout.expanded .side-group-title{font-size:10.5px;height:auto;padding:12px 10px 4px;margin-top:4px;background:none;width:auto}
+  .layout.expanded .side-text{display:inline}
+  .layout.expanded .side a{justify-content:flex-start;width:auto;height:auto;padding:9px 12px;margin:1px 0}
+  .layout.expanded .side a .side-ico{font-size:14px;width:18px}
+  .live-status-pill{display:none}
+  .main{padding:20px 18px}
+}
+@media(max-width:600px){
+  .topbar{padding:0 12px;height:60px}
+  .layout{grid-template-columns:56px 1fr;min-height:calc(100vh - 60px)}
+  .side{width:56px;top:60px;height:calc(100vh - 60px);padding:10px 4px}
+  .side a{width:38px;height:38px}
+  .side a .side-ico{font-size:16px}
+  .topbrand-text{display:none}
+  .top-role-badge{display:none}
+  .main{padding:14px 10px}
+  .stats{grid-template-columns:1fr}
+  .layout.expanded .side{position:fixed;left:0;top:60px;bottom:0;width:240px;z-index:9999;box-shadow:6px 0 25px rgba(0,0,0,0.6)}
+  .layout.expanded .side-backdrop{display:block;position:fixed;top:60px;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(2px)}
+}
 """
 
 
@@ -2617,17 +2689,26 @@ class Handler(BaseHTTPRequestHandler):
         ]
         links_parts=[]
         for gname,items in nav_groups:
-            links_parts.append(f'<div class="side-group-title">{gname}</div>')
+            links_parts.append(f'<div class="side-group-title" data-group="{gname}">{gname}</div>')
             for n,u,ico in items:
                 act="active" if (n==active or (active in ("Templates","Email Templates") and n=="Email Templates") or (active=="Overview" and n=="Overview") or (active=="Dashboard" and n=="Overview")) else ""
-                links_parts.append(f'<a href="{u}" class="{act}"><span class="side-ico">{ico}</span><span>{n}</span></a>')
+                links_parts.append(f'<a href="{u}" class="{act}" title="{n}" data-tooltip="{n}"><span class="side-ico">{ico}</span><span class="side-text">{n}</span></a>')
         links="".join(links_parts)
         css=DASH_CSS
         body=f'''<header class="topbar">
-  <a class="topbrand" href="/admin">
-    <div class="mark">🛡️</div>
-    <div>Trust PhishGuard</div>
-  </a>
+  <div class="topbar-left">
+    <button type="button" class="topbar-toggle-btn" id="topbarToggleBtn" onclick="toggleSidebar()" aria-label="Toggle Sidebar" title="Toggle sidebar">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+    <a class="topbrand" href="/admin">
+      <div class="mark">🛡️</div>
+      <div class="topbrand-text">Trust PhishGuard</div>
+    </a>
+  </div>
   <div class="live-status-pill">
     <span class="pulse-dot"></span> Simulation Engine Online · Asia/Dhaka
   </div>
@@ -2637,10 +2718,47 @@ class Handler(BaseHTTPRequestHandler):
     <a href="/admin/logout">🚪 Logout</a>
   </div>
 </header>
-<div class="layout">
-  <aside class="side">{links}</aside>
+<div class="layout" id="mainLayout">
+  <aside class="side" id="adminSidebar">
+    <div class="side-header">
+      <span class="side-header-title">NAVIGATION</span>
+      <button type="button" class="side-collapse-btn" id="sideCollapseBtn" onclick="toggleSidebar()" aria-label="Toggle Sidebar" title="Collapse sidebar">
+        <svg class="side-toggle-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+    </div>
+    <div class="side-nav-content">
+      {links}
+    </div>
+  </aside>
+  <div class="side-backdrop" onclick="toggleSidebar()"></div>
   <main class="main">{content}</main>
-</div>'''
+</div>
+<script>
+function toggleSidebar(){{
+  var layout = document.getElementById('mainLayout') || document.querySelector('.layout');
+  if(!layout) return;
+  var isMobile = window.innerWidth <= 860;
+  if(isMobile){{
+    layout.classList.toggle('expanded');
+    layout.classList.remove('collapsed');
+  }} else {{
+    var willCollapse = !layout.classList.contains('collapsed');
+    layout.classList.toggle('collapsed', willCollapse);
+    layout.classList.remove('expanded');
+    try {{ localStorage.setItem('phish_sidebar_collapsed', willCollapse ? '1' : '0'); }} catch(e){{}}
+  }}
+}}
+(function(){{
+  try {{
+    if(window.innerWidth > 860 && localStorage.getItem('phish_sidebar_collapsed') === '1'){{
+      var layout = document.getElementById('mainLayout') || document.querySelector('.layout');
+      if(layout) layout.classList.add('collapsed');
+    }}
+  }} catch(e){{}}
+}})();
+</script>'''
         return page(title,body,css)
 
     def feature_page(self,path,query=""):
