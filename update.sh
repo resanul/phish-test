@@ -50,13 +50,19 @@ mkdir -p "$APP/.deploy-backups"
 printf 'previous=%s\ncurrent=%s\ndeployed_at=%s\n' "$CURRENT" "$TARGET" "$STAMP" > "$STATE"
 
 health_check() {
-  local url="http://127.0.0.1:${PORT}/1.html"
+  local scheme="http"
+  if grep -qs "^SSL_ENABLED=1" /etc/phish-test.env 2>/dev/null || [ "${SSL_ENABLED:-0}" = "1" ] || [ "$PORT" = "443" ]; then
+    scheme="https"
+  fi
+  local url="${scheme}://127.0.0.1:${PORT}/1.html"
+  local alt_url="http://127.0.0.1:${PORT}/1.html"
+  [ "$scheme" = "http" ] && alt_url="https://127.0.0.1:${PORT}/1.html"
 
   echo "Waiting for $SERVICE to become healthy..."
 
   for i in {1..15}; do
     if systemctl is-active --quiet "$SERVICE" && \
-       curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+       (curl -fsSk --max-time 3 "$url" >/dev/null 2>&1 || curl -fsSk --max-time 3 "$alt_url" >/dev/null 2>&1); then
       echo "Health check passed."
       return 0
     fi

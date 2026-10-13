@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json
+import os, sys, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode, quote_plus, urlsplit, unquote
 from http import cookies
@@ -16,6 +16,9 @@ DB=os.path.join(DATA,"phish.db")
 LOG=os.path.join(LOGS,"access.log")
 PORT=int(os.environ.get("PORT","8899"))
 PUBLIC_BASE_URL=os.environ.get("PUBLIC_BASE_URL","").rstrip("/")
+SSL_CERT=os.environ.get("SSL_CERT","").strip()
+SSL_KEY=os.environ.get("SSL_KEY","").strip()
+SSL_ENABLED=os.environ.get("SSL_ENABLED","0").strip().lower() in ("1","true","yes") or ("--ssl" in sys.argv) or bool(SSL_CERT and SSL_KEY)
 SEND_DELAY=float(os.environ.get("SEND_DELAY_SECONDS","0.2"))
 ADMIN_USERNAME=os.environ.get("ADMIN_USERNAME","admin")
 ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
@@ -778,10 +781,68 @@ def validate_landing_html(body):
             return False,"Blocked field policy: passwords, OTPs, PINs, CVV/CVC or card-number collection is not allowed."
     return True,""
 
-def get_public_base_url(fallback_host=None):
+def ensure_self_signed_cert(cert_path, key_path):
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        return cert_path, key_path
+    os.makedirs(os.path.dirname(os.path.abspath(cert_path)), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(key_path)), exist_ok=True)
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        import datetime as dt
+        import ipaddress
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Trust PhishGuard Security Simulation"),
+        ])
+        alt_names = [
+            x509.DNSName("localhost"),
+            x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+        ]
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1))
+            .not_valid_after(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=3650))
+            .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
+            .sign(key, hashes.SHA256())
+        )
+        with open(key_path, "wb") as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+        return cert_path, key_path
+    except Exception:
+        pass
+    try:
+        cmd = [
+            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", key_path, "-out", cert_path, "-days", "3650",
+            "-subj", "/CN=localhost/O=Trust PhishGuard"
+        ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return cert_path, key_path
+    except Exception as e:
+        raise RuntimeError(f"Could not generate self-signed certificate: {e}")
+
+def get_public_base_url(fallback_host=None, is_secure=None):
     global PUBLIC_BASE_URL
     env_val = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
     if env_val:
+        if (is_secure or SSL_ENABLED) and env_val.startswith("http://"):
+            env_val = "https://" + env_val[7:]
         PUBLIC_BASE_URL = env_val
         return env_val
     try:
@@ -790,12 +851,17 @@ def get_public_base_url(fallback_host=None):
         c.close()
         if r and r["value"] and r["value"].strip():
             val = r["value"].strip().rstrip("/")
+            if (is_secure or SSL_ENABLED) and val.startswith("http://"):
+                val = "https://" + val[7:]
             PUBLIC_BASE_URL = val
             return val
     except Exception:
         pass
     if fallback_host:
-        proto = "https" if str(fallback_host).endswith(":443") else "http"
+        if is_secure is not None:
+            proto = "https" if is_secure else "http"
+        else:
+            proto = "https" if (SSL_ENABLED or PORT == 443 or str(fallback_host).endswith(":443")) else "http"
         detected = f"{proto}://{fallback_host}".rstrip("/")
         try:
             c = db()
@@ -808,7 +874,8 @@ def get_public_base_url(fallback_host=None):
         return detected
     if PUBLIC_BASE_URL:
         return PUBLIC_BASE_URL
-    return f"http://127.0.0.1:{PORT}"
+    scheme = "https" if (is_secure or SSL_ENABLED or PORT == 443) else "http"
+    return f"{scheme}://127.0.0.1:{PORT}"
 
 def create_tracking_token(campaign_id,recipient_id):
     token=secrets.token_urlsafe(32)
@@ -2261,6 +2328,18 @@ def route_permission(path,method,form=None):
     return value
 
 class Handler(BaseHTTPRequestHandler):
+    def is_https(self):
+        headers = getattr(self, "headers", None)
+        if headers:
+            proto = headers.get("X-Forwarded-Proto", "").strip().lower()
+            if proto == "https":
+                return True
+            if headers.get("X-Forwarded-Ssl", "").strip().lower() == "on":
+                return True
+        if isinstance(getattr(self, "connection", None), ssl.SSLSocket):
+            return True
+        return bool(SSL_ENABLED or PORT == 443)
+
     def sendbody(self,code,body,ctype="text/html; charset=utf-8",extra=None):
         b=body.encode() if isinstance(body,str) else body
         self.send_response(code)
@@ -2274,6 +2353,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("X-Frame-Options", x_frame)
         self.send_header("Referrer-Policy","same-origin")
         self.send_header("Permissions-Policy","camera=(),microphone=(),geolocation=()")
+        if self.is_https():
+            self.send_header("Strict-Transport-Security","max-age=31536000; includeSubDomains")
         if extra:
             for k,v in extra.items(): self.send_header(k,v)
         self.end_headers()
@@ -4150,7 +4231,7 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
             return self.admin_shell("Admin Users",body,"Admin Users")
         if path=="/admin/settings":
             cfg=risk_settings(c); c.close()
-            cur_base_url = get_public_base_url(self.headers.get("Host"))
+            cur_base_url = get_public_base_url(self.headers.get("Host"), is_secure=self.is_https())
             body='''<h1>Settings</h1><div class="card"><h3>Public Simulation Base URL</h3><p>The public base URL used for email tracking links, landing pages, and QR codes sent to target users.</p><form class="form" method="post" action="/admin/settings/base-url"><label>Base URL (e.g., http://192.168.10.242:8899 or https://phish.example.com)<input type="text" name="public_base_url" value="%s" required maxlength="255"></label><button class="btn primary" type="submit">Save Base URL</button></form><p class="sub" style="margin-top:8px">Currently active: <code>%s</code></p></div><div class="card" style="margin-top:15px"><h3>System Environment</h3><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'''%(esc(cur_base_url),esc(cur_base_url),cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
             return self.admin_shell("Settings",body,"Settings")
         c.close(); return None
@@ -6209,7 +6290,7 @@ syncAudience();
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
             req_host=self.headers.get("Host")
             errors=campaign_prelaunch_validation(campaign, req_host)
-            current_base_url=get_public_base_url(req_host)
+            current_base_url=get_public_base_url(req_host, is_secure=self.is_https())
             checks="".join("<li style='color:%s'>%s</li>"%("#a12d2d" if e else "#087b59",esc(e or "Ready")) for e in errors) if errors else "<li style='color:#087b59'>All pre-launch checks passed.</li>"
             in_window=campaign_window_open(campaign)
             window_info='<p style="color:#087b59;font-size:12px;margin:5px 0">✓ Within configured sending window (%s, %s–%s %s)</p>'%(esc(campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu"),esc(campaign["window_start"] or "09:00"),esc(campaign["window_end"] or "17:00"),esc(campaign["timezone"] or "Asia/Dhaka")) if in_window else '<p style="color:#b37400;font-size:12px;margin:5px 0">ℹ Currently outside configured sending window (%s, %s–%s %s). <b>Manual launch will dispatch immediately.</b></p>'%(esc(campaign["business_days"] or "Sun,Mon,Tue,Wed,Thu"),esc(campaign["window_start"] or "09:00"),esc(campaign["window_end"] or "17:00"),esc(campaign["timezone"] or "Asia/Dhaka"))
@@ -6301,7 +6382,7 @@ syncAudience();
                 LOGIN_ATTEMPTS.pop(self.client_address[0],None)
                 sid=secrets.token_urlsafe(32); SESSIONS[sid]={"username":username,"role":admin["role"] if admin else "Administrator","created_at":time.time(),"last_seen":time.time()}
                 ck=cookies.SimpleCookie(); ck["admin_session"]=sid; ck["admin_session"]["HttpOnly"]=True; ck["admin_session"]["SameSite"]="Strict"; ck["admin_session"]["Max-Age"]="28800"; ck["admin_session"]["Path"]="/"
-                if self.headers.get("X-Forwarded-Proto","").lower()=="https": ck["admin_session"]["Secure"]=True
+                if self.is_https(): ck["admin_session"]["Secure"]=True
                 return self.sendbody(302,b"",extra={"Location":"/","Set-Cookie":ck["admin_session"].OutputString()})
             self.login_failed()
             return self.sendbody(401,self.login_page("Invalid username or password"))
@@ -7302,11 +7383,24 @@ def scheduler_loop():
 if __name__=="__main__":
     db().close()
     threading.Thread(target=scheduler_loop,daemon=True,name="campaign-scheduler").start()
+    scheme = "https" if SSL_ENABLED else "http"
     print("=" * 60)
-    print(" Trust PhishGuard Simulation Platform")
-    print(f" Server running on: http://127.0.0.1:{PORT}")
-    print(f" Admin Login URL:   http://127.0.0.1:{PORT}/admin")
+    status_tag = "[SSL SECURE]" if SSL_ENABLED else "[HTTP]"
+    print(f" Trust PhishGuard Simulation Platform ({scheme.upper()} {status_tag})")
+    print(f" Server running on: {scheme}://127.0.0.1:{PORT}")
+    print(f" Admin Login URL:   {scheme}://127.0.0.1:{PORT}/admin")
     print(f" Default Username:  {ADMIN_USERNAME}")
     print(f" Default Password:  {ADMIN_PASSWORD}")
+    if SSL_ENABLED:
+        cert_display = SSL_CERT or os.path.join(DATA, "cert.pem")
+        print(f" SSL Certificate:   {cert_display}")
     print("=" * 60)
-    ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
+    httpd = ThreadingHTTPServer(("0.0.0.0",PORT),Handler)
+    if SSL_ENABLED:
+        cert_file = SSL_CERT or os.path.join(DATA, "cert.pem")
+        key_file = SSL_KEY or os.path.join(DATA, "key.pem")
+        cert_file, key_file = ensure_self_signed_cert(cert_file, key_file)
+        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
+        httpd.socket = ssl_ctx.wrap_socket(httpd.socket, server_side=True)
+    httpd.serve_forever()

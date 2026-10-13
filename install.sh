@@ -20,7 +20,7 @@ fi
 
 mkdir -p "$APP/templates" "$APP/logs" "$APP/data"
 
-chmod 755 "$APP/server.py" "$APP/update.sh" "$APP/rollback.sh" "$APP/install.sh"
+chmod 755 "$APP/server.py" "$APP/update.sh" "$APP/rollback.sh" "$APP/install.sh" "$APP/setup-ssl.sh"
 
 if [ -f /etc/systemd/system/$SERVICE.service ]; then
   cp -a /etc/systemd/system/$SERVICE.service /etc/systemd/system/$SERVICE.service.backup.$(date +%Y%m%d_%H%M%S)
@@ -50,10 +50,19 @@ systemctl restart $SERVICE
 
 python3 -m py_compile "$APP/server.py"
 
-if ! curl -fsS --max-time 10 "http://127.0.0.1:$PORT/1.html" >/dev/null; then
-  echo "ERROR: Health check failed."
-  systemctl --no-pager status $SERVICE || true
-  exit 1
+SCHEME="http"
+if grep -qs "^SSL_ENABLED=1" /etc/phish-test.env 2>/dev/null || [ "${SSL_ENABLED:-0}" = "1" ] || [ "$PORT" = "443" ]; then
+  SCHEME="https"
+fi
+
+if ! curl -fsSk --max-time 10 "${SCHEME}://127.0.0.1:$PORT/1.html" >/dev/null 2>&1; then
+  ALT_SCHEME="https"
+  [ "$SCHEME" = "https" ] && ALT_SCHEME="http"
+  if ! curl -fsSk --max-time 5 "${ALT_SCHEME}://127.0.0.1:$PORT/1.html" >/dev/null 2>&1; then
+    echo "ERROR: Health check failed."
+    systemctl --no-pager status $SERVICE || true
+    exit 1
+  fi
 fi
 
 echo
