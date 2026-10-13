@@ -387,7 +387,7 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn('id="mainLayout"', html)
         self.assertIn('id="adminSidebar"', html)
         self.assertIn('id="sideCollapseBtn"', html)
-        self.assertIn('id="topbarToggleBtn"', html)
+        self.assertNotIn('id="topbarToggleBtn"', html)
         self.assertIn('class="side-backdrop"', html)
         self.assertIn('data-tooltip="Campaigns"', html)
         self.assertIn('class="side-text"', html)

@@ -1596,9 +1596,6 @@ DASH_CSS="""
 *{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#10221a;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit}button,input,select,textarea{font:inherit}
 .topbar{height:68px;background:#051b14;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid #0f382a;position:sticky;top:0;z-index:90}
-.topbar-left{display:flex;align-items:center;gap:12px}
-.topbar-toggle-btn{background:rgba(255,255,255,0.06);border:1px solid #1a4d3c;color:#a8d5c4;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s ease;padding:0}
-.topbar-toggle-btn:hover{background:#124433;color:#fff;border-color:#2a755a}
 .topbrand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:16px;color:#fff;text-decoration:none}
 .topbrand-text{letter-spacing:-0.3px}
 .mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
@@ -2696,19 +2693,10 @@ class Handler(BaseHTTPRequestHandler):
         links="".join(links_parts)
         css=DASH_CSS
         body=f'''<header class="topbar">
-  <div class="topbar-left">
-    <button type="button" class="topbar-toggle-btn" id="topbarToggleBtn" onclick="toggleSidebar()" aria-label="Toggle Sidebar" title="Toggle sidebar">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="3" y1="12" x2="21" y2="12"></line>
-        <line x1="3" y1="6" x2="21" y2="6"></line>
-        <line x1="3" y1="18" x2="21" y2="18"></line>
-      </svg>
-    </button>
-    <a class="topbrand" href="/admin">
-      <div class="mark">🛡️</div>
-      <div class="topbrand-text">Trust PhishGuard</div>
-    </a>
-  </div>
+  <a class="topbrand" href="/admin">
+    <div class="mark">🛡️</div>
+    <div class="topbrand-text">Trust PhishGuard</div>
+  </a>
   <div class="live-status-pill">
     <span class="pulse-dot"></span> Simulation Engine Online · Asia/Dhaka
   </div>
