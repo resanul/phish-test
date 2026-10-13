@@ -1676,6 +1676,7 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .form input:focus,.form select:focus,.form textarea:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
 @media(max-width:960px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.side{display:flex;flex-direction:row;overflow-x:auto;padding:10px}.side-group-title{display:none}.side a{white-space:nowrap}}
 @media(max-width:540px){.stats{grid-template-columns:1fr}.main{padding:18px}.topbar{padding:0 16px}.top-role-badge{display:none}}
+@media print{.topbar,.side,.camp-crumb a,.filter,button,a.btn,.stat-hint,.live-status-pill,.top-actions{display:none !important}.layout{display:block !important}.main{padding:0 !important;max-width:100% !important;margin:0 !important}body{background:#fff !important;color:#000 !important;font-size:11pt !important}.card{border:1px solid #ddd !important;box-shadow:none !important;margin-bottom:14px !important;break-inside:avoid}.stat{border:1px solid #ddd !important;box-shadow:none !important;break-inside:avoid}}
 /* LinkSec Modern 3-Column Email Template Catalog & Live Preview */
 .ls-browser{display:grid;grid-template-columns:230px 370px 1fr;background:#ffffff;border:1px solid #e1ece6;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 18px rgba(7,28,21,0.04);min-height:740px;height:calc(100vh - 210px);margin-top:14px}
 .ls-sidebar{background:#f9fbf9;border-right:1px solid #e6f0eb;padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
@@ -1981,6 +1982,43 @@ function filterDashboardFromModal() {
   }
 }
 
+function exportStatModalCSV() {
+  if (!currentStatData || !currentStatData.items || !currentStatData.items.length) {
+    alert('No telemetry records available to export.');
+    return;
+  }
+  const items = currentStatData.items;
+  let headers = [];
+  let rows = [];
+
+  if (currentStatData.type === 'ips') {
+    headers = ["Source IP", "Total Events", "Clicks", "Submissions", "Action Rate", "Targets", "Associated Emails", "Last Seen Date", "Last Seen Time"];
+    rows = items.map(it => [
+      it.ip, it.total_events, it.clicks, it.submissions, it.action_rate, it.target_count, it.sample_emails, it.last_seen_date, it.last_seen_time
+    ]);
+  } else {
+    headers = ["Date", "Time", "Event", "Template", "Source IP", "Recipient Name", "Email Address", "Mobile", "Employee ID", "User Agent"];
+    rows = items.map(it => [
+      it.date, it.time, it.event, it.template, it.ip, it.name || "", it.email || "", it.mobile || "", it.employee_id || "", it.ua || ""
+    ]);
+  }
+
+  const csvRows = [];
+  csvRows.push(headers.map(h => '"' + String(h).replace(/"/g, '""') + '"').join(','));
+  for (const r of rows) {
+    csvRows.push(r.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(','));
+  }
+  const blob = new Blob([csvRows.join('\\r\\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trust-phishguard-${currentStatType}-telemetry.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function escHtml(str) {
   if (str === null || str === undefined) return '';
   return String(str)
@@ -2008,6 +2046,9 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/users":"admin.view",
         "/admin/reports":"report.view",
         "/admin/reports.pdf":"report.export",
+        "/admin/reports.csv":"report.export",
+        "/admin/reports/campaign.csv":"report.export",
+        "/admin/reports/campaign.pdf":"report.export",
         "/admin/api/stat_details":"report.view",
         "/admin/risk":"risk.view",
         "/admin/settings":"risk.manage",
@@ -2306,6 +2347,14 @@ class Handler(BaseHTTPRequestHandler):
             }
         if path.startswith("/admin/templates"):
             return {"campaign_type": first("campaign_type","type","category")}
+        if path.startswith("/admin/reports"):
+            return {
+                "department": first("department"),
+                "organizational_unit": first("organizational_unit","org_unit"),
+                "campaign_type": first("campaign_type","type"),
+                "campaign_group": first("group_name","group_id"),
+                "campaign": first("campaign_id","id"),
+            }
         return {
             "department": first("department"),
             "organizational_unit": first("organizational_unit","org_unit"),
@@ -2518,9 +2567,11 @@ class Handler(BaseHTTPRequestHandler):
         <input id="statModalSearch" type="text" placeholder="Filter this view (IP, email, template, name...)" oninput="filterStatModalRows()" style="width:100%;padding:8px 12px;border:1.5px solid #ccdcd5;border-radius:8px;font-size:12.5px;outline:none">
         <button type="button" onclick="document.getElementById('statModalSearch').value='';filterStatModalRows()" style="border:none;background:#e3ede8;color:#1a3328;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:650">Clear</button>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span id="statRowCountBadge" style="font-size:12px;color:#527867;font-weight:600">Showing records</span>
-        <button type="button" onclick="filterDashboardFromModal()" style="border:1.5px solid #087b59;background:#fff;color:#087b59;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px">🔍 Filter Main Activity Table</button>
+        <button type="button" onclick="exportStatModalCSV()" style="border:1.5px solid #087b59;background:#eef7f2;color:#087b59;padding:7px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="Export this drilldown data as CSV">📥 Export CSV</button>
+        <button type="button" onclick="window.print()" style="border:1.5px solid #cbdad2;background:#fff;color:#1e382c;padding:7px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="Print or Save as PDF">🖨️ Print / PDF</button>
+        <button type="button" onclick="filterDashboardFromModal()" style="border:1.5px solid #087b59;background:#087b59;color:#fff;padding:7px 11px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px">🔍 Filter Main Activity Table</button>
       </div>
     </div>
 
@@ -3705,8 +3756,8 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
                 COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='report' AND e.ts>=? AND e.ts<?),0) reports
                 FROM campaigns c ORDER BY c.id DESC""",(start_iso,end_iso,start_iso,end_iso,start_iso,end_iso,start_iso,end_iso,start_iso,end_iso)).fetchall(); c.close()
             rate=subs/clicks*100 if clicks else 0; report_rate=reports/clicks*100 if clicks else 0
-            rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td><a class="btn" href="/admin/reports?campaign_id=%s">Details</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),r["targeted"],r["sent"],r["failed"],r["clicks"],(r["actions"] or 0)/(r["clicks"] or 1)*100,(r["reports"] or 0)/(r["clicks"] or 1)*100,r["id"]) for r in campaigns) or '<tr><td colspan="10">No campaign telemetry in this period.</td></tr>'
-            controls='<div class="card"><form method="get" class="filter"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Last 30 Days</a><a class="btn" href="/admin/reports.pdf?start=%s&end=%s">PDF Report</a></form></div>'%(esc(start_day),esc(end_day),esc(start_day),esc(end_day))
+            rows="".join('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td><td><div style="display:inline-flex;gap:4px;white-space:nowrap"><a class="btn" href="/admin/reports?campaign_id=%s" style="padding:4px 8px;font-size:12px;font-weight:600">📊 View</a><a class="btn" href="/admin/reports/campaign.csv?id=%s" style="padding:4px 8px;font-size:12px;font-weight:600;color:#087b59;background:#f2faf6;border-color:#b4decb" title="Download CSV">📥 CSV</a><a class="btn" href="/admin/reports/campaign.pdf?id=%s" style="padding:4px 8px;font-size:12px;font-weight:600;color:#b91c1c;background:#fef2f2;border-color:#fca5a5" title="Download PDF">📄 PDF</a></div></td></tr>'%(r["id"],esc(r["name"]),esc(r["status"]),r["targeted"],r["sent"],r["failed"],r["clicks"],(r["actions"] or 0)/(r["clicks"] or 1)*100,(r["reports"] or 0)/(r["clicks"] or 1)*100,r["id"],r["id"],r["id"]) for r in campaigns) or '<tr><td colspan="10">No campaign telemetry in this period.</td></tr>'
+            controls='<div class="card"><form method="get" class="filter"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Last 30 Days</a><a class="btn" href="/admin/reports.pdf?start=%s&end=%s" style="color:#b91c1c;background:#fef2f2;border-color:#fca5a5;font-weight:600">📄 Executive PDF</a><a class="btn" href="/admin/reports.csv?start=%s&end=%s" style="color:#087b59;background:#f2faf6;border-color:#b4decb;font-weight:600">📥 Executive CSV</a></form></div>'%(esc(start_day),esc(end_day),esc(start_day),esc(end_day),esc(start_day),esc(end_day))
             return self.admin_shell("Reports",'<h1>Campaign Reports</h1><p>Measured telemetry · %s to %s.</p>%s<div class="card"><h3>Overall</h3><p>Events: %s · Clicks: %s · Actions: %s · Reports: %s · Action rate: %.1f%% · Report rate: %.1f%%</p></div><div class="card"><p><a class="btn" href="/admin/reports?view=compare">Campaign Comparison</a> <a class="btn" href="/admin/reports?view=department">Department Report</a> <a class="btn" href="/admin/reports?view=monthly">Monthly Report</a> <a class="btn" href="/admin/reports?view=executive">Executive Dashboard</a> <a class="btn" href="/admin/reports?view=trend">Risk & Resilience Trends</a> <a class="btn" href="/admin/reports/scheduled">Scheduled Reports</a></p><table class="table"><tr><th>ID</th><th>Campaign</th><th>Status</th><th>Targeted</th><th>Sent</th><th>Failed</th><th>Clicks</th><th>Action Rate</th><th>Report Rate</th><th></th></tr>%s</table></div>'%(esc(start_day),esc(end_day),controls,total,clicks,subs,reports,rate,report_rate,rows),"Reports")
         if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="department":
             try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
@@ -3720,7 +3771,7 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
                 FROM recipients r LEFT JOIN events e ON lower(e.email)=lower(r.email) AND e.ts>=? AND e.ts<?
                 GROUP BY COALESCE(r.department,'Unassigned') ORDER BY action_users DESC,clicked_users DESC""",(start_iso,end_iso)).fetchall(); c.close()
             table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>"%(esc(x["department"]),x["users"],x["clicked_users"],x["action_users"],x["report_users"],x["events"]) for x in rows) or "<tr><td colspan='6'>No department telemetry.</td></tr>"
-            return self.admin_shell("Department Report",'<h1>Department Report</h1><p>Unique users with measured simulation events · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="department"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Department</th><th>Users</th><th>Clicked Users</th><th>Action Users</th><th>Reported Users</th><th>Events</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),table),"Reports")
+            return self.admin_shell("Department Report",'<h1>Department Report</h1><p>Unique users with measured simulation events · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="department"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports.csv?view=department&start=%s&end=%s" style="color:#087b59;background:#f2faf6;border-color:#b4decb;font-weight:600">📥 Export CSV</a><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Department</th><th>Users</th><th>Clicked Users</th><th>Action Users</th><th>Reported Users</th><th>Events</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),esc(start_day),esc(end_day),esc(start_day),esc(end_day),table),"Reports")
         if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="monthly":
             try: start_iso,end_iso,start_day,end_day=report_window(parse_qs(query))
             except ValueError as e: return self.sendbody(400,esc(str(e)),"text/plain")
@@ -3731,7 +3782,7 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
                 SUM(event='report') reports
                 FROM events WHERE ts>=? AND ts<? GROUP BY substr(ts,1,7) ORDER BY month DESC""",(start_iso,end_iso)).fetchall(); c.close()
             table="".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%.1f%%</td><td>%.1f%%</td></tr>"%(esc(x["month"]),x["events"],x["clicks"] or 0,x["actions"] or 0,x["reports"] or 0,(x["actions"] or 0)/max(x["clicks"] or 0,1)*100,(x["reports"] or 0)/max(x["clicks"] or 0,1)*100) for x in rows) or "<tr><td colspan='7'>No monthly telemetry.</td></tr>"
-            return self.admin_shell("Monthly Report",'<h1>Monthly Report</h1><p>Measured telemetry by calendar month · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="monthly"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Month</th><th>Events</th><th>Clicks</th><th>Actions</th><th>Reports</th><th>Action Rate</th><th>Report Rate</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),table),"Reports")
+            return self.admin_shell("Monthly Report",'<h1>Monthly Report</h1><p>Measured telemetry by calendar month · %s to %s.</p><div class="card"><form method="get" class="filter"><input type="hidden" name="view" value="monthly"><label>Start <input type="date" name="start" value="%s"></label><label>End <input type="date" name="end" value="%s"></label><button class="btn primary">Apply</button><a class="btn" href="/admin/reports.csv?view=monthly&start=%s&end=%s" style="color:#087b59;background:#f2faf6;border-color:#b4decb;font-weight:600">📥 Export CSV</a><a class="btn" href="/admin/reports">Campaign Reports</a></form></div><div class="card"><table class="table"><tr><th>Month</th><th>Events</th><th>Clicks</th><th>Actions</th><th>Reports</th><th>Action Rate</th><th>Report Rate</th></tr>%s</table></div>'%(esc(start_day),esc(end_day),esc(start_day),esc(end_day),esc(start_day),esc(end_day),table),"Reports")
         if path=="/admin/reports" and parse_qs(query).get("view",[""])[0]=="compare":
             ids=[x for x in parse_qs(query).get("campaign_id",[]) if x.isdigit()][:10]
             c=db(); campaigns=c.execute("SELECT id,name,status,targeted FROM campaigns ORDER BY id DESC LIMIT 100").fetchall()
@@ -3891,31 +3942,387 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
             return self.admin_shell("Settings",body,"Settings")
         c.close(); return None
 
-    def campaign_report(self,cid):
-        c=db()
-        camp=c.execute("SELECT c.*,s.name smtp_name,l.name landing_name FROM campaigns c LEFT JOIN smtp_profiles s ON s.id=c.smtp_profile_id LEFT JOIN landing_pages l ON l.id=c.landing_page_id WHERE c.id=?",(cid,)).fetchone()
-        deliveries=c.execute("""SELECT d.status,d.sent_at,r.email,r.name,r.department,
-                                       (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='click') as click_count,
-                                       (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event in ('form_action','submitted')) as action_count
-                                FROM campaign_deliveries d JOIN recipients r ON r.id=d.recipient_id WHERE d.campaign_id=? ORDER BY d.id DESC""",(cid,cid,cid)).fetchall()
-        events=c.execute("SELECT event,COUNT(*) n FROM events WHERE campaign_id=? GROUP BY event",(cid,)).fetchall()
+    def campaign_report_csv(self, cid):
+        c = db()
+        camp = c.execute("SELECT * FROM campaigns WHERE id=?", (cid,)).fetchone()
+        if not camp:
+            c.close()
+            return self.sendbody(404, "Campaign not found", "text/plain")
+        deliveries = c.execute("""
+            SELECT d.status, d.sent_at, r.email, r.name, r.department, r.employee_id,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='click') as click_count,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event in ('form_action','submitted')) as action_count,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='report') as report_count
+            FROM campaign_deliveries d
+            JOIN recipients r ON r.id=d.recipient_id
+            WHERE d.campaign_id=?
+            ORDER BY d.id DESC
+        """, (cid, cid, cid, cid)).fetchall()
         c.close()
-        if not camp: return self.sendbody(404,"Campaign not found","text/plain")
-        counts={x["event"]:x["n"] for x in events}
-        sent=sum(1 for x in deliveries if x["status"]=="Sent"); failed=sum(1 for x in deliveries if x["status"]=="Failed")
-        rows=[]
+
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["campaign_id", "campaign_name", "email", "name", "department", "employee_id", "delivery_status", "sent_at", "clicks", "form_actions", "reports"])
+        for d in deliveries:
+            w.writerow([camp["id"], camp["name"], d["email"], d["name"] or "", d["department"] or "", d["employee_id"] or "", d["status"], d["sent_at"] or "", d["click_count"], d["action_count"], d["report_count"]])
+
+        audit(ADMIN_USERNAME, "CAMPAIGN_CSV_EXPORT", f"campaign_id={cid}", self.client_address[0])
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', camp["name"])[:35]
+        return self.sendbody(200, out.getvalue(), "text/csv", {"Content-Disposition": f'attachment; filename="campaign-{cid}-{safe_name}.csv"'})
+
+    def campaign_report_pdf(self, cid):
+        c = db()
+        camp = c.execute("SELECT c.*, s.name smtp_name, l.name landing_name FROM campaigns c LEFT JOIN smtp_profiles s ON s.id=c.smtp_profile_id LEFT JOIN landing_pages l ON l.id=c.landing_page_id WHERE c.id=?", (cid,)).fetchone()
+        if not camp:
+            c.close()
+            return self.sendbody(404, "Campaign not found", "text/plain")
+        deliveries = c.execute("""
+            SELECT d.status, d.sent_at, r.email, r.name, r.department,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='click') as click_count,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event in ('form_action','submitted')) as action_count,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='report') as report_count
+            FROM campaign_deliveries d
+            JOIN recipients r ON r.id=d.recipient_id
+            WHERE d.campaign_id=?
+            ORDER BY d.id DESC
+        """, (cid, cid, cid, cid)).fetchall()
+        events = c.execute("SELECT event, COUNT(*) n FROM events WHERE campaign_id=? GROUP BY event", (cid,)).fetchall()
+        c.close()
+
+        counts = {x["event"]: x["n"] for x in events}
+        total_targeted = camp["targeted"] or len(deliveries)
+        sent = sum(1 for x in deliveries if x["status"] == "Sent")
+        failed = sum(1 for x in deliveries if x["status"] == "Failed")
+        clicks = counts.get("click", 0)
+        total_actions = counts.get("form_action", 0) + counts.get("submitted", 0)
+        reports = counts.get("report", 0)
+
+        delivery_rate = (sent / max(total_targeted, 1) * 100)
+        click_rate = (clicks / max(sent, 1) * 100) if sent else 0.0
+        action_rate = (total_actions / max(clicks, 1) * 100) if clicks else 0.0
+        report_rate = (reports / max(sent, 1) * 100) if sent else 0.0
+
+        lines = [
+            "==========================================================================================",
+            "TRUST PHISHGUARD — CAMPAIGN PERFORMANCE REPORT",
+            "==========================================================================================",
+            f"Campaign ID:       {camp['id']}",
+            f"Campaign Name:     {camp['name']}",
+            f"Status:            {camp['status']}",
+            f"Created At:        {camp['created_at'] or 'N/A'}",
+            f"SMTP Profile:      {camp['smtp_name'] or 'Not configured'}",
+            f"Landing Page:      {camp['landing_name'] or 'Default template'}",
+            "",
+            "------------------------------------------------------------------------------------------",
+            "EXECUTIVE METRICS SUMMARY",
+            "------------------------------------------------------------------------------------------",
+            f"Target Audience:   {total_targeted}",
+            f"Delivered (Sent):  {sent} ({delivery_rate:.1f}% Delivery Rate)",
+            f"Failed Relays:     {failed}",
+            f"Total Clicks:      {clicks} ({click_rate:.1f}% Click-Through Rate)",
+            f"Form Submissions:  {total_actions} ({action_rate:.1f}% Action / Compromise Rate)",
+            f"Phish Reports:     {reports} ({report_rate:.1f}% Awareness Reporting Rate)",
+            "",
+            "------------------------------------------------------------------------------------------",
+            "RECIPIENT ENGAGEMENT AUDIT (Top Records)",
+            "------------------------------------------------------------------------------------------",
+            "EMAIL                           | STATUS    | CLICKS | ACTIONS | DEPT",
+            "--------------------------------+-----------+--------+---------+--------------------------",
+        ]
+
+        for d in deliveries[:200]:
+            email_col = (d["email"] or "")[:31].ljust(31)
+            status_col = (d["status"] or "")[:9].ljust(9)
+            clicks_col = str(d["click_count"]).rjust(6)
+            actions_col = str(d["action_count"]).rjust(7)
+            dept_col = (d["department"] or "General")[:26]
+            lines.append(f"{email_col} | {status_col} | {clicks_col} | {actions_col} | {dept_col}")
+
+        lines.extend([
+            "",
+            "------------------------------------------------------------------------------------------",
+            "ENTERPRISE COMPLIANCE & CREDENTIAL SAFETY GUARANTEE",
+            "------------------------------------------------------------------------------------------",
+            "Trust PhishGuard adheres to strict enterprise awareness standards.",
+            "Passwords, OTPs, PINs, card numbers, and raw form credentials are never stored or logged.",
+            "All metrics reflect measured delivery and telemetry only.",
+            f"Report Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')} · Trust Bank PLC",
+        ])
+
+        audit(ADMIN_USERNAME, "CAMPAIGN_PDF_EXPORT", f"campaign_id={cid}", self.client_address[0])
+        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '_', camp["name"])[:35]
+        pdf = build_pdf(lines)
+        return self.sendbody(200, pdf, "application/pdf", {"Content-Disposition": f'attachment; filename="campaign-{cid}-{safe_name}.pdf"'})
+
+    def reports_csv_export(self, query=""):
+        try:
+            start_iso, end_iso, start_day, end_day = report_window(parse_qs(query))
+        except ValueError as e:
+            return self.sendbody(400, esc(str(e)), "text/plain")
+
+        view = parse_qs(query).get("view", [""])[0].lower()
+        c = db()
+
+        if view == "department":
+            rows = c.execute("""
+                SELECT COALESCE(r.department,'Unassigned') department,
+                    COUNT(DISTINCT r.id) users,
+                    COUNT(DISTINCT CASE WHEN e.event='click' THEN r.id END) clicked_users,
+                    COUNT(DISTINCT CASE WHEN e.event='form_action' THEN r.id END) action_users,
+                    COUNT(DISTINCT CASE WHEN e.event='report' THEN r.id END) report_users,
+                    COUNT(e.id) events
+                FROM recipients r
+                LEFT JOIN events e ON lower(e.email)=lower(r.email) AND e.ts>=? AND e.ts<?
+                GROUP BY COALESCE(r.department,'Unassigned')
+                ORDER BY action_users DESC, clicked_users DESC
+            """, (start_iso, end_iso)).fetchall()
+            c.close()
+            out = io.StringIO(); w = csv.writer(out)
+            w.writerow(["department", "total_users", "clicked_users", "action_users", "reported_users", "total_events"])
+            for r in rows:
+                w.writerow([r["department"], r["users"], r["clicked_users"], r["action_users"], r["report_users"], r["events"]])
+            audit(ADMIN_USERNAME, "DEPARTMENT_CSV_EXPORT", f"Period {start_day} to {end_day}", self.client_address[0])
+            return self.sendbody(200, out.getvalue(), "text/csv", {"Content-Disposition": f'attachment; filename="department-report-{start_day}-to-{end_day}.csv"'})
+
+        elif view == "monthly":
+            rows = c.execute("""
+                SELECT substr(ts,1,7) month,
+                    COUNT(*) events,
+                    SUM(event='click') clicks,
+                    SUM(event='form_action') actions,
+                    SUM(event='report') reports
+                FROM events WHERE ts>=? AND ts<?
+                GROUP BY substr(ts,1,7) ORDER BY month DESC
+            """, (start_iso, end_iso)).fetchall()
+            c.close()
+            out = io.StringIO(); w = csv.writer(out)
+            w.writerow(["month", "total_events", "clicks", "actions", "reports", "action_rate_percent", "report_rate_percent"])
+            for r in rows:
+                clk = r["clicks"] or 0; act = r["actions"] or 0; rep = r["reports"] or 0
+                w.writerow([r["month"], r["events"], clk, act, rep, f"{(act/clk*100):.1f}" if clk else "0.0", f"{(rep/clk*100):.1f}" if clk else "0.0"])
+            audit(ADMIN_USERNAME, "MONTHLY_CSV_EXPORT", f"Period {start_day} to {end_day}", self.client_address[0])
+            return self.sendbody(200, out.getvalue(), "text/csv", {"Content-Disposition": f'attachment; filename="monthly-report-{start_day}-to-{end_day}.csv"'})
+
+        else:
+            campaigns = c.execute("""
+                SELECT c.id, c.name, c.status, c.targeted,
+                    COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Sent' AND d.sent_at>=? AND d.sent_at<?),0) sent,
+                    COALESCE((SELECT COUNT(*) FROM campaign_deliveries d WHERE d.campaign_id=c.id AND d.status='Failed' AND d.attempted_at>=? AND d.attempted_at<?),0) failed,
+                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='click' AND e.ts>=? AND e.ts<?),0) clicks,
+                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='form_action' AND e.ts>=? AND e.ts<?),0) actions,
+                    COALESCE((SELECT COUNT(*) FROM events e WHERE e.campaign_id=c.id AND e.event='report' AND e.ts>=? AND e.ts<?),0) reports
+                FROM campaigns c ORDER BY c.id DESC
+            """, (start_iso, end_iso, start_iso, end_iso, start_iso, end_iso, start_iso, end_iso, start_iso, end_iso)).fetchall()
+            c.close()
+            out = io.StringIO(); w = csv.writer(out)
+            w.writerow(["campaign_id", "campaign_name", "status", "targeted", "delivered_sent", "failed", "clicks", "form_actions", "reports", "action_rate_percent", "report_rate_percent"])
+            for r in campaigns:
+                clk = r["clicks"] or 0; act = r["actions"] or 0; rep = r["reports"] or 0
+                w.writerow([r["id"], r["name"], r["status"], r["targeted"], r["sent"], r["failed"], clk, act, rep, f"{(act/clk*100):.1f}" if clk else "0.0", f"{(rep/clk*100):.1f}" if clk else "0.0"])
+            audit(ADMIN_USERNAME, "REPORTS_CSV_EXPORT", f"Period {start_day} to {end_day}", self.client_address[0])
+            return self.sendbody(200, out.getvalue(), "text/csv", {"Content-Disposition": f'attachment; filename="phishguard-report-{start_day}-to-{end_day}.csv"'})
+
+    def campaign_report(self, cid):
+        c = db()
+        camp = c.execute("SELECT c.*, s.name smtp_name, l.name landing_name FROM campaigns c LEFT JOIN smtp_profiles s ON s.id=c.smtp_profile_id LEFT JOIN landing_pages l ON l.id=c.landing_page_id WHERE c.id=?", (cid,)).fetchone()
+        if not camp:
+            c.close()
+            return self.sendbody(404, "Campaign not found", "text/plain")
+
+        deliveries = c.execute("""
+            SELECT d.status, d.sent_at, d.attempted_at, d.error, r.email, r.name, r.department, r.employee_id,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='click') as click_count,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event in ('form_action','submitted')) as action_count,
+                   (SELECT COUNT(*) FROM events e WHERE e.campaign_id=? AND e.email=r.email AND e.event='report') as report_count
+            FROM campaign_deliveries d
+            JOIN recipients r ON r.id=d.recipient_id
+            WHERE d.campaign_id=?
+            ORDER BY d.id DESC
+        """, (cid, cid, cid, cid)).fetchall()
+        events = c.execute("SELECT event, COUNT(*) n FROM events WHERE campaign_id=? GROUP BY event", (cid,)).fetchall()
+        c.close()
+
+        counts = {x["event"]: x["n"] for x in events}
+        total_targeted = camp["targeted"] or len(deliveries)
+        sent = sum(1 for x in deliveries if x["status"] == "Sent")
+        failed = sum(1 for x in deliveries if x["status"] == "Failed")
+        clicks = counts.get("click", 0)
+        total_actions = counts.get("form_action", 0) + counts.get("submitted", 0)
+        reports = counts.get("report", 0)
+
+        delivery_rate = (sent / max(total_targeted, 1) * 100)
+        click_rate = (clicks / max(sent, 1) * 100) if sent else 0.0
+        action_rate = (total_actions / max(clicks, 1) * 100) if clicks else 0.0
+        report_rate = (reports / max(sent, 1) * 100) if sent else 0.0
+
+        clicked_users = sum(1 for x in deliveries if x["click_count"] > 0)
+        compromised_users = sum(1 for x in deliveries if x["action_count"] > 0)
+        reported_users = sum(1 for x in deliveries if x["report_count"] > 0)
+
+        created_str = "—"
+        if camp["created_at"]:
+            try:
+                cd, ct = format_datetime(camp["created_at"])
+                created_str = f"{cd} {ct} BST"
+            except Exception:
+                created_str = str(camp["created_at"])
+
+        deliv_pct = min(100, int(sent / max(total_targeted, 1) * 100))
+        click_pct = min(100, int(clicks / max(total_targeted, 1) * 100))
+        action_pct = min(100, int(total_actions / max(total_targeted, 1) * 100))
+        report_pct = min(100, int(reports / max(total_targeted, 1) * 100))
+
+        status_badge = "status-active" if camp["status"] == "Active" else ("status-completed" if camp["status"] == "Completed" else "status-draft")
+
+        rows = []
         for x in deliveries:
-            ck_badge = f'<span class="pill click" style="background:#fff3cd;color:#856404;font-weight:700">⚠️ Clicked ({x["click_count"]})</span>' if x["click_count"] > 0 else '<span style="color:#8ba59b">—</span>'
-            act_badge = f'<span class="pill form_action" style="background:#f8d7da;color:#721c24;font-weight:700">🚨 Action ({x["action_count"]})</span>' if x["action_count"] > 0 else '<span style="color:#8ba59b">—</span>'
-            rows.append('<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td><span class="pill %s">%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>'%(
-                esc(x["email"]),esc(x["name"]),esc(x["department"]),
-                "delivered" if x["status"]=="Sent" else "failed",esc(x["status"]),
-                ck_badge,act_badge,esc(x["sent_at"] or "")
-            ))
-        rows_html="".join(rows) or '<tr><td colspan="7">No delivery records.</td></tr>'
-        total_actions=counts.get("form_action",0) + counts.get("submitted",0)
-        body='<h1>%s</h1><p>SMTP: %s · Landing Page: %s · Targeted: %s</p><div class="card" style="display:flex;gap:20px;flex-wrap:wrap"><div><b>Sent:</b> %s</div> <div><b>Failed:</b> %s</div> <div><b style="color:#b37400">Clicks:</b> %s</div> <div><b style="color:#c82333">Form Actions:</b> %s</div></div><div class="card"><table class="table"><tr><th>Email</th><th>Name</th><th>Department</th><th>Delivery</th><th>Clicked</th><th>Form Action</th><th>Sent At</th></tr>%s</table></div><p><a class="btn" href="/admin/reports">Back to Reports</a></p>'%(esc(camp["name"]),esc(camp["smtp_name"] or "Not set"),esc(camp["landing_name"] or "Not set"),camp["targeted"],sent,failed,counts.get("click",0),total_actions,rows_html)
-        return self.admin_shell("Campaign Report",body,"Reports")
+            if x["status"] == "Sent":
+                deliv_badge = '<span class="pill click" style="background:#e6f7f0;color:#087b59;border:1px solid #c2ebd9">✓ Delivered</span>'
+            elif x["status"] == "Failed":
+                err_hint = f' title="{esc(x["error"])}"' if x["error"] else ''
+                deliv_badge = f'<span class="pill"{err_hint} style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca">✗ Failed</span>'
+            else:
+                deliv_badge = '<span class="pill" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">⏳ Queued</span>'
+
+            ck_badge = f'<span class="pill" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;font-weight:700">⚠️ Clicked ({x["click_count"]})</span>' if x["click_count"] > 0 else '<span style="color:#8ba59b">—</span>'
+            act_badge = f'<span class="pill" style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;font-weight:700">🚨 Action ({x["action_count"]})</span>' if x["action_count"] > 0 else '<span style="color:#8ba59b">—</span>'
+            rep_badge = f'<span class="pill" style="background:#faf5ff;color:#7e22ce;border:1px solid #f3e8ff;font-weight:700">🛡️ Reported</span>' if x["report_count"] > 0 else '<span style="color:#8ba59b">—</span>'
+
+            ts_str = "—"
+            if x["sent_at"]:
+                try:
+                    sd, st = format_datetime(x["sent_at"])
+                    ts_str = f"{sd} {st}"
+                except Exception:
+                    ts_str = str(x["sent_at"])
+
+            dept_val = esc(x["department"]) if x["department"] else '<span style="color:#8ba59b">—</span>'
+            name_val = esc(x["name"]) if x["name"] else "—"
+
+            rows.append(f'''<tr class="camp-rec-row">
+                <td><b>{name_val}</b><div style="font-size:11.5px;color:#087b59;font-family:monospace;margin-top:2px">{esc(x["email"])}</div></td>
+                <td>{dept_val}</td>
+                <td>{deliv_badge}</td>
+                <td>{ck_badge}</td>
+                <td>{act_badge}</td>
+                <td>{rep_badge}</td>
+                <td><small style="color:#5e776d">{ts_str}</small></td>
+            </tr>''')
+
+        rows_html = "".join(rows) or '<tr><td colspan="7" style="text-align:center;padding:24px;color:#718c80">No delivery telemetry records found for this campaign.</td></tr>'
+
+        body = f'''
+<div class="camp-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:16px;flex-wrap:wrap">
+  <div>
+    <div class="camp-crumb" style="font-size:12px;color:#5e776d;margin-bottom:6px;display:flex;gap:6px;align-items:center">
+      <a href="/admin/reports" style="color:#087b59;text-decoration:none;font-weight:600">Reports</a>
+      <span>/</span>
+      <span>Campaign Performance</span>
+      <span>/</span>
+      <span style="font-weight:700;color:#10221a">{esc(camp["name"])}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <h1 style="margin:0;font-size:24px;font-weight:850;color:#10221a;letter-spacing:-0.5px">{esc(camp["name"])}</h1>
+      <span class="camp-status-badge {status_badge}" style="font-size:11px;font-weight:750;padding:4px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:0.5px">{esc(camp["status"])}</span>
+    </div>
+    <div style="font-size:12px;color:#5e776d;margin-top:6px;display:flex;gap:16px;flex-wrap:wrap">
+      <span>⚡ <b>Relay:</b> {esc(camp["smtp_name"] or "Default SMTP")}</span>
+      <span>🌐 <b>Landing Page:</b> {esc(camp["landing_name"] or "Default Landing")}</span>
+      <span>🕒 <b>Created:</b> {created_str}</span>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <a href="/admin/reports/campaign.csv?id={cid}" class="btn" style="color:#087b59;border-color:#b4decb;background:#f2faf6;font-weight:700;display:inline-flex;align-items:center;gap:4px" title="Export raw campaign data in CSV">📥 Download CSV</a>
+    <a href="/admin/reports/campaign.pdf?id={cid}" class="btn" style="color:#b91c1c;border-color:#fca5a5;background:#fef2f2;font-weight:700;display:inline-flex;align-items:center;gap:4px" title="Export executive report in PDF">📄 Download PDF</a>
+    <button type="button" onclick="window.print()" class="btn" style="font-weight:700;display:inline-flex;align-items:center;gap:4px">🖨️ Print / Save PDF</button>
+    <a href="/admin/reports" class="btn">← Back to Reports</a>
+  </div>
+</div>
+
+<section class="stats" style="margin-bottom:20px">
+  <div class="stat">
+    <div class="stat-label">DISPATCH & DELIVERY</div>
+    <div class="num" style="color:#087b59">{sent} <span style="font-size:16px;font-weight:600;color:#5e776d">/ {total_targeted}</span></div>
+    <div class="delta" style="color:#087b59"><b>{delivery_rate:.1f}%</b> delivered · {failed} failed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">LINK CLICKS</div>
+    <div class="num" style="color:#b45309">{clicks}</div>
+    <div class="delta" style="color:#b45309"><b>{click_rate:.1f}%</b> click rate ({clicked_users} users)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">FORM COMPROMISE</div>
+    <div class="num" style="color:#b91c1c">{total_actions}</div>
+    <div class="delta" style="color:#b91c1c"><b>{action_rate:.1f}%</b> action rate ({compromised_users} users)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">PHISH REPORTED</div>
+    <div class="num" style="color:#7e22ce">{reports}</div>
+    <div class="delta" style="color:#7e22ce"><b>{report_rate:.1f}%</b> reporting resilience ({reported_users} users)</div>
+  </div>
+</section>
+
+<div class="card" style="margin-bottom:20px;padding:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="margin:0;font-size:15px;font-weight:800;color:#10221a">Simulation Engagement Funnel</h3>
+    <span style="font-size:11.5px;color:#5e776d">Measured behavioral drop-off overview</span>
+  </div>
+  <div style="background:#edf3f0;height:12px;border-radius:20px;overflow:hidden;display:flex;margin-bottom:12px">
+    <div style="width:{deliv_pct}%;background:#10b981" title="Delivered: {sent}"></div>
+    <div style="width:{click_pct}%;background:#f59e0b" title="Clicked: {clicks}"></div>
+    <div style="width:{action_pct}%;background:#ef4444" title="Submitted: {total_actions}"></div>
+    <div style="width:{report_pct}%;background:#8b5cf6" title="Reported: {reports}"></div>
+  </div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12px">
+    <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block"></span> Delivered: <b>{sent}</b> ({deliv_pct}%)</div>
+    <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block"></span> Clicked: <b>{clicks}</b> ({click_pct}%)</div>
+    <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block"></span> Compromised: <b>{total_actions}</b> ({action_pct}%)</div>
+    <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:50%;background:#8b5cf6;display:inline-block"></span> Reported: <b>{reports}</b> ({report_pct}%)</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:12px">
+    <div>
+      <h3 style="margin:0;font-size:15px;font-weight:800;color:#10221a">Target Engagement Telemetry</h3>
+      <div style="font-size:11.5px;color:#5e776d;margin-top:3px">Individual delivery and interaction status · Asia/Dhaka (BST)</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="recQ" type="text" oninput="filterRecTable()" placeholder="Filter employee, email, dept..." style="padding:8px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:12.5px;outline:none;width:240px">
+      <button type="button" onclick="document.getElementById('recQ').value='';filterRecTable()" style="border:none;background:#e3ede8;color:#1a3328;padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">Clear</button>
+      <a href="/admin/reports/campaign.csv?id={cid}" class="btn" style="font-size:12px;padding:7px 11px">📥 Export CSV</a>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Target Employee</th>
+          <th>Department</th>
+          <th>Delivery Status</th>
+          <th>Simulation Click</th>
+          <th>Form Submission</th>
+          <th>Phish Reported</th>
+          <th>Dispatched Time (BST)</th>
+        </tr>
+      </thead>
+      <tbody id="recRows">
+        {rows_html}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+function filterRecTable() {{
+  const q = (document.getElementById('recQ').value || '').toLowerCase().trim();
+  document.querySelectorAll('#recRows tr.camp-rec-row').forEach(r => {{
+    r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
+  }});
+}}
+</script>
+'''
+        return self.admin_shell("Campaign Report", body, "Reports")
 
     def recipient_profile_form(self,rid=None):
         c=db()
@@ -5444,13 +5851,31 @@ syncAudience();
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-test.csv"})
         if path=="/admin/api/stat_details":
             return self.stat_details_api(p.query)
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/reports.csv","/admin/reports/campaign.csv","/admin/reports/campaign.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
+            if path=="/admin/reports.csv":
+                return self.reports_csv_export(p.query)
+            if path=="/admin/reports/campaign.csv":
+                cid=parse_qs(p.query).get("id",[None])[0] or parse_qs(p.query).get("campaign_id",[None])[0]
+                if not cid: return self.sendbody(400,"Campaign ID required","text/plain")
+                return self.campaign_report_csv(cid)
+            if path=="/admin/reports/campaign.pdf":
+                cid=parse_qs(p.query).get("id",[None])[0] or parse_qs(p.query).get("campaign_id",[None])[0]
+                if not cid: return self.sendbody(400,"Campaign ID required","text/plain")
+                return self.campaign_report_pdf(cid)
             if path=="/admin/campaigns" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.campaign_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/reports" and parse_qs(p.query).get("campaign_id",[None])[0]:
-                return self.sendbody(200,self.campaign_report(parse_qs(p.query).get("campaign_id",[None])[0]))
+                cid=parse_qs(p.query).get("campaign_id",[None])[0]
+                exp=parse_qs(p.query).get("export",[""])[0].lower()
+                if exp=="csv": return self.campaign_report_csv(cid)
+                if exp=="pdf": return self.campaign_report_pdf(cid)
+                return self.sendbody(200,self.campaign_report(cid))
+            if path=="/admin/reports" and parse_qs(p.query).get("export",[""])[0].lower()=="csv":
+                return self.reports_csv_export(p.query)
+            if path=="/admin/reports" and parse_qs(p.query).get("export",[""])[0].lower()=="pdf":
+                return self.feature_page("/admin/reports.pdf",p.query)
             if path=="/admin/smtp" and parse_qs(p.query).get("id",[None])[0]:
                 return self.sendbody(200,self.smtp_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/templates" and parse_qs(p.query).get("id",[None])[0]:
@@ -5509,7 +5934,7 @@ syncAudience();
             if mode=="realistic":
                 rendered=re.sub(r'style="background-color:\s*#[a-fA-F0-9]+;\s*outline:\s*3px solid\s*#[a-fA-F0-9]+"', 'style="background-color:transparent;outline:none"', rendered)
             return self.sendbody(200,rendered,"text/html; charset=utf-8",extra={"X-Frame-Options":"SAMEORIGIN"})
-        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
+        if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/reports.csv","/admin/reports/campaign.csv","/admin/reports/campaign.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             return self.sendbody(200,self.feature_page(path,p.query))
         if path=="/admin/smtp/diagnostics":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")

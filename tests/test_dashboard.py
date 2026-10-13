@@ -21,7 +21,12 @@ class DashboardTelemetryTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.tmp.cleanup()
+        import gc
+        gc.collect()
+        try:
+            cls.tmp.cleanup()
+        except Exception:
+            pass
 
     def setUp(self):
         self.server.DB = os.path.join(self.tmp.name, self._testMethodName + ".db")
@@ -223,7 +228,160 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["type"], "total")
 
+    def test_campaign_report_modern_html_and_downloads(self):
+        c = self.server.db()
+        c.execute("INSERT INTO campaigns(name,status,targeted,created_at) VALUES('Q1 Security Drill','Active',10,'2026-10-13T10:00:00Z')")
+        cid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.execute("INSERT INTO recipients(email,name,department) VALUES('john@bank.com','John Doe','Finance')")
+        rid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,sent_at) VALUES(?,?,'Sent','2026-10-13T10:01:00Z')",(cid,rid))
+        c.execute("INSERT INTO events(campaign_id,recipient_id,email,event,ts,ip,template) VALUES(?,?,'john@bank.com','click','2026-10-13T10:02:00Z','127.0.0.1','1')",(cid,rid))
+        c.commit()
+        c.close()
+
+        self.handler.admin_shell = lambda title, body, active: body
+        html = self.handler.campaign_report(str(cid))
+        self.assertIn("Q1 Security Drill", html)
+        self.assertIn("Simulation Engagement Funnel", html)
+        self.assertIn("Target Engagement Telemetry", html)
+        self.assertIn("DISPATCH & DELIVERY", html)
+        self.assertIn("LINK CLICKS", html)
+        self.assertIn("FORM COMPROMISE", html)
+        self.assertIn("PHISH REPORTED", html)
+        self.assertIn(f"/admin/reports/campaign.csv?id={cid}", html)
+        self.assertIn(f"/admin/reports/campaign.pdf?id={cid}", html)
+        self.assertIn("window.print()", html)
+        self.assertIn("filterRecTable()", html)
+
+    def test_campaign_report_csv_and_pdf_exports(self):
+        c = self.server.db()
+        c.execute("INSERT INTO campaigns(name,status,targeted,created_at) VALUES('Export Test Drill','Active',5,'2026-10-13T10:00:00Z')")
+        cid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.execute("INSERT INTO recipients(email,name,department,employee_id) VALUES('audit@bank.com','Audit User','Risk & Compliance','EMP-99')")
+        rid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.execute("INSERT INTO campaign_deliveries(campaign_id,recipient_id,status,sent_at) VALUES(?,?,'Sent','2026-10-13T10:01:00Z')",(cid,rid))
+        c.commit()
+        c.close()
+
+        # CSV Export
+        sent_csv = []
+        self.handler.client_address = ("127.0.0.1", 12345)
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_csv.append((code, body, ctype, extra))
+        self.handler.campaign_report_csv(str(cid))
+        self.assertEqual(len(sent_csv), 1)
+        code, body, ctype, extra = sent_csv[0]
+        self.assertEqual(code, 200)
+        self.assertEqual(ctype, "text/csv")
+        self.assertIn("attachment; filename=", extra.get("Content-Disposition", ""))
+        self.assertIn("campaign_id,campaign_name,email,name,department,employee_id,delivery_status", body)
+        self.assertIn("audit@bank.com", body)
+
+        # PDF Export
+        sent_pdf = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_pdf.append((code, body, ctype, extra))
+        self.handler.campaign_report_pdf(str(cid))
+        self.assertEqual(len(sent_pdf), 1)
+        code, body, ctype, extra = sent_pdf[0]
+        self.assertEqual(code, 200)
+        self.assertEqual(ctype, "application/pdf")
+        self.assertIn("attachment; filename=", extra.get("Content-Disposition", ""))
+        self.assertTrue(body.startswith(b"%PDF-"))
+
+    def test_reports_csv_export_views(self):
+        c = self.server.db()
+        c.execute("INSERT INTO campaigns(name,status,targeted,created_at) VALUES('Monthly Drill','Active',1,'2026-10-13T10:00:00Z')")
+        c.execute("INSERT INTO events(ts,ip,template,event,name,email) VALUES('2026-10-13T10:00:00Z','172.31.10.5','1','click','User','u@bank.com')")
+        c.commit()
+        c.close()
+
+        self.handler.client_address = ("127.0.0.1", 12345)
+
+        # Main / Campaigns CSV
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent.append((code, body, ctype, extra))
+        self.handler.reports_csv_export("")
+        self.assertEqual(sent[0][0], 200)
+        self.assertEqual(sent[0][2], "text/csv")
+        self.assertIn("campaign_id,campaign_name,status", sent[0][1])
+
+        # Department CSV
+        sent_dept = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_dept.append((code, body, ctype, extra))
+        self.handler.reports_csv_export("view=department")
+        self.assertEqual(sent_dept[0][0], 200)
+        self.assertEqual(sent_dept[0][2], "text/csv")
+        self.assertIn("department,total_users,clicked_users", sent_dept[0][1])
+
+        # Monthly CSV
+        sent_month = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_month.append((code, body, ctype, extra))
+        self.handler.reports_csv_export("view=monthly")
+        self.assertEqual(sent_month[0][0], 200)
+        self.assertEqual(sent_month[0][2], "text/csv")
+        self.assertIn("month,total_events,clicks,actions,reports", sent_month[0][1])
+
+    def test_reports_routing_in_do_get(self):
+        c = self.server.db()
+        c.execute("INSERT INTO campaigns(name,status,targeted,created_at) VALUES('Route Test Drill','Active',1,'2026-10-13T10:00:00Z')")
+        cid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.commit()
+        c.close()
+
+        self.handler.client_address = ("127.0.0.1", 12345)
+        self.handler.headers = {}
+        self.handler.auth = lambda: True
+        self.handler.permission_allowed = lambda *a, **k: True
+
+        # Test GET /admin/reports/campaign.csv?id=CID
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent.append((code, body, ctype))
+        self.handler.path = f"/admin/reports/campaign.csv?id={cid}"
+        self.handler.do_GET()
+        self.assertEqual(sent[0][0], 200)
+        self.assertEqual(sent[0][2], "text/csv")
+
+        # Test GET /admin/reports/campaign.pdf?id=CID
+        sent_pdf = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_pdf.append((code, body, ctype))
+        self.handler.path = f"/admin/reports/campaign.pdf?id={cid}"
+        self.handler.do_GET()
+        self.assertEqual(sent_pdf[0][0], 200)
+        self.assertEqual(sent_pdf[0][2], "application/pdf")
+
+        # Test GET /admin/reports?campaign_id=CID&export=csv
+        sent_qs_csv = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_qs_csv.append((code, body, ctype))
+        self.handler.path = f"/admin/reports?campaign_id={cid}&export=csv"
+        self.handler.do_GET()
+        self.assertEqual(sent_qs_csv[0][0], 200)
+        self.assertEqual(sent_qs_csv[0][2], "text/csv")
+
+        # Test GET /admin/reports.csv
+        sent_rep_csv = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent_rep_csv.append((code, body, ctype))
+        self.handler.path = "/admin/reports.csv"
+        self.handler.do_GET()
+        self.assertEqual(sent_rep_csv[0][0], 200)
+        self.assertEqual(sent_rep_csv[0][2], "text/csv")
+
+    def test_main_reports_page_has_individual_download_buttons(self):
+        c = self.server.db()
+        c.execute("INSERT INTO campaigns(name,status,targeted,created_at) VALUES('List Drill 101','Active',5,'2026-10-13T10:00:00Z')")
+        cid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.commit()
+        c.close()
+
+        self.handler.admin_shell = lambda title, body, active: body
+        html = self.handler.feature_page("/admin/reports", "")
+        self.assertIn("List Drill 101", html)
+        self.assertIn(f"/admin/reports?campaign_id={cid}", html)
+        self.assertIn(f"/admin/reports/campaign.csv?id={cid}", html)
+        self.assertIn(f"/admin/reports/campaign.pdf?id={cid}", html)
+        self.assertIn("/admin/reports.pdf", html)
+        self.assertIn("/admin/reports.csv", html)
+
 if __name__ == "__main__":
     unittest.main()
+
 
 
