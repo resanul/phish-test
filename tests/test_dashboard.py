@@ -392,6 +392,10 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn('data-tooltip="Campaigns"', html)
         self.assertIn('class="side-text"', html)
         self.assertIn('toggleSidebar', html)
+        self.assertIn('toggleMobileNav', html)
+        self.assertIn('closeMobileNav', html)
+        self.assertIn('mobile-menu-btn', html)
+        self.assertIn('side-close-btn', html)
         self.assertIn('.layout.collapsed{grid-template-columns:68px 1fr}', html)
         self.assertIn('localStorage.getItem', html)
 

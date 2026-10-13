@@ -1595,23 +1595,31 @@ DASH_CSS="""
 :root{--primary:#087b59;--primary-hover:#066347;--bg:#f2f5f3;--card:#ffffff;--border:#e1ece6;--text:#10221a;--text-muted:#5e776d}
 *{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#10221a;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:inherit}button,input,select,textarea{font:inherit}
+
+/* Topbar */
 .topbar{height:68px;background:#051b14;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid #0f382a;position:sticky;top:0;z-index:90}
+.topbar-brand-wrap{display:flex;align-items:center;gap:12px}
+.mobile-menu-btn{display:none;background:rgba(255,255,255,0.06);border:1px solid #1a4d3c;color:#a8d5c4;width:38px;height:38px;border-radius:10px;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s ease;padding:0}
+.mobile-menu-btn:hover{background:#124433;color:#fff}
 .topbrand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:16px;color:#fff;text-decoration:none}
 .topbrand-text{letter-spacing:-0.3px}
 .mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;display:grid;place-items:center;font-weight:900;font-size:18px;box-shadow:0 2px 8px rgba(16,185,129,0.3)}
 .live-status-pill{display:inline-flex;align-items:center;gap:7px;background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.25);padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600}
 .pulse-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;display:inline-block}
 .top-actions{display:flex;gap:10px;align-items:center}
-.top-actions a{padding:7px 13px;border:1px solid #1c4b3a;background:rgba(255,255,255,0.05);border-radius:8px;text-decoration:none;font-size:12px;color:#d7ebe3;font-weight:600;transition:all 0.15s ease}
+.top-actions a{padding:7px 13px;border:1px solid #1c4b3a;background:rgba(255,255,255,0.05);border-radius:8px;text-decoration:none;font-size:12px;color:#d7ebe3;font-weight:600;transition:all 0.15s ease;display:inline-flex;align-items:center;gap:6px}
 .top-actions a:hover{background:#123e2f;border-color:#2a6952;color:#fff}
 .top-role-badge{font-size:11px;font-weight:750;background:rgba(255,255,255,0.08);color:#a8c7bc;padding:5px 9px;border-radius:6px;border:1px solid #1b4536;letter-spacing:0.5px}
 
-.layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 68px);transition:grid-template-columns 0.22s cubic-bezier(0.4,0,0.2,1)}
+/* Layout & Desktop Sidebar */
+.layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 68px);width:100%;transition:grid-template-columns 0.22s cubic-bezier(0.4,0,0.2,1)}
 .side{background:#071c15;color:#b8d1c8;padding:14px 10px;border-right:1px solid #0f3327;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;position:sticky;top:68px;height:calc(100vh - 68px);box-sizing:border-box;transition:width 0.22s cubic-bezier(0.4,0,0.2,1),padding 0.22s ease}
 .side-header{display:flex;align-items:center;justify-content:space-between;padding:4px 8px 12px;border-bottom:1px solid #0f3327;margin-bottom:8px}
 .side-header-title{font-size:11px;font-weight:800;letter-spacing:0.8px;color:#497563;text-transform:uppercase}
 .side-collapse-btn{background:rgba(255,255,255,0.05);border:1px solid #144031;color:#9cc8b7;width:28px;height:28px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s ease;padding:0}
 .side-collapse-btn:hover{background:#114232;color:#fff;border-color:#247257}
+.side-close-btn{display:none;background:rgba(255,255,255,0.06);border:1px solid #1c4b3a;color:#a8c7bc;width:28px;height:28px;border-radius:7px;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.side-close-btn:hover{background:#124433;color:#fff}
 .side-toggle-arrow{transition:transform 0.22s ease}
 .side-nav-content{display:flex;flex-direction:column;gap:3px;flex:1}
 
@@ -1622,7 +1630,10 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .side-ico{font-size:14px;width:18px;display:inline-block;text-align:center;flex-shrink:0}
 .side-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .side-backdrop{display:none}
-.main{padding:28px 36px;max-width:1560px;min-width:0;box-sizing:border-box}
+
+/* Main Content: FULL WIDTH FLUID */
+.main{padding:24px 32px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.wrap, .dash-wrap{width:100%;max-width:100%;margin:0;padding:0;box-sizing:border-box}
 
 /* Collapsed Icon Bar State */
 .layout.collapsed{grid-template-columns:68px 1fr}
@@ -1637,11 +1648,12 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .layout.collapsed .side a:hover{transform:scale(1.1)}
 .layout.collapsed .side a:hover::after{content:attr(data-tooltip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);background:#082a1f;color:#fff;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.35);border:1px solid #1a5e47;z-index:9999;pointer-events:none}
 .layout.collapsed .side a:hover::before{content:"";position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);border-width:5px 6px 5px 0;border-style:solid;border-color:transparent #1a5e47 transparent transparent;z-index:9999}
-.wrap{max-width:1440px;margin:auto;padding:28px}
-.hero{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;flex-wrap:wrap;gap:14px}
+
+/* Content Components */
+.hero{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;flex-wrap:wrap;gap:14px;width:100%}
 .hero h1{margin:0;font-size:28px;font-weight:850;color:#10221a;letter-spacing:-0.7px}
 .hero p{margin:6px 0 0;color:#5e776d;font-size:13.5px}
-.camp-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:16px;flex-wrap:wrap}
+.camp-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:16px;flex-wrap:wrap;width:100%}
 .camp-crumb{font-size:12px;color:#5e776d;margin-bottom:6px;display:flex;gap:6px;align-items:center}
 .camp-crumb a{color:#087b59;text-decoration:none;font-weight:600}
 .camp-crumb a:hover{text-decoration:underline}
@@ -1651,7 +1663,8 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .status-active{background:#e6f7f0;color:#087b59;border:1px solid #b7e8d3}
 .status-draft{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
 .status-completed{background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px;width:100%}
 .stat{background:#fff;border:1px solid #e0ece6;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.02);transition:all 0.15s ease}
 .stat:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(8,123,89,0.06);border-color:#b8dad0}
 .stat.clickable{cursor:pointer;position:relative;user-select:none}
@@ -1662,8 +1675,9 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .stat-label{font-size:11px;color:#5e776d;font-weight:750;text-transform:uppercase;letter-spacing:0.6px}
 .num{font-size:30px;font-weight:850;color:#10221a;margin-top:8px;letter-spacing:-0.5px}
 .delta{font-size:11.5px;color:#087b59;margin-top:8px;font-weight:600}
-.grid{display:grid;grid-template-columns:1.35fr .65fr;gap:16px;margin-top:16px}
-.card{background:#ffffff;border:1px solid #e1ece6;border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 14px rgba(7,28,21,0.02);margin-bottom:20px}
+
+.grid{display:grid;grid-template-columns:1.35fr .65fr;gap:16px;margin-top:16px;width:100%}
+.card{background:#ffffff;border:1px solid #e1ece6;border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 14px rgba(7,28,21,0.02);margin-bottom:20px;width:100%;box-sizing:border-box}
 .card h3{margin:0 0 6px;font-size:16px;font-weight:750;color:#10221a}
 .sub{color:#647d72;font-size:12px;line-height:1.5}
 .bars{margin-top:18px;display:grid;gap:13px}
@@ -1675,12 +1689,14 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .daybar{width:100%;max-width:42px;background:linear-gradient(180deg,#10b981,#087b59);border-radius:6px 6px 2px 2px;min-height:3px;box-shadow:0 2px 6px rgba(8,123,89,0.15)}
 .day small{font-size:10.5px;color:#647d72;font-weight:600}
 .day b{font-size:11px;color:#10221a;font-weight:750}
-.table-wrap{overflow-x:auto;border-radius:12px;border:1px solid #e1ece6;background:#fff;margin-top:14px}
-.table{width:100%;border-collapse:collapse;font-size:12.5px;text-align:left}
+
+.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1px solid #e1ece6;background:#fff;margin-top:14px}
+.table{width:100%;min-width:600px;border-collapse:collapse;font-size:12.5px;text-align:left}
 .table th{background:#f7faf8;color:#496559;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:0.5px;padding:12px 14px;border-bottom:1.5px solid #e1ece6;white-space:nowrap}
 .table td{padding:12px 14px;border-bottom:1px solid #edf3f0;color:#1a3127;vertical-align:middle}
 .table tbody tr:hover{background:#f8fbf9}
 .table tbody tr:last-child td{border-bottom:none}
+
 .pill{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:11px;font-weight:750}
 .pill.click{background:#e6f7f0;color:#087b59;border:1px solid #c2ebd9}
 .pill.submitted,.pill.form_action{background:#edf3ff;color:#2563eb;border:1px solid #c7dcfe}
@@ -1695,15 +1711,13 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .filter input:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
 .filter button{border:0;background:#e3ede8;color:#1a3328;padding:9px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:650;transition:all 0.15s ease}
 .filter button:hover{background:#d5e5dd}
-.form{display:grid;gap:14px;max-width:850px}
+.form{display:grid;gap:14px;max-width:850px;width:100%}
 .form label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:650;color:#1a3127}
 .form input,.form select,.form textarea{padding:10px 13px;border:1.5px solid #ccdcd5;border-radius:9px;font-size:13px;background:#fff;color:#10221a;outline:none;transition:all 0.15s ease}
 .form input:focus,.form select:focus,.form textarea:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
-@media(max-width:960px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.layout{grid-template-columns:1fr}.side{display:flex;flex-direction:row;overflow-x:auto;padding:10px}.side-group-title{display:none}.side a{white-space:nowrap}}
-@media(max-width:540px){.stats{grid-template-columns:1fr}.main{padding:18px}.topbar{padding:0 16px}.top-role-badge{display:none}}
-@media print{.topbar,.side,.camp-crumb a,.filter,button,a.btn,.stat-hint,.live-status-pill,.top-actions{display:none !important}.layout{display:block !important}.main{padding:0 !important;max-width:100% !important;margin:0 !important}body{background:#fff !important;color:#000 !important;font-size:11pt !important}.card{border:1px solid #ddd !important;box-shadow:none !important;margin-bottom:14px !important;break-inside:avoid}.stat{border:1px solid #ddd !important;box-shadow:none !important;break-inside:avoid}}
+
 /* LinkSec Modern 3-Column Email Template Catalog & Live Preview */
-.ls-browser{display:grid;grid-template-columns:230px 370px 1fr;background:#ffffff;border:1px solid #e1ece6;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 18px rgba(7,28,21,0.04);min-height:740px;height:calc(100vh - 210px);margin-top:14px}
+.ls-browser{display:grid;grid-template-columns:230px 370px 1fr;background:#ffffff;border:1px solid #e1ece6;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 18px rgba(7,28,21,0.04);min-height:740px;height:calc(100vh - 210px);margin-top:14px;width:100%}
 .ls-sidebar{background:#f9fbf9;border-right:1px solid #e6f0eb;padding:14px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
 .ls-group-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#527365;padding:4px 8px;margin-bottom:2px}
 .ls-nav-item{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;font-size:12px;font-weight:600;color:#243e32;cursor:pointer;transition:all 0.15s ease;user-select:none}
@@ -1755,53 +1769,115 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .ls-meta-subject{font-size:13.5px;font-weight:800;color:#0b1a13;margin-top:2px}
 .ls-meta-subline{font-size:11px;color:#648074;display:flex;gap:10px;flex-wrap:wrap}
 .ls-frame-container{flex:1;padding:14px 18px;overflow-y:auto;display:flex;justify-content:center;background:#edf3f0}
-.ls-frame-card{width:100%;max-width:820px;background:#ffffff;border-radius:10px;border:1px solid #dce8e1;box-shadow:0 3px 14px rgba(7,28,21,0.04);overflow:hidden;display:flex;flex-direction:column}
+.ls-frame-card{width:100%;max-width:880px;background:#ffffff;border-radius:10px;border:1px solid #dce8e1;box-shadow:0 3px 14px rgba(7,28,21,0.04);overflow:hidden;display:flex;flex-direction:column}
 .ls-iframe{width:100%;height:680px;border:none;background:#ffffff}
-@media(max-width:1200px){.ls-browser{grid-template-columns:200px 320px 1fr}}
-@media(max-width:960px){.ls-browser{grid-template-columns:1fr;height:auto;min-height:0}.ls-sidebar{display:none}}
 
-/* Responsive behavior ensuring sidebar stays on the left across all screen size changes */
+/* Tablet & Medium Breakpoint (<= 1200px) */
+@media(max-width:1200px){
+  .ls-browser{grid-template-columns:200px 300px 1fr}
+}
+
+/* Tablet Breakpoint (<= 1080px) */
 @media(max-width:1080px){
-  .stats{grid-template-columns:repeat(2,1fr)}
-  .grid{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,1fr);gap:14px}
+  .grid{grid-template-columns:1fr;gap:16px}
 }
-@media(max-width:860px){
-  .layout{grid-template-columns:68px 1fr}
-  .layout .side{width:68px;padding:14px 6px;align-items:center}
-  .layout .side-header{justify-content:center;padding:0 0 10px;border-bottom:none}
-  .layout .side-header-title{display:none}
-  .layout .side-collapse-btn .side-toggle-arrow{transform:rotate(180deg)}
-  .layout .side-group-title{font-size:0;height:1px;padding:0;margin:10px 4px;background:rgba(255,255,255,0.08);overflow:hidden;width:40px}
-  .layout .side-text{display:none}
-  .layout .side a{justify-content:center;width:44px;height:44px;padding:0;margin:3px auto;border-radius:10px}
-  .layout .side a .side-ico{font-size:18px;width:auto}
-  .layout .side a:hover::after{content:attr(data-tooltip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);background:#082a1f;color:#fff;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:6px;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.35);border:1px solid #1a5e47;z-index:9999;pointer-events:none}
-  .layout .side a:hover::before{content:"";position:absolute;left:calc(100% + 6px);top:50%;transform:translateY(-50%);border-width:5px 6px 5px 0;border-style:solid;border-color:transparent #1a5e47 transparent transparent;z-index:9999}
 
-  .layout.expanded{grid-template-columns:240px 1fr}
-  .layout.expanded .side{width:240px;padding:14px 10px;align-items:stretch}
-  .layout.expanded .side-header{justify-content:space-between;padding:4px 8px 12px;border-bottom:1px solid #0f3327}
-  .layout.expanded .side-header-title{display:inline}
-  .layout.expanded .side-collapse-btn .side-toggle-arrow{transform:rotate(0deg)}
-  .layout.expanded .side-group-title{font-size:10.5px;height:auto;padding:12px 10px 4px;margin-top:4px;background:none;width:auto}
-  .layout.expanded .side-text{display:inline}
-  .layout.expanded .side a{justify-content:flex-start;width:auto;height:auto;padding:9px 12px;margin:1px 0}
-  .layout.expanded .side a .side-ico{font-size:14px;width:18px}
+/* Primary Mobile & Small Tablet Breakpoint (<= 860px) */
+@media(max-width:860px){
+  .topbar{height:60px;padding:0 14px}
+  .mobile-menu-btn{display:inline-flex}
   .live-status-pill{display:none}
-  .main{padding:20px 18px}
-}
-@media(max-width:600px){
-  .topbar{padding:0 12px;height:60px}
-  .layout{grid-template-columns:56px 1fr;min-height:calc(100vh - 60px)}
-  .side{width:56px;top:60px;height:calc(100vh - 60px);padding:10px 4px}
-  .side a{width:38px;height:38px}
-  .side a .side-ico{font-size:16px}
-  .topbrand-text{display:none}
   .top-role-badge{display:none}
+  .top-act-txt{display:none}
+  .top-actions{gap:6px}
+  .top-actions a{padding:6px 10px;font-size:13px}
+
+  .layout{display:block;width:100%;min-height:calc(100vh - 60px)}
+  .side{
+    position:fixed;
+    top:0;
+    left:0;
+    bottom:0;
+    width:280px;
+    max-width:85vw;
+    height:100vh;
+    z-index:9999;
+    transform:translateX(-100%);
+    transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
+    box-shadow:10px 0 35px rgba(0,0,0,0.5);
+    background:#071c15;
+    padding:16px 12px;
+    display:flex;
+  }
+  .layout.mobile-nav-open .side{transform:translateX(0)}
+  .side-header{justify-content:space-between;padding:4px 6px 12px;border-bottom:1px solid #0f3327}
+  .side-header-title{display:inline}
+  .side-collapse-btn{display:none}
+  .side-close-btn{display:inline-flex}
+
+  .side-backdrop{
+    display:block;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.6);
+    backdrop-filter:blur(2px);
+    z-index:9998;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.25s ease;
+  }
+  .layout.mobile-nav-open .side-backdrop{
+    opacity:1;
+    pointer-events:auto;
+  }
+
+  .main{padding:18px 14px;width:100%}
+
+  .ls-browser{display:flex;flex-direction:column;height:auto;min-height:0}
+  .ls-sidebar{max-height:220px;border-right:none;border-bottom:1px solid #e6f0eb}
+  .ls-catalog{max-height:360px;border-right:none;border-bottom:1px solid #e6f0eb}
+  .ls-preview-pane{height:auto;min-height:500px}
+  .ls-iframe{height:520px}
+}
+
+/* Smartphone Screens (<= 640px) */
+@media(max-width:640px){
   .main{padding:14px 10px}
-  .stats{grid-template-columns:1fr}
-  .layout.expanded .side{position:fixed;left:0;top:60px;bottom:0;width:240px;z-index:9999;box-shadow:6px 0 25px rgba(0,0,0,0.6)}
-  .layout.expanded .side-backdrop{display:block;position:fixed;top:60px;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9998;backdrop-filter:blur(2px)}
+  .hero{flex-direction:column;align-items:stretch;gap:12px}
+  .hero > div:last-child{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+  .hero > div:last-child a{flex:1 1 calc(50% - 6px);min-width:110px;justify-content:center;text-align:center;padding:9px 10px}
+  .camp-header{flex-direction:column;align-items:stretch;gap:12px}
+  .camp-actions{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+  .camp-actions button, .camp-actions a{flex:1 1 calc(50% - 6px);min-width:110px;justify-content:center;text-align:center;padding:9px 10px}
+
+  .card{padding:16px 12px;border-radius:12px}
+  .table th, .table td{padding:10px 10px;font-size:12px}
+  .filter{width:100%;margin-top:10px}
+  .filter input{flex:1;min-width:120px}
+
+  .qc-row-2col{grid-template-columns:1fr !important}
+  .qc-quick-add-grid{grid-template-columns:1fr !important}
+}
+
+/* Small Smartphone Screens (<= 440px) */
+@media(max-width:440px){
+  .stats{grid-template-columns:1fr;gap:10px}
+  .stat{padding:14px 16px}
+  .num{font-size:26px}
+  .hero h1{font-size:22px}
+  .camp-title-row h1{font-size:20px}
+  .topbrand-text{display:none}
+}
+
+/* Print Styles */
+@media print{
+  .topbar,.side,.camp-crumb a,.filter,button,a.btn,.stat-hint,.live-status-pill,.top-actions,.side-backdrop{display:none !important}
+  .layout{display:block !important}
+  .main{padding:0 !important;max-width:100% !important;margin:0 !important}
+  body{background:#fff !important;color:#000 !important;font-size:11pt !important}
+  .card{border:1px solid #ddd !important;box-shadow:none !important;margin-bottom:14px !important;break-inside:avoid}
+  .stat{border:1px solid #ddd !important;box-shadow:none !important;break-inside:avoid}
 }
 """
 
@@ -2693,26 +2769,41 @@ class Handler(BaseHTTPRequestHandler):
         links="".join(links_parts)
         css=DASH_CSS
         body=f'''<header class="topbar">
-  <a class="topbrand" href="/admin">
-    <div class="mark">🛡️</div>
-    <div class="topbrand-text">Trust PhishGuard</div>
-  </a>
+  <div class="topbar-brand-wrap">
+    <button type="button" class="mobile-menu-btn" onclick="toggleMobileNav()" aria-label="Open Navigation Menu" title="Open Navigation Menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"></line>
+        <line x1="3" y1="6" x2="21" y2="6"></line>
+        <line x1="3" y1="18" x2="21" y2="18"></line>
+      </svg>
+    </button>
+    <a class="topbrand" href="/admin">
+      <div class="mark">🛡️</div>
+      <div class="topbrand-text">Trust PhishGuard</div>
+    </a>
+  </div>
   <div class="live-status-pill">
     <span class="pulse-dot"></span> Simulation Engine Online · Asia/Dhaka
   </div>
   <div class="top-actions">
     <span class="top-role-badge">ADMINISTRATOR</span>
-    <a href="/admin.csv">📥 Export CSV</a>
-    <a href="/admin/logout">🚪 Logout</a>
+    <a href="/admin.csv" title="Export CSV"><span class="top-act-ico">📥</span><span class="top-act-txt">Export CSV</span></a>
+    <a href="/admin/logout" title="Logout"><span class="top-act-ico">🚪</span><span class="top-act-txt">Logout</span></a>
   </div>
 </header>
 <div class="layout" id="mainLayout">
   <aside class="side" id="adminSidebar">
     <div class="side-header">
       <span class="side-header-title">NAVIGATION</span>
-      <button type="button" class="side-collapse-btn" id="sideCollapseBtn" onclick="toggleSidebar()" aria-label="Toggle Sidebar" title="Collapse sidebar">
+      <button type="button" class="side-collapse-btn desktop-only" id="sideCollapseBtn" onclick="toggleSidebar()" aria-label="Toggle Sidebar" title="Collapse / Expand sidebar">
         <svg class="side-toggle-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <button type="button" class="side-close-btn mobile-only" onclick="closeMobileNav()" aria-label="Close Navigation" title="Close menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
     </div>
@@ -2720,23 +2811,28 @@ class Handler(BaseHTTPRequestHandler):
       {links}
     </div>
   </aside>
-  <div class="side-backdrop" onclick="toggleSidebar()"></div>
+  <div class="side-backdrop" id="sideBackdrop" onclick="closeMobileNav()"></div>
   <main class="main">{content}</main>
 </div>
 <script>
 function toggleSidebar(){{
   var layout = document.getElementById('mainLayout') || document.querySelector('.layout');
   if(!layout) return;
-  var isMobile = window.innerWidth <= 860;
-  if(isMobile){{
-    layout.classList.toggle('expanded');
-    layout.classList.remove('collapsed');
+  if(window.innerWidth <= 860){{
+    layout.classList.toggle('mobile-nav-open');
   }} else {{
     var willCollapse = !layout.classList.contains('collapsed');
     layout.classList.toggle('collapsed', willCollapse);
-    layout.classList.remove('expanded');
     try {{ localStorage.setItem('phish_sidebar_collapsed', willCollapse ? '1' : '0'); }} catch(e){{}}
   }}
+}}
+function toggleMobileNav(){{
+  var layout = document.getElementById('mainLayout') || document.querySelector('.layout');
+  if(layout) layout.classList.toggle('mobile-nav-open');
+}}
+function closeMobileNav(){{
+  var layout = document.getElementById('mainLayout') || document.querySelector('.layout');
+  if(layout) layout.classList.remove('mobile-nav-open');
 }}
 (function(){{
   try {{
@@ -2745,6 +2841,17 @@ function toggleSidebar(){{
       if(layout) layout.classList.add('collapsed');
     }}
   }} catch(e){{}}
+  document.addEventListener('DOMContentLoaded', function(){{
+    var links = document.querySelectorAll('#adminSidebar a');
+    for(var i=0; i<links.length; i++){{
+      links[i].addEventListener('click', function(){{
+        if(window.innerWidth <= 860) closeMobileNav();
+      }});
+    }}
+  }});
+  document.addEventListener('keydown', function(e){{
+    if(e.key === 'Escape') closeMobileNav();
+  }});
 }})();
 </script>'''
         return page(title,body,css)
@@ -2839,8 +2946,8 @@ function toggleSidebar(){{
 </div>
 
 <!-- Quick Campaign Modal -->
-<div id="quickCampModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.65);z-index:99999;backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;box-sizing:border-box">
-  <div style="background:#ffffff;border-radius:18px;width:100%;max-width:620px;box-shadow:0 25px 60px rgba(0,0,0,0.3);overflow:hidden;animation:popIn 0.22s cubic-bezier(0.16,1,0.3,1)">
+<div id="quickCampModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.65);z-index:99999;backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:16px;box-sizing:border-box">
+  <div style="background:#ffffff;border-radius:18px;width:100%;max-width:620px;max-height:92vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.3);animation:popIn 0.22s cubic-bezier(0.16,1,0.3,1)">
     <div style="background:linear-gradient(135deg,#0d3829,#15543e);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:12px">
         <div style="background:linear-gradient(135deg,#ffb74d,#ff9800);width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 10px rgba(0,0,0,0.25)">⚡</div>
@@ -2858,7 +2965,7 @@ function toggleSidebar(){{
         <input type="text" id="qcName" name="name" required maxlength="150" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px" placeholder="e.g. Quick Drill - Zoom Meeting (Instant)">
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="qc-row-2col" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div>
           <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Email Template (Payload)</label>
           <select id="qcTemplate" name="template" required onchange="onTemplateChange()" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
@@ -2883,7 +2990,7 @@ function toggleSidebar(){{
           <span style="font-size:12px;font-weight:700;color:#0d4d34;display:flex;align-items:center;gap:5px">⚡ Quick Add Recipient Target</span>
           <button type="button" onclick="toggleQuickAddRecipient()" style="background:none;border:none;color:#527867;font-size:16px;cursor:pointer;line-height:1" title="Close">&times;</button>
         </div>
-        <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:8px;align-items:center">
+        <div class="qc-quick-add-grid" style="display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:8px;align-items:center">
           <input type="email" id="qaEmail" name="quick_email" placeholder="Email (e.g. user@domain.com)" style="padding:7px 10px;border:1.5px solid #b5d5c5;border-radius:6px;font-size:12px;box-sizing:border-box;width:100%">
           <input type="text" id="qaName" name="quick_name" placeholder="Name (optional)" style="padding:7px 10px;border:1.5px solid #b5d5c5;border-radius:6px;font-size:12px;box-sizing:border-box;width:100%">
           <input type="text" id="qaGroup" name="quick_group" placeholder="Group (optional)" style="padding:7px 10px;border:1.5px solid #b5d5c5;border-radius:6px;font-size:12px;box-sizing:border-box;width:100%">
