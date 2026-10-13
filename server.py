@@ -1832,6 +1832,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/recipients/save":{"create":"recipient.create","edit":"recipient.edit"},
         "/admin/recipients/delete":"recipient.delete",
         "/admin/recipients/import":"recipient.import",
+        "/admin/recipients/quick_add":"recipient.create",
         "/admin/groups/save":"group.manage",
         "/admin/campaigns/control":"campaign.edit",
         "/admin/campaigns/test-send":"campaign.launch",
@@ -2433,12 +2434,30 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
           </select>
         </div>
         <div>
-          <label style="font-weight:600;font-size:12.5px;color:#203a30;margin-bottom:5px;display:block">Target Audience</label>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <label style="font-weight:600;font-size:12.5px;color:#203a30;margin:0">Target Audience</label>
+            <button type="button" onclick="toggleQuickAddRecipient()" style="background:#eef7f2;border:1px solid #a8d5be;color:#0d4d34;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px" title="Add recipient instantly without leaving modal">⚡ + Quick Add</button>
+          </div>
           <select name="group_name" id="qcAudience" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
             <option value="">🎯 All Active Recipients ({active_recipients_cnt} targets)</option>
             {group_options}
           </select>
         </div>
+      </div>
+
+      <!-- Quick Add Recipient Inline Drawer -->
+      <div id="quickAddRecPanel" style="display:none;background:#f2faf5;border:1.5px dashed #48a074;border-radius:10px;padding:12px 14px;box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:700;color:#0d4d34;display:flex;align-items:center;gap:5px">⚡ Quick Add Recipient Target</span>
+          <button type="button" onclick="toggleQuickAddRecipient()" style="background:none;border:none;color:#527867;font-size:16px;cursor:pointer;line-height:1" title="Close">&times;</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:8px;align-items:center">
+          <input type="email" id="qaEmail" name="quick_email" placeholder="Email (e.g. user@domain.com)" style="padding:7px 10px;border:1.5px solid #b5d5c5;border-radius:6px;font-size:12px;box-sizing:border-box;width:100%">
+          <input type="text" id="qaName" name="quick_name" placeholder="Name (optional)" style="padding:7px 10px;border:1.5px solid #b5d5c5;border-radius:6px;font-size:12px;box-sizing:border-box;width:100%">
+          <input type="text" id="qaGroup" name="quick_group" placeholder="Group (optional)" style="padding:7px 10px;border:1.5px solid #b5d5c5;border-radius:6px;font-size:12px;box-sizing:border-box;width:100%">
+          <button type="button" onclick="submitQuickRecipient()" id="qaBtn" style="background:#0d4d34;color:#fff;border:none;border-radius:6px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Add Target</button>
+        </div>
+        <div id="qaFeedback" style="margin-top:6px;font-size:11.5px;display:none"></div>
       </div>
 
       <div>
@@ -2486,9 +2505,109 @@ function filterRows(){{const q=document.getElementById('q').value.toLowerCase();
 const qcTemplates = {tpl_json_raw};
 function filterCampTable(){{const q=document.getElementById('qCamp').value.toLowerCase();document.querySelectorAll('#campRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
 
+function toggleQuickAddRecipient() {{
+  const panel = document.getElementById('quickAddRecPanel');
+  if (!panel) return;
+  const isHidden = panel.style.display === 'none' || panel.style.display === '';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {{
+    document.getElementById('qaEmail').focus();
+  }}
+}}
+
+function submitQuickRecipient() {{
+  const emailInput = document.getElementById('qaEmail');
+  const nameInput = document.getElementById('qaName');
+  const groupInput = document.getElementById('qaGroup');
+  const fb = document.getElementById('qaFeedback');
+  const btn = document.getElementById('qaBtn');
+  const email = (emailInput.value || '').trim();
+  const name = (nameInput.value || '').trim();
+  const group = (groupInput.value || '').trim();
+
+  if (!email || !email.includes('@')) {{
+    fb.style.display = 'block';
+    fb.style.color = '#c62828';
+    fb.innerText = 'Please enter a valid email address.';
+    emailInput.focus();
+    return;
+  }}
+
+  btn.disabled = true;
+  btn.innerText = 'Adding...';
+  fb.style.display = 'none';
+
+  const params = new URLSearchParams();
+  params.append('email', email);
+  params.append('name', name);
+  params.append('group_name', group);
+
+  fetch('/admin/recipients/quick_add', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+    body: params.toString()
+  }})
+  .then(res => res.json())
+  .then(data => {{
+    btn.disabled = false;
+    btn.innerText = 'Add Target';
+    if (data.status === 'ok') {{
+      fb.style.display = 'block';
+      fb.style.color = '#0d4d34';
+      fb.innerText = '✓ ' + (data.message || 'Recipient added successfully.');
+
+      const audSel = document.getElementById('qcAudience');
+      if (audSel && audSel.options.length > 0) {{
+        audSel.options[0].text = '🎯 All Active Recipients (' + data.total_targets + ' targets)';
+        if (data.group_name) {{
+          let found = false;
+          for (let opt of audSel.options) {{
+            if (opt.value === data.group_name) {{
+              opt.selected = true;
+              found = true;
+              break;
+            }}
+          }}
+          if (!found) {{
+            const newOpt = document.createElement('option');
+            newOpt.value = data.group_name;
+            newOpt.text = '👥 Group: ' + data.group_name;
+            newOpt.selected = true;
+            audSel.appendChild(newOpt);
+          }}
+        }} else {{
+          audSel.options[0].selected = true;
+        }}
+      }}
+      emailInput.value = '';
+      nameInput.value = '';
+      groupInput.value = '';
+      setTimeout(() => {{
+        document.getElementById('quickAddRecPanel').style.display = 'none';
+        fb.style.display = 'none';
+      }}, 1600);
+    }} else {{
+      fb.style.display = 'block';
+      fb.style.color = '#c62828';
+      fb.innerText = data.error || 'Failed to add recipient.';
+    }}
+  }})
+  .catch(err => {{
+    btn.disabled = false;
+    btn.innerText = 'Add Target';
+    fb.style.display = 'block';
+    fb.style.color = '#c62828';
+    fb.innerText = 'Request error: ' + err.message;
+  }});
+}}
+
 function openQuickModal() {{
   document.getElementById('quickCampModal').style.display = 'flex';
   onTemplateChange();
+  const audSel = document.getElementById('qcAudience');
+  if (audSel && audSel.options[0] && audSel.options[0].text.includes('(0 targets)')) {{
+    document.getElementById('quickAddRecPanel').style.display = 'block';
+  }}
 }}
 function closeQuickModal() {{
   document.getElementById('quickCampModal').style.display = 'none';
@@ -5691,6 +5810,33 @@ syncAudience();
                           (email,name,employee,department,designation,location,manager,language,timezone_val,group_name,status_val,rid))
                 c.commit(); c.close(); audit(ADMIN_USERNAME,"RECIPIENT_PROFILE_UPDATE","recipient=%s email=%s"%(rid,email),ip)
                 return self.sendbody(302,b"",extra={"Location":"/admin/recipients"})
+        if p.path=="/admin/recipients/quick_add":
+            if not self.auth(): return self.sendbody(403,json.dumps({"status":"error","error":"Forbidden"}),"application/json")
+            if not self.permission_allowed(p.path,"POST",form=form): return self.sendbody(403,json.dumps({"status":"error","error":"Insufficient permissions"}),"application/json")
+            email=form.get("email",[""])[0].strip().lower()
+            if not email or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email):
+                return self.sendbody(400,json.dumps({"status":"error","error":"Invalid email address"}),"application/json")
+            name=form.get("name",[""])[0].strip()[:150]
+            group_name=form.get("group_name",[""])[0].strip()[:100]
+            c=db()
+            rec=c.execute("SELECT id,status FROM recipients WHERE lower(email)=?",(email,)).fetchone()
+            if rec:
+                if rec["status"]!="Active":
+                    c.execute("UPDATE recipients SET status='Active',group_name=COALESCE(NULLIF(?,''),group_name) WHERE id=?",(group_name,rec["id"]))
+                msg=f"Recipient {email} is active."
+            else:
+                c.execute("INSERT INTO recipients(email,name,group_name,status,created_at) VALUES(?,?,?,'Active',?)",(email,name,group_name,now()))
+                if group_name:
+                    c.execute("INSERT OR IGNORE INTO groups_tbl(name,created_at) VALUES(?,?)",(group_name,now()))
+                msg=f"Added {email} to directory!"
+            c.commit()
+            total_targets=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+            group_count=0
+            if group_name:
+                group_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND group_name=?",(group_name,)).fetchone()["n"]
+            c.close()
+            audit(ADMIN_USERNAME,"RECIPIENT_QUICK_ADD",f"email={email} group={group_name}",ip)
+            return self.sendbody(200,json.dumps({"status":"ok","message":msg,"email":email,"name":name,"group_name":group_name,"group_count":group_count,"total_targets":total_targets}),"application/json")
         if p.path=="/admin/recipients/delete":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(p.path,"POST",form=form): return self.sendbody(403,"Insufficient role permission","text/plain")
@@ -5894,6 +6040,21 @@ syncAudience();
             smtp_val=int(smtp_id)
             landing_val=int(landing_id)
 
+            quick_email=form.get("quick_email",[""])[0].strip().lower()
+            if quick_email and re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",quick_email):
+                quick_name=form.get("quick_name",[""])[0].strip()[:150]
+                quick_grp=form.get("quick_group",[""])[0].strip()[:100] or group_name
+                existing=c.execute("SELECT id,status FROM recipients WHERE lower(email)=?",(quick_email,)).fetchone()
+                if not existing:
+                    c.execute("INSERT INTO recipients(email,name,group_name,status,created_at) VALUES(?,?,?,'Active',?)",(quick_email,quick_name,quick_grp,now()))
+                    if quick_grp: c.execute("INSERT OR IGNORE INTO groups_tbl(name,created_at) VALUES(?,?)",(quick_grp,now()))
+                    c.commit()
+                elif existing["status"]!="Active":
+                    c.execute("UPDATE recipients SET status='Active',group_name=COALESCE(NULLIF(?,''),group_name) WHERE id=?",(quick_grp,existing["id"]))
+                    c.commit()
+                if quick_grp and not group_name:
+                    group_name=quick_grp
+
             if group_name:
                 targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND group_name=?",(group_name,)).fetchone()["n"]
             else:
@@ -5901,7 +6062,7 @@ syncAudience();
 
             if targeted==0:
                 c.close()
-                return self.sendbody(400,"No eligible recipients found in selected target audience.","text/plain")
+                return self.sendbody(400,"No eligible recipients found in selected target audience. Please add a recipient using ⚡ Quick Add.","text/plain")
 
             status="Active" if action_mode=="launch" else "Draft"
             business_days="Mon,Tue,Wed,Thu,Fri,Sat,Sun"

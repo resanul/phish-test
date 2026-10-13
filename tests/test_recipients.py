@@ -33,6 +33,7 @@ class RecipientsSingleAddTests(unittest.TestCase):
         self.handler = self.server.Handler.__new__(self.server.Handler)
         self.handler.admin_shell = lambda title, body, active: body
         self.handler.auth = lambda: True
+        self.handler.csrf_origin_ok = lambda: True
         self.handler.permission_allowed = lambda path, method, query=None, form=None: True
 
     def test_recipients_directory_renders_single_add_and_quick_add(self):
@@ -128,6 +129,45 @@ class RecipientsSingleAddTests(unittest.TestCase):
         deleted = c.execute("SELECT * FROM recipients WHERE id=?", (rid,)).fetchone()
         c.close()
         self.assertIsNone(deleted)
+
+    def test_quick_add_recipient_via_post_endpoint(self):
+        h = self.handler
+        h.path = "/admin/recipients/quick_add"
+        h.client_address = ("127.0.0.1", 12345)
+        h.headers = {"Content-Length": "0"}
+        response_data = []
+        h.sendbody = lambda code, body, ctype="text/html", extra=None: response_data.append((code, body, extra))
+
+        payload = "email=quick.target%40example.com&name=Quick+Target&group_name=IT+Security"
+        h.headers["Content-Length"] = str(len(payload))
+        from unittest.mock import MagicMock
+        h.rfile = MagicMock()
+        h.rfile.read.return_value = payload.encode()
+
+        h.do_POST()
+        self.assertEqual(len(response_data), 1)
+        self.assertEqual(response_data[0][0], 200)
+        import json
+        res = json.loads(response_data[0][1])
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["email"], "quick.target@example.com")
+        self.assertEqual(res["group_name"], "IT Security")
+        self.assertEqual(res["total_targets"], 1)
+
+        c = self.server.db()
+        row = c.execute("SELECT * FROM recipients WHERE lower(email)='quick.target@example.com'").fetchone()
+        c.close()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["name"], "Quick Target")
+        self.assertEqual(row["status"], "Active")
+
+    def test_quick_campaign_modal_renders_quick_add_button_and_drawer(self):
+        html = self.handler.feature_page("/admin/campaigns")
+        self.assertIn("Quick Campaign Launch", html)
+        self.assertIn("toggleQuickAddRecipient()", html)
+        self.assertIn("quickAddRecPanel", html)
+        self.assertIn("submitQuickRecipient()", html)
+        self.assertIn("⚡ + Quick Add", html)
 
 if __name__ == "__main__":
     unittest.main()
