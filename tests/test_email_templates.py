@@ -154,6 +154,35 @@ class EmailTemplatesTests(unittest.TestCase):
         self.assertIn("EMP-3049", r2)
         self.assertIn("https://sim.test/click?t=t1", r2)
 
+    def test_gozayaan_travel_discount_template_seeded_and_renders(self):
+        c = self.server.db()
+        self.server.seed_core_templates(c)
+        self.server.seed_linksec_templates(c)
+        c.commit()
+
+        tpl = c.execute("SELECT * FROM template_library WHERE template='trust-gozayaan-travel-oct26'").fetchone()
+        c.close()
+
+        self.assertIsNotNone(tpl, "trust-gozayaan-travel-oct26 should exist in template_library")
+        self.assertEqual(tpl["brand"], "Trust Bank")
+        self.assertIn("GoZayaan", tpl["name"])
+        self.assertIn("GoZayaan", tpl["html_body"])
+        self.assertIn("10%", tpl["html_body"])
+        self.assertIn("65%", tpl["html_body"])
+        self.assertIn("+8809678332211", tpl["html_body"])
+        self.assertIn("October 31, 2026", tpl["html_body"])
+
+        # Test variable rendering
+        rec = {"name": "Sadia Islam", "email": "sadia@corp.com"}
+        camp = {"name": "Trust Bank Travel Drill", "brand": "Trust Bank"}
+        links = {"tracking_link": "https://sim.test/track?t=gz", "report_link": "https://sim.test/report?t=gz"}
+
+        rendered = self.server.render_template_variables(tpl["html_body"], rec, camp, links)
+        self.assertIn("Sadia Islam", rendered)
+        self.assertIn("https://sim.test/track?t=gz", rendered)
+        self.assertIn("https://sim.test/report?t=gz", rendered)
+
 if __name__ == "__main__":
     unittest.main()
+
 

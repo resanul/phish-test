@@ -83,6 +83,8 @@ LINKSEC_BRAND_MAP = {
 LINKSEC_KNOWN_TITLES = {
     "apex-rewards-employee-voucher": ("Apex Rewards - Exclusive 55% Employee Gift Voucher", "[Exclusive] Claim Your Apex 55% Employee Discount Voucher", "Medium"),
     "trust-bank-corporate-card": ("Trust Bank PLC - Exclusive Employee Card Pre-Approval", "[Pre-Approved] Exclusive Corporate Credit Card Privileges for {{name}}", "Medium"),
+    "trust-bank-gozayaan-travel": ("Trust Bank × GoZayaan — Exclusive Travel Discounts", "[Exclusive] Enjoy Up to 65% Travel Discounts with Your Trust Bank Card!", "Medium"),
+    "trust-gozayaan-travel-oct26": ("Trust Bank × GoZayaan — Exclusive Travel Discounts", "[Exclusive] Enjoy Up to 65% Travel Discounts with Your Trust Bank Card!", "Medium"),
     "zoom-urgent-account-update-required": ("Zoom - Urgent Account Update Required", "Urgent: Immediate Action Required to Prevent Zoom Account Suspension", "Hard"),
     "zoom-urgent-zoom-account-security-alert": ("Zoom - Urgent Security Alert", "Zoom - Urgent Security Alert: Unusual Login Detected", "Medium"),
     "zoom-zoom-pro-subscription-offer": ("Zoom - Free Pro Subscription Offer", "Congratulations: Claim Your Complimentary 1-Year Zoom Pro Plan", "Easy"),
@@ -221,6 +223,25 @@ CORE_EMAIL_TEMPLATES = [
         "owner": "LinkSec Awareness Library",
         "status": "Active",
         "text_body": "Dear {{name}},\n\nCongratulations! You have been pre-approved for an exclusive Trust Bank PLC Corporate Credit Card with an approved limit of up to BDT 5,00,000.\n\nKey Benefits:\n- Zero Annual Fee for life under corporate arrangement\n- Complimentary Balaka Executive Lounge Access\n- Up to 50 Days Interest-Free Credit\n- Pre-approved for: {{name}} (Employee ID: {{employee_id}})\n\nTo activate your card online with zero paperwork, visit:\n{{tracking_link}}\n\nSecurity Notice: Trust Bank will never ask for your PIN or CVV. To report suspicious email:\n{{report_link}}\n\nTrust Bank PLC | Corporate Cards Division\nShadhinata Tower, Bir Sreshtha Shaheed Jahangir Gate, Dhaka Cantonment, Dhaka"
+    },
+    {
+        "template": "trust-gozayaan-travel-oct26",
+        "name": "Trust Bank × GoZayaan — Exclusive Travel Discounts",
+        "subject": "[Exclusive] Enjoy Up to 65% Travel Discounts with Your Trust Bank Card!",
+        "preheader": "Using Trust Bank cards Enjoy travel discounts with GoZayaan! Up to 10% off flights & 65% off hotels till Oct 31, 2026.",
+        "category": "Discounts & Travel Promotions",
+        "difficulty": "Medium",
+        "language": "English",
+        "brand": "Trust Bank",
+        "industry": "Banking & Travel",
+        "tags": "Call to action, Visual Imitation, Discounts & Rewards, Cardholder Privileges, Urgency, Authority Figures",
+        "file": os.path.join("email", "trust-bank", "trust-bank-gozayaan-travel.html"),
+        "from_name": "Trust Bank & GoZayaan Offers",
+        "from_email": "offers@trustbank-corporate.com",
+        "reply_to": "offers@trustbank-corporate.com",
+        "owner": "LinkSec Awareness Library",
+        "status": "Active",
+        "text_body": "Dear {{name}},\n\nUsing Trust Bank cards Enjoy travel discounts with GoZayaan!\n\nUp to 10% off flights & 65% off hotels till Oct 31, 2026.\nFor Details Call +8809678332211. T&C apply.\n\nExclusive Offers:\n- Up to 10% OFF on Flights\n- Up to 65% OFF on Hotels\n- Valid Till: October 31, 2026\n\nBook your discounted flights and hotels now:\n{{tracking_link}}\n\nIf you suspect this email is suspicious or unauthorized, please report it immediately:\n{{report_link}}\n\nTrust Bank PLC & GoZayaan\nShadhinata Tower, Bir Sreshtha Shaheed Jahangir Gate, Dhaka Cantonment, Dhaka"
     }
 ]
 
@@ -1411,7 +1432,7 @@ def render_template_variables(body,recipient,campaign,links):
         "language":(rec.get("language") if isinstance(rec,dict) else getattr(rec,"language","")) or "",
         "timezone":(rec.get("timezone") if isinstance(rec,dict) else getattr(rec,"timezone","")) or "",
     }
-    return re.sub(r"\{\{\s*\.?([a-zA-Z0-9_]+)\s*\}\}",lambda m:esc(str(values.get(m.group(1),m.group(0)))),body or "")
+    return re.sub(r"\{\{\s*\.?([a-zA-Z0-9_]+)\s*\}\}",lambda m:esc(str(values.get(m.group(1)) if m.group(1) in values else values.get(m.group(1).lower(),m.group(0)))),body or "")
 
 def _send_campaign_recipient(campaign,rec,queue_id):
     rec_id = rec["recipient_id"] if ("recipient_id" in rec.keys()) else rec["id"]

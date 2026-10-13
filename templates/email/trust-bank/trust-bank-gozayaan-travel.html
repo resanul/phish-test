@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trust Bank × GoZayaan — Exclusive Travel Discounts</title>
+<!--
+  PHISHING SIMULATION TEMPLATE
+  Campaign  : GoZayaan × Trust Bank PLC
+  Template  : trust-gozayaan-travel-oct26
+  Platform  : Trust PhishGuard
+-->
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#F2F4F7; font-family: Arial, Helvetica, sans-serif; }
+
+  .wrap {
+    max-width: 580px;
+    margin: 28px auto;
+    background: #ffffff;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.09);
+  }
+
+  /* ── sim banner ── */
+  .sim { background:#1E3A8A; padding:7px 24px; font-size:9.5px; color:#BFDBFE; font-weight:600; letter-spacing:.4px; }
+
+  /* ── header ── */
+  .hdr {
+    padding: 18px 24px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #E5E7EB;
+  }
+  /* Trust Bank logo text */
+  .tbl-logo { display:flex; align-items:center; gap:8px; }
+  .tbl-icon {
+    width:38px; height:38px; border-radius:50%;
+    border: 3px solid #E31E24;
+    background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:900; font-size:18px; color:#E31E24; font-family:Georgia,serif;
+  }
+  .tbl-text { line-height:1.2; }
+  .tbl-name { font-size:14px; font-weight:700; color:#0C5C35; }
+  .tbl-sub  { font-size:9px; color:#6B7280; }
+  /* GoZayaan logo text */
+  .gz-logo { text-align:right; }
+  .gz-name { font-size:20px; font-weight:800; color:#1E4DB7; line-height:1; }
+  .gz-name .plane { font-size:13px; }
+  .gz-sub  { font-size:9px; color:#6B7280; }
+
+  /* ── hero ── */
+  .hero { padding: 22px 24px 18px; }
+  .badge {
+    display:inline-block;
+    background:#0C5C35; color:#fff;
+    font-size:11px; font-weight:700;
+    padding:4px 12px; border-radius:4px;
+    margin-bottom:12px;
+  }
+  .hero h1 {
+    font-size:24px; font-weight:800; color:#111827; line-height:1.25;
+  }
+  .hero h1 .gz { color:#1E4DB7; }
+  .hero p {
+    margin-top:9px; font-size:13px; color:#4B5563; line-height:1.6;
+  }
+
+  /* ── offer cards ── */
+  .offers { display:flex; gap:12px; padding:0 24px 18px; }
+  .offer {
+    flex:1; border-radius:10px; padding:16px 14px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .offer.flight { background:#EAF5EE; }
+  .offer.hotel  { background:#EBF0FB; }
+  .offer-ic {
+    width:46px; height:46px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .offer.flight .offer-ic { background:#D1EDD9; }
+  .offer.hotel  .offer-ic { background:#D3E2F8; }
+  .offer-ic svg { width:24px; height:24px; }
+  .offer-body .up  { font-size:11px; color:#6B7280; }
+  .offer-body .pct { font-size:30px; font-weight:800; line-height:1; }
+  .offer-body .off { font-size:13px; font-weight:700; }
+  .offer-body .lbl { font-size:11px; color:#6B7280; margin-top:1px; }
+  .offer.flight .pct, .offer.flight .off { color:#0C5C35; }
+  .offer.hotel  .pct, .offer.hotel  .off { color:#1E4DB7; }
+
+  /* ── info strip ── */
+  .info-strip {
+    margin:0 24px 20px;
+    border:1px solid #E5E7EB; border-radius:8px;
+    display:flex;
+  }
+  .info-cell {
+    flex:1; padding:12px 16px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .info-cell:first-child { border-right:1px solid #E5E7EB; }
+  .info-cell svg { width:22px; height:22px; flex-shrink:0; }
+  .info-cell .lbl { font-size:10.5px; color:#6B7280; }
+  .info-cell .val { font-size:13.5px; font-weight:700; color:#0C5C35; }
+
+  /* ── why section ── */
+  .why { padding:4px 24px 22px; text-align:center; }
+  .why h2 { font-size:15px; font-weight:700; color:#111827; margin-bottom:16px; }
+  .why-grid { display:flex; gap:0; }
+  .why-item { flex:1; padding:0 6px; }
+  .why-icon {
+    width:46px; height:46px; border-radius:50%;
+    margin:0 auto 8px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .why-icon.g1 { background:#EAF5EE; }
+  .why-icon.g2 { background:#EBF0FB; }
+  .why-icon svg { width:22px; height:22px; }
+  .why-item p { font-size:11px; color:#374151; line-height:1.4; }
+
+  /* ── CTA ── */
+  .cta-wrap { padding:18px 24px 22px; text-align:center; }
+  .cta-btn {
+    display:inline-block;
+    background:#0C5C35; color:#fff !important;
+    text-decoration:none !important;
+    font-size:15px; font-weight:800;
+    padding:14px 60px; border-radius:40px;
+    letter-spacing:1px;
+    box-shadow: 0 4px 14px rgba(12, 92, 53, 0.25);
+  }
+  .cta-btn .arrow { margin-left:8px; }
+
+  /* ── destination strip ── */
+  .dest { display:flex; padding:0 24px 22px; gap:8px; }
+  .dest-card {
+    flex:1; height:90px; border-radius:8px; overflow:hidden;
+    background:#D1D5DB;
+    display:flex; align-items:flex-end;
+    position:relative;
+  }
+  .dest-card .label {
+    width:100%; background:rgba(0,0,0,0.42); color:#fff;
+    font-size:10px; font-weight:700; padding:5px 8px;
+    text-align:center;
+  }
+  /* color-coded placeholders */
+  .dest-card.d1 { background:linear-gradient(135deg,#F9A825,#E65100); }
+  .dest-card.d2 { background:linear-gradient(135deg,#26C6DA,#00796B); }
+  .dest-card.d3 { background:linear-gradient(135deg,#AB47BC,#E91E63); }
+  /* destination icons */
+  .dest-icon {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-62%);
+    font-size:28px; opacity:0.75;
+  }
+
+  /* ── footer ── */
+  .footer {
+    border-top:1px solid #E5E7EB;
+    padding:16px 24px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .social { text-align:center; }
+  .social .s-label { font-size:10px; color:#9CA3AF; margin-bottom:7px; }
+  .social-icons { display:flex; gap:8px; justify-content:center; }
+  .s-ic {
+    width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .s-ic.fb { background:#1877F2; }
+  .s-ic.li { background:#0A66C2; }
+  .s-ic.yt { background:#FF0000; }
+  .s-ic.ig { background:radial-gradient(circle at 30% 110%,#FFD600,#FF6B00 40%,#C90074 70%,#6E00B7); }
+  .s-ic svg { width:14px; height:14px; }
+
+  .footer-tbl .tbl-name { font-size:12px; }
+  .footer-tbl .tbl-sub  { font-size:8px; }
+  .footer-gz .gz-name   { font-size:16px; }
+  .footer-gz .gz-sub    { font-size:8px; }
+
+  .tc-bar {
+    background:#0C5C35; text-align:center;
+    padding:9px 24px; font-size:11px; color:rgba(255,255,255,0.85);
+    letter-spacing:.3px;
+  }
+  .tc-bar a {
+    color:#ffffff; text-decoration:underline; font-weight:600;
+  }
+
+  @media(max-width:480px){
+    .offers{ flex-direction:column; }
+    .why-grid{ flex-wrap:wrap; }
+    .why-item{ flex:0 0 50%; margin-bottom:14px; }
+    .dest{ flex-direction:column; }
+    .dest-card{ height:70px; }
+    .hdr{ flex-direction:column; gap:10px; text-align:center; }
+    .gz-logo{ text-align:center; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Simulation banner -->
+  <div class="sim">▶ PHISHING SIMULATION — Trust PhishGuard &nbsp;|&nbsp; trust-gozayaan-travel-oct26</div>
+
+  <!-- Header -->
+  <div class="hdr phish-technique" data-name="Visual Imitation" data-colour="#ff9b99">
+    <div class="tbl-logo">
+      <div class="tbl-icon">t</div>
+      <div class="tbl-text">
+        <div class="tbl-name">Trust Bank</div>
+        <div class="tbl-sub">A Bank for Financial Inclusion</div>
+      </div>
+    </div>
+    <div class="gz-logo">
+      <div class="gz-name">Go<span style="color:#E31E24;">Z</span>ayaan<span class="plane"> ✈</span></div>
+      <div class="gz-sub">Travel Beyond Boundaries</div>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="badge phish-technique" data-name="Personalized Information" data-colour="#c9daf8">Exclusive Cardholder Offer</div>
+    <h1>Using Trust Bank cards<br>Enjoy travel discounts<br>with <span class="gz">GoZayaan!</span></h1>
+    <p>Dear {{name}}, make your next journey more affordable with exclusive cardholder discounts on flights and hotels.</p>
+  </div>
+
+  <!-- Offer cards -->
+  <div class="offers phish-technique" data-name="Discounts & Rewards" data-colour="#b6d7a8">
+    <div class="offer flight">
+      <div class="offer-ic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0C5C35" stroke-width="2" stroke-linecap="round">
+          <path d="M21 16v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>
+          <path d="M3.5 16l17 0M12 3l8 6-8 2-8-2z"/>
+        </svg>
+      </div>
+      <div class="offer-body">
+        <div class="up">Up to</div>
+        <div><span class="pct">10%</span> <span class="off">OFF</span></div>
+        <div class="lbl">on Flights</div>
+      </div>
+    </div>
+    <div class="offer hotel">
+      <div class="offer-ic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1E4DB7" stroke-width="2" stroke-linecap="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </div>
+      <div class="offer-body">
+        <div class="up">Up to</div>
+        <div><span class="pct">65%</span> <span class="off">OFF</span></div>
+        <div class="lbl">on Hotels</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Info strip -->
+  <div class="info-strip">
+    <div class="info-cell phish-technique" data-name="Urgency" data-colour="#ffe599">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0C5C35" stroke-width="2" stroke-linecap="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      <div>
+        <div class="lbl">Offer Valid Till</div>
+        <div class="val">October 31, 2026</div>
+      </div>
+    </div>
+    <div class="info-cell phish-technique" data-name="Authority Figures" data-colour="#e6b8af">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0C5C35" stroke-width="2" stroke-linecap="round">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.35 2 2 0 0 1 3.59 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.88a16 16 0 0 0 6.29 6.29l.88-.88a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      <div>
+        <div class="lbl">For Details Call</div>
+        <div class="val">+8809678332211</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Why section -->
+  <div class="why">
+    <h2>Why Book with Trust Bank Cards?</h2>
+    <div class="why-grid">
+      <div class="why-item">
+        <div class="why-icon g1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0C5C35" stroke-width="2" stroke-linecap="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <p>Exclusive<br>Cardholder Offer</p>
+      </div>
+      <div class="why-item">
+        <div class="why-icon g2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1E4DB7" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+          </svg>
+        </div>
+        <p>Great Savings on<br>Flights &amp; Hotels</p>
+      </div>
+      <div class="why-item">
+        <div class="why-icon g1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0C5C35" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </div>
+        <p>Global Travel<br>Destinations</p>
+      </div>
+      <div class="why-item">
+        <div class="why-icon g2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1E4DB7" stroke-width="2" stroke-linecap="round">
+            <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+          </svg>
+        </div>
+        <p>Easy &amp; Convenient<br>Booking</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-wrap">
+    <a href="{{tracking_link}}" class="cta-btn phish-technique" data-name="Call to action" data-colour="#99b8ff">BOOK NOW <span class="arrow">›</span></a>
+  </div>
+
+  <!-- Destination strip -->
+  <div class="dest">
+    <div class="dest-card d1">
+      <div class="dest-icon">🏙️</div>
+      <div class="label">Dubai</div>
+    </div>
+    <div class="dest-card d2">
+      <div class="dest-icon">🏝️</div>
+      <div class="label">Maldives</div>
+    </div>
+    <div class="dest-card d3">
+      <div class="dest-icon">🛕</div>
+      <div class="label">Bangkok</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-tbl tbl-logo">
+      <div class="tbl-icon" style="width:30px;height:30px;font-size:14px;">t</div>
+      <div class="tbl-text">
+        <div class="tbl-name">Trust Bank</div>
+        <div class="tbl-sub">A Bank for Financial Inclusion</div>
+      </div>
+    </div>
+    <div class="social">
+      <div class="s-label">Follow Us</div>
+      <div class="social-icons">
+        <div class="s-ic fb">
+          <svg viewBox="0 0 24 24" fill="#fff"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+        </div>
+        <div class="s-ic li">
+          <svg viewBox="0 0 24 24" fill="#fff"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6zM2 9h4v12H2z"/><circle cx="4" cy="4" r="2" fill="#fff"/></svg>
+        </div>
+        <div class="s-ic yt">
+          <svg viewBox="0 0 24 24" fill="#fff"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#FF0000"/></svg>
+        </div>
+        <div class="s-ic ig">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+            <rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="#fff" stroke="none"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <div class="footer-gz gz-logo">
+      <div class="gz-name" style="font-size:16px;">Go<span style="color:#E31E24;">Z</span>ayaan ✈</div>
+      <div class="gz-sub">Travel Beyond Boundaries</div>
+    </div>
+  </div>
+
+  <!-- T&C bar -->
+  <div class="tc-bar">
+    Terms &amp; Conditions Apply. &nbsp;&bull;&nbsp; Suspect Phishing? <a href="{{report_link}}">Report to Information Security</a>
+  </div>
+
+</div>
+</body>
+</html>
