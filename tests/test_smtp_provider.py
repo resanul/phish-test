@@ -339,14 +339,18 @@ class SMTPProviderUnitTests(unittest.TestCase):
     def test_establish_http_tunnel_truncated_response_raises(self):
         s1, s2 = socket.socketpair()
         try:
-            s2.sendall(b"HTTP/1.1 200 OK\r\n")
-            try:
-                s2.shutdown(socket.SHUT_WR)
-            except OSError:
-                pass
-            s2.close()
+            def server_peer():
+                try:
+                    s2.recv(1024)
+                    s2.sendall(b"HTTP/1.1 200 OK\r\n")
+                    s2.close()
+                except OSError:
+                    pass
+            t = threading.Thread(target=server_peer)
+            t.start()
             with self.assertRaises(self.server.ProxyConnectionError) as ctx:
                 self.server.establish_http_tunnel(s1, "smtp.gmail.com", 587, timeout=2)
+            t.join()
             self.assertTrue(any(w in str(ctx.exception).lower() for w in ("truncated", "incomplete", "socket error")))
         finally:
             s1.close()

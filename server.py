@@ -1054,7 +1054,12 @@ def establish_http_tunnel(sock, target_host, target_port, proxy_user=None, proxy
         req_lines.append(f"Proxy-Authorization: Basic {b64}")
 
     req_data = ("\r\n".join(req_lines) + "\r\n\r\n").encode("iso-8859-1")
-    sock.sendall(req_data)
+    try:
+        sock.sendall(req_data)
+    except (socket.timeout, TimeoutError) as e:
+        raise ProxyConnectionError(f"Timeout sending HTTP CONNECT request to proxy: {e}") from e
+    except OSError as e:
+        raise ProxyConnectionError(f"Socket error while sending HTTP CONNECT request: {e}") from e
 
     header_bytes = bytearray()
     while not header_bytes.endswith(b"\r\n\r\n"):
