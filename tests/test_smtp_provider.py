@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import importlib.util
 import os
+import socket
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -254,11 +256,215 @@ class SMTPProviderUnitTests(unittest.TestCase):
         response_data=[]
         h.sendbody=lambda code,body,ctype="text/html",extra=None: response_data.append((code,body,extra))
 
-        h.do_GET()
+        with patch.object(self.server, "smtp_diagnostics", return_value=[{"stage":"DNS","status":"PASS","detail":"Resolved 1 address(es)."},{"stage":"TCP","status":"PASS","detail":"TCP tunnel established via proxy 172.31.105.10:3128."}]):
+            h.do_GET()
         self.assertEqual(len(response_data),1)
         self.assertEqual(response_data[0][0],200)
         self.assertIn("SMTP Connectivity Diagnostics",response_data[0][1])
         self.assertIn("Diag Test",response_data[0][1])
+
+    def test_get_smtp_proxy_config_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = self.server.get_smtp_proxy_config()
+            self.assertTrue(cfg["enabled"])
+            self.assertEqual(cfg["host"], "172.31.105.10")
+            self.assertEqual(cfg["port"], 3128)
+            self.assertEqual(cfg["source"], "default")
+
+    def test_get_smtp_proxy_config_from_smtp_proxy_url(self):
+        with patch.dict(os.environ, {"SMTP_PROXY": "http://user1:pass1@proxy.corp.test:8080"}):
+            cfg = self.server.get_smtp_proxy_config()
+            self.assertTrue(cfg["enabled"])
+            self.assertEqual(cfg["host"], "proxy.corp.test")
+            self.assertEqual(cfg["port"], 8080)
+            self.assertEqual(cfg["username"], "user1")
+            self.assertEqual(cfg["password"], "pass1")
+            self.assertEqual(cfg["source"], "SMTP_PROXY")
+
+    def test_get_smtp_proxy_config_from_smtp_proxy_host_port(self):
+        with patch.dict(os.environ, {"SMTP_PROXY": "", "SMTP_PROXY_HOST": "192.168.10.50", "SMTP_PROXY_PORT": "3129"}):
+            cfg = self.server.get_smtp_proxy_config()
+            self.assertTrue(cfg["enabled"])
+            self.assertEqual(cfg["host"], "192.168.10.50")
+            self.assertEqual(cfg["port"], 3129)
+            self.assertEqual(cfg["source"], "SMTP_PROXY_HOST")
+
+    def test_get_smtp_proxy_config_direct_connect_explicit(self):
+        with patch.dict(os.environ, {"SMTP_DIRECT_CONNECT": "1"}):
+            cfg = self.server.get_smtp_proxy_config()
+            self.assertFalse(cfg["enabled"])
+            self.assertEqual(cfg["source"], "direct")
+
+        with patch.dict(os.environ, {"SMTP_PROXY": "direct"}):
+            cfg = self.server.get_smtp_proxy_config()
+            self.assertFalse(cfg["enabled"])
+            self.assertEqual(cfg["source"], "direct")
+
+    def test_establish_http_tunnel_success_and_preserves_greeting(self):
+        s1, s2 = socket.socketpair()
+        try:
+            s2.sendall(b"HTTP/1.1 200 Connection established\r\nProxy-Agent: Squid\r\n\r\n220 smtp.gmail.com ESMTP PhishGuard\r\n")
+            self.server.establish_http_tunnel(s1, "smtp.gmail.com", 587, timeout=2)
+            req_data = s2.recv(1024)
+            self.assertIn(b"CONNECT smtp.gmail.com:587 HTTP/1.1", req_data)
+            self.assertIn(b"Host: smtp.gmail.com:587", req_data)
+            greeting = s1.recv(1024)
+            self.assertEqual(greeting, b"220 smtp.gmail.com ESMTP PhishGuard\r\n")
+        finally:
+            s1.close()
+            s2.close()
+
+    def test_establish_http_tunnel_forbidden_403(self):
+        s1, s2 = socket.socketpair()
+        try:
+            s2.sendall(b"HTTP/1.1 403 Forbidden\r\nServer: Cisco-WSA\r\n\r\n")
+            with self.assertRaises(self.server.ProxyConnectionError) as ctx:
+                self.server.establish_http_tunnel(s1, "smtp.gmail.com", 587, timeout=2)
+            self.assertIn("403 Forbidden", str(ctx.exception))
+        finally:
+            s1.close()
+            s2.close()
+
+    def test_establish_http_tunnel_with_proxy_auth(self):
+        s1, s2 = socket.socketpair()
+        try:
+            s2.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            self.server.establish_http_tunnel(s1, "smtp.gmail.com", 587, proxy_user="proxyadmin", proxy_pass="secret999", timeout=2)
+            req_data = s2.recv(1024)
+            self.assertIn(b"Proxy-Authorization: Basic ", req_data)
+        finally:
+            s1.close()
+            s2.close()
+
+    def test_establish_http_tunnel_truncated_response_raises(self):
+        s1, s2 = socket.socketpair()
+        try:
+            s2.sendall(b"HTTP/1.1 200 OK\r\n")
+            try:
+                s2.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
+            s2.close()
+            with self.assertRaises(self.server.ProxyConnectionError) as ctx:
+                self.server.establish_http_tunnel(s1, "smtp.gmail.com", 587, timeout=2)
+            self.assertTrue(any(w in str(ctx.exception).lower() for w in ("truncated", "incomplete", "socket error")))
+        finally:
+            s1.close()
+
+    def test_proxied_smtp_lifecycle_with_mock_proxy(self):
+        proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        proxy_sock.bind(("127.0.0.1", 0))
+        proxy_port = proxy_sock.getsockname()[1]
+        proxy_sock.listen(1)
+
+        def mock_proxy_worker():
+            conn, _ = proxy_sock.accept()
+            req = bytearray()
+            while not req.endswith(b"\r\n\r\n"):
+                req.extend(conn.recv(1))
+            conn.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            conn.sendall(b"220 mock-smtp.test ESMTP\r\n")
+            conn.recv(1024)
+            conn.sendall(b"250-mock-smtp.test\r\n250 HELP\r\n")
+            conn.recv(1024)
+            conn.sendall(b"221 Bye\r\n")
+            conn.close()
+
+        thread = threading.Thread(target=mock_proxy_worker)
+        thread.start()
+
+        with patch.dict(os.environ, {"SMTP_PROXY_HOST": "127.0.0.1", "SMTP_PROXY_PORT": str(proxy_port)}):
+            smtp = self.server.ProxiedSMTP("smtp.gmail.com", 587, timeout=5)
+            code, _ = smtp.ehlo()
+            self.assertEqual(code, 250)
+            smtp.quit()
+
+        thread.join()
+        proxy_sock.close()
+
+    def test_smtp_diagnostics_with_mock_proxy_success(self):
+        proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        proxy_sock.bind(("127.0.0.1", 0))
+        proxy_port = proxy_sock.getsockname()[1]
+        proxy_sock.listen(5)
+
+        def mock_proxy():
+            conn1, _ = proxy_sock.accept()
+            req = bytearray()
+            while not req.endswith(b"\r\n\r\n"):
+                req.extend(conn1.recv(1))
+            conn1.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            conn1.close()
+
+            conn2, _ = proxy_sock.accept()
+            req2 = bytearray()
+            while not req2.endswith(b"\r\n\r\n"):
+                req2.extend(conn2.recv(1))
+            conn2.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            conn2.sendall(b"220 smtp.gmail.com ESMTP\r\n")
+            conn2.recv(1024)
+            conn2.sendall(b"250-smtp.gmail.com\r\n250 HELP\r\n")
+            conn2.recv(1024)
+            conn2.sendall(b"221 Bye\r\n")
+            conn2.close()
+
+        thread = threading.Thread(target=mock_proxy)
+        thread.start()
+
+        profile = {
+            "name": "Proxy Gmail",
+            "host": "127.0.0.1",
+            "port": 587,
+            "security": "None",
+            "username": "",
+            "from_name": "Test",
+            "from_email": "test@example.com"
+        }
+        with patch.dict(os.environ, {"SMTP_PROXY_HOST": "127.0.0.1", "SMTP_PROXY_PORT": str(proxy_port)}):
+            results = self.server.smtp_diagnostics(profile)
+
+        thread.join()
+        proxy_sock.close()
+
+        stages = {r["stage"]: r for r in results}
+        self.assertEqual(stages["DNS"]["status"], "PASS")
+        self.assertEqual(stages["TCP"]["status"], "PASS")
+        self.assertIn("TCP tunnel established via proxy", stages["TCP"]["detail"])
+        self.assertEqual(stages["TLS"]["status"], "PASS")
+
+    def test_smtp_diagnostics_tcp_stage_reports_proxy_rejection_403(self):
+        proxy_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        proxy_sock.bind(("127.0.0.1", 0))
+        proxy_port = proxy_sock.getsockname()[1]
+        proxy_sock.listen(1)
+
+        def mock_proxy():
+            conn, _ = proxy_sock.accept()
+            req = bytearray()
+            while not req.endswith(b"\r\n\r\n"):
+                req.extend(conn.recv(1))
+            conn.sendall(b"HTTP/1.1 403 Forbidden\r\nServer: Cisco-WSA\r\n\r\n")
+            conn.close()
+
+        thread = threading.Thread(target=mock_proxy)
+        thread.start()
+
+        profile = {
+            "name": "Blocked Profile",
+            "host": "smtp.gmail.com",
+            "port": 587,
+            "security": "STARTTLS",
+        }
+        with patch.dict(os.environ, {"SMTP_PROXY_HOST": "127.0.0.1", "SMTP_PROXY_PORT": str(proxy_port)}):
+            results = self.server.smtp_diagnostics(profile)
+
+        thread.join()
+        proxy_sock.close()
+
+        stages = {r["stage"]: r for r in results}
+        self.assertEqual(stages["DNS"]["status"], "PASS")
+        self.assertEqual(stages["TCP"]["status"], "FAIL")
+        self.assertIn("403 Forbidden", stages["TCP"]["detail"])
 
 if __name__=="__main__":
     unittest.main()

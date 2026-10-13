@@ -80,6 +80,12 @@ Example:
 
 ```bash
 printf 'ADMIN_PASSWORD=%s\n' '<strong-random-password>' > /etc/phish-test.env
+# Approved corporate HTTP proxy for outbound SMTP (defaults to 172.31.105.10:3128):
+printf 'SMTP_PROXY_HOST=172.31.105.10\nSMTP_PROXY_PORT=3128\n' >> /etc/phish-test.env
+# Or URL format:
+# printf 'SMTP_PROXY=http://172.31.105.10:3128\n' >> /etc/phish-test.env
+# Or explicit direct connection mode (bypassing proxy if allowed by policy):
+# printf 'SMTP_DIRECT_CONNECT=1\n' >> /etc/phish-test.env
 chmod 600 /etc/phish-test.env
 systemctl daemon-reload
 systemctl restart phish-test
@@ -109,14 +115,16 @@ Reusable simulation variables are intentionally limited to non-secret recipient/
 
 The platform must never request, collect, store, export or process passwords, OTPs, PINs, CVVs, full card numbers or authentication secrets.
 
-### SMTP diagnostics
+### SMTP diagnostics and corporate proxy routing
+
+All outbound SMTP traffic (diagnostics, template test sends, campaign test sends, and live campaign dispatches) routes through the corporate HTTP CONNECT proxy (`172.31.105.10:3128` by default, configurable via `SMTP_PROXY`, `SMTP_PROXY_HOST`/`SMTP_PROXY_PORT`, or `SMTP_DIRECT_CONNECT=1`).
 
 From an enabled SMTP profile, **Run Diagnostics** performs:
 
-1. DNS resolution
-2. TCP connection
-3. TLS/session negotiation
-4. SMTP authentication when configured
+1. DNS resolution (verifies proxy host and SMTP destination)
+2. TCP connection (establishes HTTP CONNECT tunnel to proxy, reporting any 403 or gateway rejections)
+3. TLS/session negotiation (STARTTLS or implicit SSL/TLS with full certificate verification over the tunnel)
+4. SMTP authentication when configured (password or OAuth2/XOAUTH2)
 5. Optional one-message send to an explicitly supplied test recipient
 
 Diagnostic output never displays SMTP passwords or tokens.

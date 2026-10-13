@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs, urlencode, quote_plus
+from urllib.parse import urlparse, parse_qs, urlencode, quote_plus, urlsplit, unquote
 from http import cookies
 from datetime import datetime, timezone, timedelta
 from email.message import EmailMessage
@@ -974,33 +974,212 @@ def audit(admin,action,details,ip):
     c.execute("INSERT INTO audit_logs(ts,admin,action,details,ip) VALUES(?,?,?,?,?)",(now(),admin,action,safe_details,ip))
     c.commit(); c.close()
 
+DEFAULT_SMTP_PROXY_HOST = "172.31.105.10"
+DEFAULT_SMTP_PROXY_PORT = 3128
+
+class ProxyConnectionError(OSError):
+    """Raised when an HTTP CONNECT proxy tunnel cannot be established or is rejected."""
+    pass
+
+def get_smtp_proxy_config():
+    """
+    Returns active SMTP proxy configuration dict:
+    {
+        'enabled': bool,
+        'host': str,
+        'port': int,
+        'username': str or None,
+        'password': str or None,
+        'source': str
+    }
+    Precedence:
+    1. Explicit direct connect mode (SMTP_DIRECT_CONNECT=1/true, or SMTP_PROXY in ('direct', 'none', 'off', '0'))
+    2. SMTP_PROXY URL / string (e.g. http://172.31.105.10:3128 or 172.31.105.10:3128)
+    3. SMTP_PROXY_HOST and SMTP_PROXY_PORT
+    4. Default approved corporate proxy: 172.31.105.10:3128
+    """
+    direct_val = os.environ.get("SMTP_DIRECT_CONNECT", "").strip().lower()
+    if direct_val in ("1", "true", "yes", "on"):
+        return {"enabled": False, "host": "", "port": 0, "username": None, "password": None, "source": "direct"}
+
+    proxy_url = os.environ.get("SMTP_PROXY", "").strip()
+    if proxy_url:
+        if proxy_url.lower() in ("direct", "none", "off", "disabled", "0"):
+            return {"enabled": False, "host": "", "port": 0, "username": None, "password": None, "source": "direct"}
+        raw = proxy_url if "://" in proxy_url else ("http://" + proxy_url)
+        parsed = urlsplit(raw)
+        host = parsed.hostname or ""
+        port = parsed.port or DEFAULT_SMTP_PROXY_PORT
+        user = unquote(parsed.username) if parsed.username else os.environ.get("SMTP_PROXY_USER")
+        pwd = unquote(parsed.password) if parsed.password else os.environ.get("SMTP_PROXY_PASS")
+        return {"enabled": bool(host), "host": host, "port": port, "username": user, "password": pwd, "source": "SMTP_PROXY"}
+
+    proxy_host = os.environ.get("SMTP_PROXY_HOST", "").strip()
+    if proxy_host:
+        if proxy_host.lower() in ("direct", "none", "off", "disabled"):
+            return {"enabled": False, "host": "", "port": 0, "username": None, "password": None, "source": "direct"}
+        port_raw = os.environ.get("SMTP_PROXY_PORT", "").strip()
+        port = int(port_raw) if port_raw.isdigit() else DEFAULT_SMTP_PROXY_PORT
+        user = os.environ.get("SMTP_PROXY_USER") or None
+        pwd = os.environ.get("SMTP_PROXY_PASS") or None
+        return {"enabled": True, "host": proxy_host, "port": port, "username": user, "password": pwd, "source": "SMTP_PROXY_HOST"}
+
+    return {
+        "enabled": True,
+        "host": DEFAULT_SMTP_PROXY_HOST,
+        "port": DEFAULT_SMTP_PROXY_PORT,
+        "username": None,
+        "password": None,
+        "source": "default",
+    }
+
+def establish_http_tunnel(sock, target_host, target_port, proxy_user=None, proxy_pass=None, timeout=15):
+    """
+    Sends an HTTP CONNECT request to the proxy and validates the tunnel response.
+    Reads response headers byte-by-byte up to b'\\r\\n\\r\\n' to prevent
+    consuming or corrupting any subsequent SMTP greeting banner bytes.
+    """
+    if timeout is not None:
+        sock.settimeout(timeout)
+
+    req_lines = [
+        f"CONNECT {target_host}:{target_port} HTTP/1.1",
+        f"Host: {target_host}:{target_port}",
+        "Proxy-Connection: keep-alive",
+        "User-Agent: Trust-PhishGuard",
+    ]
+    if proxy_user and proxy_pass:
+        auth_bytes = f"{proxy_user}:{proxy_pass}".encode("utf-8")
+        b64 = base64.b64encode(auth_bytes).decode("ascii")
+        req_lines.append(f"Proxy-Authorization: Basic {b64}")
+
+    req_data = ("\r\n".join(req_lines) + "\r\n\r\n").encode("iso-8859-1")
+    sock.sendall(req_data)
+
+    header_bytes = bytearray()
+    while not header_bytes.endswith(b"\r\n\r\n"):
+        try:
+            chunk = sock.recv(1)
+        except (socket.timeout, TimeoutError) as e:
+            raise ProxyConnectionError(f"Timeout waiting for HTTP CONNECT response from proxy: {e}") from e
+        except OSError as e:
+            raise ProxyConnectionError(f"Socket error or truncated response while reading HTTP CONNECT response: {e}") from e
+
+        if not chunk:
+            break
+        header_bytes.extend(chunk)
+        if len(header_bytes) > 65536:
+            raise ProxyConnectionError("Proxy response headers exceeded maximum allowed size (64KB)")
+
+    if not header_bytes or not header_bytes.endswith(b"\r\n\r\n"):
+        raise ProxyConnectionError(f"Incomplete or truncated response from proxy while tunneling to {target_host}:{target_port}")
+
+    status_line = header_bytes.decode("iso-8859-1", errors="replace").split("\r\n", 1)[0]
+    parts = status_line.split(" ", 2)
+    if len(parts) < 2:
+        raise ProxyConnectionError(f"Malformed proxy response: {status_line[:100]}")
+    try:
+        status_code = int(parts[1])
+    except ValueError:
+        raise ProxyConnectionError(f"Malformed proxy response status code: {status_line[:100]}")
+
+    if status_code != 200:
+        reason = parts[2] if len(parts) > 2 else ""
+        detail = f"{status_code} {reason}".strip()
+        raise ProxyConnectionError(f"HTTP CONNECT to {target_host}:{target_port} rejected by proxy: {detail}")
+
+def open_smtp_socket(target_host, target_port, timeout=15):
+    """
+    Creates and returns a connected socket to (target_host, target_port).
+    If an HTTP proxy is configured, connects to the proxy and establishes
+    an HTTP CONNECT tunnel before returning the socket.
+    """
+    proxy = get_smtp_proxy_config()
+    if not proxy or not proxy.get("enabled"):
+        return socket.create_connection((target_host, target_port), timeout=timeout)
+
+    proxy_host = proxy["host"]
+    proxy_port = proxy["port"]
+
+    try:
+        sock = socket.create_connection((proxy_host, proxy_port), timeout=timeout)
+    except Exception as e:
+        raise ProxyConnectionError(f"Failed to connect to proxy {proxy_host}:{proxy_port}: {e}") from e
+
+    try:
+        establish_http_tunnel(
+            sock,
+            target_host,
+            target_port,
+            proxy_user=proxy.get("username"),
+            proxy_pass=proxy.get("password"),
+            timeout=timeout,
+        )
+    except Exception:
+        try:
+            sock.close()
+        except Exception:
+            pass
+        raise
+
+    return sock
+
+class ProxiedSMTP(smtplib.SMTP):
+    """SMTP client that routes connections through an HTTP CONNECT proxy tunnel when configured."""
+    def _get_socket(self, host, port, timeout):
+        if timeout is not None and not timeout:
+            raise ValueError("Non-blocking socket (timeout=0) is not supported")
+        return open_smtp_socket(host, port, timeout=timeout)
+
+class ProxiedSMTP_SSL(smtplib.SMTP_SSL):
+    """SMTP_SSL client that routes connections through an HTTP CONNECT proxy tunnel when configured."""
+    def _get_socket(self, host, port, timeout):
+        if timeout is not None and not timeout:
+            raise ValueError("Non-blocking socket (timeout=0) is not supported")
+        sock = open_smtp_socket(host, port, timeout=timeout)
+        return self.context.wrap_socket(sock, server_hostname=self._host)
+
 def smtp_diagnostics(profile,to_email=""):
     result=[]
     host=profile["host"]; port=int(profile["port"]); security=profile["security"]
     if not host:
         return [{"stage":"DNS","status":"FAIL","detail":"SMTP host is empty."}]
+    proxy_cfg=get_smtp_proxy_config()
     try:
-        addresses=socket.getaddrinfo(host,port,type=socket.SOCK_STREAM)
-        result.append({"stage":"DNS","status":"PASS","detail":"Resolved %d address(es)."%len(addresses)})
+        if proxy_cfg and proxy_cfg.get("enabled"):
+            p_addrs=socket.getaddrinfo(proxy_cfg["host"],proxy_cfg["port"],type=socket.SOCK_STREAM)
+            try:
+                t_addrs=socket.getaddrinfo(host,port,type=socket.SOCK_STREAM)
+                detail="Resolved proxy %s (%d addr) and destination %s (%d addr)."%(proxy_cfg["host"],len(p_addrs),host,len(t_addrs))
+            except Exception:
+                detail="Resolved proxy %s (%d addr). Destination %s delegated to proxy."%(proxy_cfg["host"],len(p_addrs),host)
+            result.append({"stage":"DNS","status":"PASS","detail":detail})
+        else:
+            addresses=socket.getaddrinfo(host,port,type=socket.SOCK_STREAM)
+            result.append({"stage":"DNS","status":"PASS","detail":"Resolved %d address(es)."%len(addresses)})
     except Exception as e:
-        return result+[{"stage":"DNS","status":"FAIL","detail":"DNS resolution failed."}]
+        return result+[{"stage":"DNS","status":"FAIL","detail":"DNS resolution failed: %s"%esc(sanitize_audit_details(str(e)[:120]))}]
     try:
-        raw=socket.create_connection((host,port),timeout=10)
+        raw=open_smtp_socket(host,port,timeout=10)
         raw.close()
-        result.append({"stage":"TCP","status":"PASS","detail":"TCP connection established."})
-    except Exception:
-        return result+[{"stage":"TCP","status":"FAIL","detail":"TCP connection failed."}]
+        if proxy_cfg and proxy_cfg.get("enabled"):
+            result.append({"stage":"TCP","status":"PASS","detail":"TCP tunnel established via proxy %s:%d."%(proxy_cfg["host"],proxy_cfg["port"])})
+        else:
+            result.append({"stage":"TCP","status":"PASS","detail":"TCP connection established."})
+    except Exception as e:
+        return result+[{"stage":"TCP","status":"FAIL","detail":"TCP connection failed: %s"%esc(sanitize_audit_details(str(e)[:120]))}]
     smtp=None
     current_stage="TLS"
     try:
         if security=="SSL/TLS":
-            smtp=smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=15)
+            smtp=ProxiedSMTP_SSL(host,port,context=ssl.create_default_context(),timeout=15)
             smtp.ehlo()
         else:
-            smtp=smtplib.SMTP(host,port,timeout=15)
+            smtp=ProxiedSMTP(host,port,timeout=15)
             smtp.ehlo()
             if security=="STARTTLS":
-                smtp.starttls(context=ssl.create_default_context()); smtp.ehlo()
+                smtp.starttls(context=ssl.create_default_context())
+                smtp.ehlo()
         result.append({"stage":"TLS","status":"PASS","detail":"SMTP TLS/session negotiation succeeded."})
         current_stage="AUTH"
         username=profile["username"] if "username" in profile.keys() and profile["username"] else ""
@@ -1025,8 +1204,8 @@ def smtp_diagnostics(profile,to_email=""):
             result.append({"stage":"SEND","status":"SKIP","detail":"No test recipient supplied."})
     except smtplib.SMTPAuthenticationError:
         result.append({"stage":"AUTH","status":"FAIL","detail":"SMTP authentication failed."})
-    except ssl.SSLError:
-        result.append({"stage":"TLS","status":"FAIL","detail":"TLS negotiation failed."})
+    except ssl.SSLError as e:
+        result.append({"stage":"TLS","status":"FAIL","detail":"TLS negotiation failed: %s"%esc(sanitize_audit_details(str(e)[:120]))})
     except Exception as e:
         stage_fail=current_stage if current_stage in ("TLS","AUTH","SEND") else ("SEND" if to_email else "TLS")
         result.append({"stage":stage_fail,"status":"FAIL","detail":"SMTP session operation failed: %s"%esc(sanitize_audit_details(str(e)[:120]))})
@@ -1056,10 +1235,10 @@ def smtp_authenticate(smtp,profile):
 def smtp_connect(profile):
     host=profile["host"]; port=int(profile["port"]); security=profile["security"]
     if security=="SSL/TLS":
-        smtp=smtplib.SMTP_SSL(host,port,context=ssl.create_default_context(),timeout=20)
+        smtp=ProxiedSMTP_SSL(host,port,context=ssl.create_default_context(),timeout=20)
         smtp.ehlo()
     else:
-        smtp=smtplib.SMTP(host,port,timeout=20)
+        smtp=ProxiedSMTP(host,port,timeout=20)
         smtp.ehlo()
         if security=="STARTTLS":
             smtp.starttls(context=ssl.create_default_context())

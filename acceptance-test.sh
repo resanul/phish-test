@@ -72,6 +72,14 @@ if [ -f "$APP/tests/test_smtp_provider.py" ]; then
   pass "SMTP provider regression suite passes"
 fi
 
+if grep -q 'def establish_http_tunnel' "$APP/server.py" \
+   && grep -q 'def open_smtp_socket' "$APP/server.py" \
+   && grep -q 'class ProxiedSMTP' "$APP/server.py"; then
+  pass "SMTP HTTP CONNECT proxy tunneling contract is present"
+else
+  fail "SMTP HTTP CONNECT proxy tunneling contract is missing or incomplete"
+fi
+
 # Static contract checks guard the rollback script's recovery path without performing a rollback.
 if grep -Fq 'git reset --hard "$TARGET"' "$APP/rollback.sh" \
    && grep -Fq 'git reset --hard "$CURRENT"' "$APP/rollback.sh" \
