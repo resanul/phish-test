@@ -403,7 +403,7 @@ def seed_landing_pages(c):
         row = c.execute("SELECT id, name, html_body, version FROM landing_pages WHERE template=?", (item["template"],)).fetchone()
         if row:
             is_placeholder = row["name"].startswith("Landing Page ") or len(row["html_body"] or "") < 1200
-            if is_placeholder and html_body:
+            if (is_placeholder or item["name"] == row["name"]) and html_body and row["html_body"] != html_body:
                 c.execute("UPDATE landing_pages SET name=?, html_body=?, text_body=?, updated_at=? WHERE id=?",
                           (item["name"], html_body, "Authorized security-awareness simulation landing page.", now(), row["id"]))
                 c.execute("INSERT OR IGNORE INTO landing_page_versions(landing_page_id,version,html_body,text_body,created_at,created_by) VALUES(?,?,?,?,?,?)",
@@ -414,6 +414,10 @@ def seed_landing_pages(c):
             new_id = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
             c.execute("INSERT OR IGNORE INTO landing_page_versions(landing_page_id,version,html_body,text_body,created_at,created_by) VALUES(?,1,?,?,?,?)",
                       (new_id, html_body, "Authorized security-awareness simulation landing page.", now(), ADMIN_USERNAME))
+    try:
+        c.execute("DELETE FROM landing_pages WHERE name LIKE 'Landing Page %' AND id > 10")
+    except Exception:
+        pass
 
 def db():
     c=sqlite3.connect(DB)
@@ -4310,12 +4314,12 @@ function applyFilters() {{
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
             total_lp=len(rows)
             active_lp=sum(1 for r in rows if r["status"]=="Enabled")
-            brand_map={"1":"Apex","2":"Trust Bank","3":"Microsoft 365","4":"Google Workspace","5":"HR Portal","6":"GlobalProtect","7":"bKash / Bank","8":"Zoom","9":"AWS","10":"Awareness Training"}
+            brand_map={"1":"Apex","2":"Trust Bank","3":"Microsoft 365","4":"Google Workspace","5":"HR Portal","6":"GlobalProtect","7":"bKash / Bank","8":"Zoom","9":"AWS","10":"Awareness Training","11":"Trust Bank × GoZayaan","trust-gozayaan-travel-oct26":"Trust Bank × GoZayaan"}
             table_rows=[]
             for r in rows:
                 tpl_str=str(r["template"] or "")
                 b_name=brand_map.get(tpl_str,"Enterprise Portal")
-                test_link=f'/{tpl_str}.html' if tpl_str.isdigit() else f'/admin/landing-pages/preview?id={r["id"]}'
+                test_link=f'/{tpl_str}.html' if (tpl_str.isdigit() or tpl_str.startswith("trust-")) else f'/admin/landing-pages/preview?id={r["id"]}'
                 table_rows.append(f'''<tr>
                   <td><b>#{r["id"]}</b></td>
                   <td>
@@ -5898,6 +5902,12 @@ function escapeHtml(str) {{
           </div>
           <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Instant interactive drill with phishing red flag breakdown.</p>
         </div>
+        <div class="preset-card" onclick="loadPreset('11')">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>✈️</span> Trust Bank × GoZayaan Travel
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Exclusive cardholder 10% flight &amp; 65% hotel discounts portal.</p>
+        </div>
       </div>
     </div>
 
@@ -7350,19 +7360,24 @@ syncAudience();
                 t=f"{t_num}.html"
 
             body=None
-            c=db()
-            lp_row=c.execute("SELECT html_body FROM landing_pages WHERE (template=? OR id=?) AND html_body IS NOT NULL AND length(html_body)>0",(t_num,t_num)).fetchone()
-            c.close()
-            if lp_row and lp_row["html_body"]:
-                body=lp_row["html_body"]
-            else:
-                for cand in (os.path.join(TEMPLATES,t), os.path.join(os.path.dirname(__file__),"templates",t), os.path.join(TEMPLATES,f"{t_num}.html"), os.path.join(os.path.dirname(__file__),"templates",f"{t_num}.html")):
-                    if os.path.isfile(cand):
-                        try:
-                            with open(cand,"rb") as f: body=f.read().decode("utf-8","replace")
-                            break
-                        except Exception:
-                            pass
+            for cand in (os.path.join(TEMPLATES,t), os.path.join(os.path.dirname(__file__),"templates",t), os.path.join(TEMPLATES,f"{t_num}.html"), os.path.join(os.path.dirname(__file__),"templates",f"{t_num}.html")):
+                if cand and os.path.isfile(cand):
+                    try:
+                        with open(cand,"rb") as f: body=f.read().decode("utf-8","replace")
+                        break
+                    except Exception:
+                        pass
+
+            if body is None:
+                c=db()
+                lp_row=c.execute("SELECT html_body FROM landing_pages WHERE template=? AND html_body IS NOT NULL AND length(html_body)>0 ORDER BY id DESC LIMIT 1",(t_num,)).fetchone()
+                if not lp_row and is_landing_path:
+                    req_id=q.get("id",[""])[0]
+                    if req_id.isdigit():
+                        lp_row=c.execute("SELECT html_body FROM landing_pages WHERE id=? AND html_body IS NOT NULL AND length(html_body)>0",(int(req_id),)).fetchone()
+                c.close()
+                if lp_row and lp_row["html_body"]:
+                    body=lp_row["html_body"]
 
             if body is not None:
                 tpl_key = str(t_num or t or "1")
