@@ -1383,9 +1383,19 @@ def queue_campaign(campaign_id):
         c.close()
         raise ValueError("Campaign not found")
     if campaign["group_name"]:
-        recipients=c.execute("SELECT id FROM recipients WHERE status!='Suppressed' AND group_name=? ORDER BY id",(campaign["group_name"],)).fetchall()
+        gname = campaign["group_name"]
+        grow = c.execute("SELECT department FROM groups_tbl WHERE lower(name)=lower(?)", (gname,)).fetchone()
+        depts = [d.strip().lower() for d in (grow["department"] or "").split(",") if d.strip()] if grow else []
+        if depts:
+            placeholders = ",".join(["?"] * len(depts))
+            recipients = c.execute(f"""SELECT id FROM recipients 
+                                       WHERE status!='Suppressed' 
+                                         AND (lower(group_name)=lower(?) OR ((group_name IS NULL OR group_name='') AND lower(department) IN ({placeholders})))
+                                       ORDER BY id""", [gname] + depts).fetchall()
+        else:
+            recipients = c.execute("SELECT id FROM recipients WHERE status!='Suppressed' AND lower(group_name)=lower(?) ORDER BY id", (gname,)).fetchall()
     else:
-        recipients=c.execute("SELECT id FROM recipients WHERE status!='Suppressed' ORDER BY id").fetchall()
+        recipients = c.execute("SELECT id FROM recipients WHERE status!='Suppressed' ORDER BY id").fetchall()
     for rec in recipients:
         c.execute("""INSERT OR IGNORE INTO campaign_queue
                      (campaign_id,recipient_id,status,attempts,next_attempt_at,queued_at,updated_at)
@@ -1503,7 +1513,16 @@ def campaign_prelaunch_validation(campaign, req_host=None):
     landing=c.execute("SELECT * FROM landing_pages WHERE id=? AND status='Enabled'",(campaign["landing_page_id"],)).fetchone() if campaign["landing_page_id"] else None
     template=c.execute("SELECT status,html_body FROM template_library WHERE template=?",(campaign["template"],)).fetchone()
     group=campaign["group_name"] or ""
-    recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(group,group)).fetchone()["n"]
+    if group:
+        grow=c.execute("SELECT department FROM groups_tbl WHERE lower(name)=lower(?)",(group,)).fetchone()
+        depts=[d.strip().lower() for d in (grow["department"] or "").split(",") if d.strip()] if grow else []
+        if depts:
+            placeholders=",".join(["?"]*len(depts))
+            recipient_count=c.execute(f"SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (lower(group_name)=lower(?) OR ((group_name IS NULL OR group_name='') AND lower(department) IN ({placeholders})))",[group]+depts).fetchone()["n"]
+        else:
+            recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND lower(group_name)=lower(?)",(group,)).fetchone()["n"]
+    else:
+        recipient_count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
     c.close()
     if not smtp: errors.append("Enabled SMTP provider is required.")
     if not landing: errors.append("Enabled landing page is required.")
@@ -2762,6 +2781,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/recipients/import":"recipient.import",
         "/admin/recipients/quick_add":"recipient.create",
         "/admin/groups/save":"group.manage",
+        "/admin/groups/delete":"group.manage",
         "/admin/campaigns/control":"campaign.edit",
         "/admin/campaigns/test-send":"campaign.launch",
         "/admin/campaigns/launch":"campaign.launch",
@@ -4455,10 +4475,46 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
 </script>'''
             return self.admin_shell("Recipients",body,"Recipients")
         if path=="/admin/groups":
-            rows=c.execute("SELECT g.id,g.name,g.department,COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name GROUP BY g.id ORDER BY g.id DESC").fetchall(); c.close()
-            total_g=len(rows)
-            total_members=sum(r["members"] or 0 for r in rows)
-            table="".join('<tr><td><b>#%s</b></td><td><b>%s</b></td><td>%s</td><td><span class="pill" style="background:#eaf4ef;color:#087b59">%s Members</span></td></tr>'%(r["id"],esc(r["name"]),esc(r["department"]),r["members"]) for r in rows) or '<tr><td colspan="4">No groups yet.</td></tr>'
+            groups=c.execute("SELECT id,name,department,created_at FROM groups_tbl ORDER BY id DESC").fetchall()
+            group_rows=[]
+            total_members=0
+            for g in groups:
+                gid = g["id"]
+                gname = g["name"]
+                raw_dept = (g["department"] or "").strip()
+                configured_depts = [d.strip() for d in raw_dept.split(",") if d.strip()]
+                member_depts = [r[0] for r in c.execute("SELECT DISTINCT department FROM recipients WHERE lower(group_name)=lower(?) AND department!=''", (gname,)).fetchall()]
+                all_depts = list(dict.fromkeys(configured_depts + member_depts))
+
+                if all_depts:
+                    placeholders = ",".join(["?"] * len(all_depts))
+                    members = c.execute(f"""SELECT COUNT(*) n FROM recipients 
+                                            WHERE lower(group_name)=lower(?) 
+                                               OR ((group_name IS NULL OR group_name='') AND lower(department) IN ({placeholders}))""",
+                                        [gname] + [d.lower() for d in all_depts]).fetchone()["n"]
+                else:
+                    members = c.execute("SELECT COUNT(*) n FROM recipients WHERE lower(group_name)=lower(?)", (gname,)).fetchone()["n"]
+                total_members += members
+
+                if all_depts:
+                    pills = "".join(f'<span class="pill" style="background:#eaf5ef;color:#087b59;font-weight:600;font-size:11px;padding:3px 8px;border-radius:6px;margin:2px 4px 2px 0;display:inline-block">📁 {esc(d)}</span>' for d in all_depts)
+                    dept_count_tag = f'<span style="font-size:11px;font-weight:700;color:#527867;margin-right:6px">{len(all_depts)} Dept{"s" if len(all_depts)!=1 else ""}:</span>' if len(all_depts) > 1 else ''
+                    dept_display = f'<div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px">{dept_count_tag}{pills}</div>'
+                else:
+                    dept_display = '<span style="color:#8ba59b;font-size:12px">—</span>'
+
+                group_rows.append(
+                    f'<tr>'
+                    f'<td><b>#{gid}</b></td>'
+                    f'<td><b>{esc(gname)}</b></td>'
+                    f'<td>{dept_display}</td>'
+                    f'<td><span class="pill" style="background:#eaf4ef;color:#087b59;font-weight:700">{members} Members</span></td>'
+                    f'<td style="text-align:right"><a class="btn" href="/admin/groups?id={gid}" style="padding:4px 10px;font-size:11.5px;font-weight:700">✏️ Edit Group</a></td>'
+                    f'</tr>'
+                )
+            c.close()
+            total_g = len(groups)
+            table = "".join(group_rows) or '<tr><td colspan="5" style="text-align:center;padding:24px;color:#8ba59b">No target groups configured yet.</td></tr>'
             body=f'''<div class="camp-header">
   <div>
     <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Groups</span></div>
@@ -4473,15 +4529,21 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="stat-label">RECIPIENT GROUPS</div><div class="num">{total_g}</div><div class="delta">Targeting groups</div></div>
-  <div class="stat"><div class="stat-label">ASSIGNED MEMBERS</div><div class="num">{total_members}</div><div class="delta">Total group assignments</div></div>
+  <div class="stat"><div class="stat-label">RECIPIENT GROUPS</div><div class="num">{total_g}</div><div class="delta">Targeting divisions &amp; groups</div></div>
+  <div class="stat"><div class="stat-label">ASSIGNED MEMBERS</div><div class="num">{total_members}</div><div class="delta">Total employee assignments</div></div>
 </div>
 
 <div class="card">
-  <h3 style="margin-bottom:14px">Configured Target Groups</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h3 style="margin:0">Configured Target Groups &amp; Divisions</h3>
+      <p style="margin:4px 0 0;font-size:12px;color:#5f786d">Each Division / Group (e.g. <b>IT Division</b>) can hold multiple sub-departments.</p>
+    </div>
+    <a class="btn primary" href="/admin/groups/new" style="font-size:12.5px">+ New Group / Division</a>
+  </div>
   <div class="table-wrap">
     <table class="table" style="width:100%">
-      <thead><tr><th>ID</th><th>Group Name</th><th>Department</th><th>Members</th></tr></thead>
+      <thead><tr><th>ID</th><th>Group / Division</th><th>Departments</th><th>Members</th><th style="text-align:right">Action</th></tr></thead>
       <tbody>{table}</tbody>
     </table>
   </div>
@@ -5228,9 +5290,24 @@ function filterRecTable() {{
     def recipient_profile_form(self,rid=None):
         c=db()
         r=c.execute("SELECT * FROM recipients WHERE id=?",(rid,)).fetchone() if (rid and str(rid).lower()!="new") else None
-        depts=[row[0] for row in c.execute("SELECT DISTINCT department FROM recipients WHERE department!='' UNION SELECT department FROM groups_tbl WHERE department!=''").fetchall()]
-        groups=[row[0] for row in c.execute("SELECT name FROM groups_tbl ORDER BY name").fetchall()]
+        raw_grp_rows = c.execute("SELECT name, department FROM groups_tbl ORDER BY name").fetchall()
+        rec_depts = [row[0] for row in c.execute("SELECT DISTINCT department FROM recipients WHERE department!=''").fetchall()]
         c.close()
+
+        all_depts_set = set(rec_depts)
+        group_names = []
+        group_to_depts = {}
+        for g in raw_grp_rows:
+            gname = g["name"]
+            group_names.append(gname)
+            sub_depts = [d.strip() for d in (g["department"] or "").split(",") if d.strip()]
+            for sd in sub_depts:
+                all_depts_set.add(sd)
+            group_to_depts[gname] = sub_depts
+
+        depts = sorted(all_depts_set, key=lambda s: s.lower())
+        groups = group_names
+        group_depts_json = json.dumps(group_to_depts)
 
         is_new=(r is None)
         if not is_new:
@@ -5306,14 +5383,16 @@ function filterRecTable() {{
 
       <label>
         <span style="font-weight:700;color:#183227">Department</span>
-        <input name="department" value="{v('department')}" list="deptList" maxlength="100" placeholder="Finance & Operations" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+        <input id="recDeptInput" name="department" value="{v('department')}" list="deptList" maxlength="100" placeholder="e.g. Division Head, IT System, Network" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px" oninput="onDeptChanged()">
         <datalist id="deptList">{dept_datalist}</datalist>
+        <div id="deptGroupHint" style="font-size:11.5px;color:#087b59;margin-top:4px;font-weight:600"></div>
       </label>
 
       <label>
-        <span style="font-weight:700;color:#183227">Group / Segment</span>
-        <input name="group_name" value="{v('group_name')}" list="grpList" maxlength="100" placeholder="Finance Dept Drill" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+        <span style="font-weight:700;color:#183227">Group / Segment / Division</span>
+        <input id="recGroupInput" name="group_name" value="{v('group_name')}" list="grpList" maxlength="100" placeholder="e.g. IT Division" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px" oninput="onGroupChanged()">
         <datalist id="grpList">{group_datalist}</datalist>
+        <div id="groupDeptsChips" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap"></div>
       </label>
 
       <label>
@@ -5351,14 +5430,171 @@ function filterRecTable() {{
       {delete_btn}
     </div>
   </form>
-</div>'''
+</div>
+
+<script>
+const groupDeptsMap = {group_depts_json};
+
+function onGroupChanged() {{
+  const gInput = document.getElementById('recGroupInput');
+  const chipContainer = document.getElementById('groupDeptsChips');
+  if (!chipContainer || !gInput) return;
+  const gVal = (gInput.value || '').trim();
+  chipContainer.innerHTML = '';
+  
+  if (gVal && groupDeptsMap[gVal] && groupDeptsMap[gVal].length > 0) {{
+    const depts = groupDeptsMap[gVal];
+    chipContainer.innerHTML = '<span style="font-size:11px;font-weight:700;color:#496b5c;display:block;width:100%;margin-bottom:2px">Departments under ' + escapeHtml(gVal) + ':</span>' + 
+      depts.map(d => '<button type="button" onclick="selectDept(\\'' + escapeHtml(d) + '\\')" style="background:#eaf5ef;color:#087b59;border:1px solid #c2e2d0;border-radius:5px;padding:3px 8px;font-size:11.5px;font-weight:600;cursor:pointer">📁 ' + escapeHtml(d) + '</button>').join(' ');
+  }}
+}}
+
+function selectDept(dept) {{
+  const dInput = document.getElementById('recDeptInput');
+  if (dInput) {{
+    dInput.value = dept;
+    onDeptChanged();
+  }}
+}}
+
+function onDeptChanged() {{
+  const dInput = document.getElementById('recDeptInput');
+  const gInput = document.getElementById('recGroupInput');
+  const hint = document.getElementById('deptGroupHint');
+  if (hint) hint.innerText = '';
+  if (!dInput || !gInput) return;
+  const dVal = (dInput.value || '').trim().toLowerCase();
+  if (!dVal) return;
+  for (const [grp, depts] of Object.entries(groupDeptsMap)) {{
+    if (depts.some(d => d.toLowerCase() === dVal)) {{
+      if (!gInput.value) {{
+        gInput.value = grp;
+        onGroupChanged();
+      }}
+      if (hint) hint.innerText = '✓ Belongs to ' + grp;
+      break;
+    }}
+  }}
+}}
+
+function escapeHtml(str) {{
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}}
+
+onGroupChanged();
+onDeptChanged();
+</script>'''
         return self.admin_shell(page_title,body,"Recipients")
 
     def recipient_import_form(self):
         return self.admin_shell("Import Recipients",'<h1>Import Recipients</h1><div class="card"><form class="form" method="post" action="/admin/recipients/import"><label>Source Name<input name="source_name" maxlength="150" placeholder="HR recipient export - October 2026"></label><label>CSV data<textarea name="csv_data" rows="16" style="width:100%;padding:10px;border:1px solid #ccd9d4;border-radius:8px" placeholder="email,name,employee_id,department,designation,location,manager,language,timezone,group_name"></textarea></label><button class="btn primary">Validate & Import</button></form><p style="font-size:12px;color:#71817b">Supported metadata: email, name, employee_id, department, designation, location, manager, language, timezone, group_name. Duplicate emails are updated; conflicting employee IDs are skipped. Never place passwords, OTPs, PINs, CVVs or card data here.</p></div>',"Recipients")
 
-    def group_form(self):
-        return self.admin_shell("New Group",'<h1>New Group</h1><div class="card"><form class="form" method="post" action="/admin/groups/save"><label>Group Name<input name="name" required maxlength="100"></label><label>Department<input name="department" maxlength="100"></label><button class="btn primary">Save Group</button></form></div>',"Groups & Departments")
+    def group_form(self, gid=None):
+        c = db()
+        r = c.execute("SELECT * FROM groups_tbl WHERE id=?", (gid,)).fetchone() if gid else None
+        
+        member_depts = []
+        if r:
+            gname = r["name"]
+            member_depts = [row[0] for row in c.execute("SELECT DISTINCT department FROM recipients WHERE lower(group_name)=lower(?) AND department!=''", (gname,)).fetchall()]
+        
+        all_company_depts = [row[0] for row in c.execute("SELECT DISTINCT department FROM recipients WHERE department!=''").fetchall()]
+        c.close()
+
+        name = esc(r["name"]) if r else ""
+        raw_depts = (r["department"] if r and r["department"] else "") or ""
+        
+        configured_list = [d.strip() for d in raw_depts.split(",") if d.strip()]
+        combined_depts = list(dict.fromkeys(configured_list + member_depts))
+        dept_value = ", ".join(combined_depts)
+
+        is_new = not r
+        page_title = "New Target Group" if is_new else f"Edit Group: {name}"
+        action_btn = "Save Group" if is_new else "Update Group"
+
+        dept_chips = "".join(f'<span class="pill" style="background:#eaf5ef;color:#087b59;font-weight:600;font-size:12px;padding:4px 10px;border-radius:6px;display:inline-flex;align-items:center;gap:6px">📁 {esc(d)}</span>' for d in combined_depts) if combined_depts else '<span style="color:#8ba59b;font-size:12px">No departments added yet. Enter departments below.</span>'
+
+        company_dept_suggestions = "".join(f'<button type="button" class="dept-suggestion" onclick="addDeptToInput(\'{esc(d)}\')" style="cursor:pointer;background:#f1f5f9;color:#334155;padding:4px 10px;border-radius:12px;font-size:11.5px;font-weight:600;display:inline-block;border:1px solid #cbd5e1">+ {esc(d)}</button>' for d in all_company_depts if d not in combined_depts)
+
+        delete_btn = f'''<button type="submit" formaction="/admin/groups/delete" class="btn" style="color:#b91c1c;border-color:#fca5a5" onclick="return confirm('Delete group {name}?');">🗑️ Delete Group</button>''' if not is_new else ''
+
+        body = f'''<div class="camp-header">
+  <div>
+    <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <a href="/admin/groups">Groups &amp; Departments</a> <span>/</span> <span>{page_title}</span></div>
+    <div class="camp-title-row">
+      <h1>{page_title}</h1>
+      <span class="camp-status-badge status-active">{'Create Mode' if is_new else 'Edit Mode'}</span>
+    </div>
+  </div>
+  <div class="camp-actions">
+    <a class="btn" href="/admin/groups">← Back to Groups</a>
+  </div>
+</div>
+
+<div class="card" style="max-width:820px;margin:0 auto">
+  <div style="margin-bottom:18px;border-bottom:1px solid #e2ede7;padding-bottom:14px">
+    <h3 style="margin:0 0 6px 0">Division &amp; Department Structure</h3>
+    <p style="margin:0;font-size:12.5px;color:#5c786c">A Division or Segment (e.g. <b>IT Division</b>) contains <b>multiple departments</b> (e.g. Division Head, IT System, Network &amp; Infrastructure, Software Development).</p>
+  </div>
+
+  <form class="form" method="post" action="/admin/groups/save">
+    <input type="hidden" name="id" value="{r['id'] if r else ''}">
+
+    <div style="margin-bottom:16px">
+      <label style="font-weight:700;color:#183227">Group / Division Name <span style="color:#dc2626">*</span></label>
+      <input name="name" value="{name}" required maxlength="100" placeholder="e.g. IT Division, Operations Division, Retail Banking" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px">
+      <small style="color:#64748b;font-size:11.5px">This represents the main division or targeting group.</small>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <label style="font-weight:700;color:#183227">Departments under this Division (Multiple Allowed)</label>
+      <input id="deptInput" name="department" value="{esc(dept_value)}" maxlength="500" placeholder="e.g. Division Head, IT System, Network & Infrastructure, Software Development" style="margin-top:6px;width:100%;padding:10px 12px;border:1.5px solid #cbdad2;border-radius:8px" oninput="updateDeptPreview()">
+      <small style="color:#64748b;font-size:11.5px;display:block;margin-top:4px">💡 <b>Multiple Departments:</b> Separate departments with commas (e.g. <code>Division Head, IT System, Network</code>).</small>
+    </div>
+
+    <div style="margin-bottom:20px;background:#f8faf9;border:1px solid #e2ede7;border-radius:10px;padding:12px 16px">
+      <div style="font-size:12px;font-weight:700;color:#234e3e;margin-bottom:8px">Configured Departments Preview:</div>
+      <div id="deptChipsPreview" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">{dept_chips}</div>
+      {f'<div style="margin-top:12px;padding-top:10px;border-top:1px dashed #cbdad2"><span style="font-size:11px;font-weight:700;color:#64748b;margin-right:6px">Quick Add Existing Departments:</span><div style="display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:4px">{company_dept_suggestions}</div></div>' if company_dept_suggestions else ''}
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid #e2ede7">
+      <div style="display:flex;gap:10px">
+        <button type="submit" class="btn primary">{action_btn}</button>
+        <a class="btn" href="/admin/groups">Cancel</a>
+      </div>
+      {delete_btn}
+    </div>
+  </form>
+</div>
+
+<script>
+function updateDeptPreview() {{
+  const val = document.getElementById('deptInput').value || '';
+  const container = document.getElementById('deptChipsPreview');
+  const depts = val.split(',').map(d => d.trim()).filter(d => d.length > 0);
+  if (!depts.length) {{
+    container.innerHTML = '<span style="color:#8ba59b;font-size:12px">No departments added yet. Enter departments above.</span>';
+    return;
+  }}
+  container.innerHTML = depts.map(d => '<span class="pill" style="background:#eaf5ef;color:#087b59;font-weight:600;font-size:12px;padding:4px 10px;border-radius:6px;display:inline-flex;align-items:center;gap:6px">📁 ' + escapeHtml(d) + '</span>').join('');
+}}
+
+function addDeptToInput(dept) {{
+  const input = document.getElementById('deptInput');
+  const cur = input.value.split(',').map(d => d.trim()).filter(d => d.length > 0);
+  if (!cur.includes(dept)) {{
+    cur.push(dept);
+    input.value = cur.join(', ');
+    updateDeptPreview();
+  }}
+}}
+
+function escapeHtml(str) {{
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}}
+</script>'''
+        return self.admin_shell(page_title, body, "Groups & Departments")
 
     def smtp_form(self,sid=None):
         c=db(); r=c.execute("SELECT * FROM smtp_profiles WHERE id=?",(sid,)).fetchone() if sid else None; c.close()
@@ -6823,6 +7059,8 @@ syncAudience();
                 return self.sendbody(200,self.recipient_profile_form(parse_qs(p.query).get("id",[None])[0]))
             if path=="/admin/recipients/new":
                 return self.sendbody(200,self.recipient_profile_form("new"))
+            if path=="/admin/groups" and parse_qs(p.query).get("id",[None])[0]:
+                return self.sendbody(200,self.group_form(parse_qs(p.query).get("id",[None])[0]))
         if path=="/admin/landing-pages/preview":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             lid=parse_qs(p.query).get("id",[""])[0]
@@ -6928,7 +7166,17 @@ syncAudience();
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             cid=parse_qs(p.query).get("id",[""])[0]
             c=db(); campaign=c.execute("SELECT * FROM campaigns WHERE id=?",(cid,)).fetchone()
-            count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (group_name=? OR ?='')",(campaign["group_name"] if campaign else "",campaign["group_name"] if campaign else "")).fetchone()["n"] if campaign else 0
+            group=campaign["group_name"] if campaign else ""
+            if group:
+                grow=c.execute("SELECT department FROM groups_tbl WHERE lower(name)=lower(?)",(group,)).fetchone()
+                depts=[d.strip().lower() for d in (grow["department"] or "").split(",") if d.strip()] if grow else []
+                if depts:
+                    placeholders=",".join(["?"]*len(depts))
+                    count=c.execute(f"SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND (lower(group_name)=lower(?) OR ((group_name IS NULL OR group_name='') AND lower(department) IN ({placeholders})))",[group]+depts).fetchone()["n"]
+                else:
+                    count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND lower(group_name)=lower(?)",(group,)).fetchone()["n"]
+            else:
+                count=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"] if campaign else 0
             c.close()
             if not campaign: return self.sendbody(404,"Campaign not found","text/plain")
             req_host=self.headers.get("Host")
@@ -7724,9 +7972,30 @@ syncAudience();
             return self.sendbody(200,page("Recipients Imported","<div style='max-width:760px;margin:70px auto;background:#fff;padding:30px;border-radius:16px;border:1px solid #dce7e2'><h2>Recipient import complete</h2><p>Processed: <b>%s</b> · Created: <b>%s</b> · Updated: <b>%s</b> · Skipped: <b>%s</b></p><p>%s</p><p><a href='/admin/recipients'>Back to Recipients</a></p></div>"%(processed,created,updated,skipped,esc(errtxt or "No validation errors."))))
         if p.path=="/admin/groups/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
-            name=form.get("name",[""])[0][:100]; department=form.get("department",[""])[0][:100]
+            gid=form.get("id",[""])[0].strip()
+            name=form.get("name",[""])[0].strip()[:100]
+            department=form.get("department",[""])[0].strip()[:500]
             if not name: return self.sendbody(400,"Group name required","text/plain")
-            c=db(); c.execute("INSERT OR IGNORE INTO groups_tbl(name,department,created_at) VALUES(?,?,?)",(name,department,now())); c.commit(); c.close(); audit(ADMIN_USERNAME,"GROUP_CREATE",name,ip)
+            c=db()
+            if gid:
+                c.execute("UPDATE groups_tbl SET name=?,department=? WHERE id=?",(name,department,gid))
+                action_info = ("GROUP_UPDATE", f"id={gid} name={name}")
+            else:
+                c.execute("INSERT OR IGNORE INTO groups_tbl(name,department,created_at) VALUES(?,?,?)",(name,department,now()))
+                action_info = ("GROUP_CREATE", name)
+            c.commit(); c.close()
+            audit(ADMIN_USERNAME, action_info[0], action_info[1], ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/groups"})
+        if p.path=="/admin/groups/delete":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            if not self.permission_allowed(p.path,"POST",form=form): return self.sendbody(403,"Insufficient role permission","text/plain")
+            gid=form.get("id",[""])[0].strip()
+            if gid:
+                c=db()
+                row=c.execute("SELECT name FROM groups_tbl WHERE id=?",(gid,)).fetchone()
+                c.execute("DELETE FROM groups_tbl WHERE id=?",(gid,))
+                c.commit(); c.close()
+                audit(ADMIN_USERNAME,"GROUP_DELETE",f"id={gid} name={row['name'] if row else ''}",ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/groups"})
         if p.path=="/admin/campaigns/control":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")

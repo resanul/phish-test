@@ -216,5 +216,125 @@ class RecipientsSingleAddTests(unittest.TestCase):
         self.assertIn("submitQuickRecipient()", html)
         self.assertIn("⚡ + Quick Add", html)
 
+    def test_groups_table_renders_multiple_departments_as_pills(self):
+        c = self.server.db()
+        c.execute("INSERT INTO groups_tbl(id, name, department, created_at) VALUES(2, 'IT Division', 'IT System, Network & Infrastructure', ?)", (self.server.now(),))
+        c.execute("INSERT INTO recipients(id, email, name, department, group_name, status, created_at) VALUES(6, 'head@company.com', 'Ahasan Kabir', 'Division Head', 'IT Division', 'Active', ?)", (self.server.now(),))
+        c.commit()
+        c.close()
+
+        html = self.handler.feature_page("/admin/groups")
+        self.assertIn("IT Division", html)
+        self.assertIn("📁 IT System", html)
+        self.assertIn("📁 Network &amp; Infrastructure", html)
+        self.assertIn("📁 Division Head", html)
+        self.assertIn("3 Depts:", html)
+        self.assertIn("1 Members", html)
+        self.assertIn('href="/admin/groups?id=2"', html)
+
+    def test_group_form_edit_and_create_support_multiple_departments(self):
+        c = self.server.db()
+        c.execute("INSERT INTO groups_tbl(id, name, department, created_at) VALUES(2, 'IT Division', 'IT System', ?)", (self.server.now(),))
+        c.execute("INSERT INTO recipients(id, email, name, department, group_name, status, created_at) VALUES(6, 'head@company.com', 'Ahasan Kabir', 'Division Head', 'IT Division', 'Active', ?)", (self.server.now(),))
+        c.commit()
+        c.close()
+
+        html_edit = self.handler.group_form("2")
+        self.assertIn("Edit Group: IT Division", html_edit)
+        self.assertIn("IT System, Division Head", html_edit)
+        self.assertIn("updateDeptPreview()", html_edit)
+        self.assertIn("Delete Group", html_edit)
+
+        html_new = self.handler.group_form(None)
+        self.assertIn("New Target Group", html_new)
+        self.assertIn("Save Group", html_new)
+
+    def test_group_save_and_update_via_post(self):
+        h = self.handler
+        h.path = "/admin/groups/save"
+        h.client_address = ("127.0.0.1", 12345)
+        response_data = []
+        h.sendbody = lambda code, body, ctype="text/html", extra=None: response_data.append((code, body, extra))
+
+        payload = "name=Operations+Division&department=Procurement%2C+Logistics"
+        h.headers = {"Content-Length": str(len(payload))}
+        from unittest.mock import MagicMock
+        h.rfile = MagicMock()
+        h.rfile.read.return_value = payload.encode()
+        h.do_POST()
+        self.assertEqual(len(response_data), 1)
+        self.assertEqual(response_data[0][0], 302)
+
+        c = self.server.db()
+        row = c.execute("SELECT * FROM groups_tbl WHERE name='Operations Division'").fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["department"], "Procurement, Logistics")
+        gid = row["id"]
+
+        response_data.clear()
+        payload2 = f"id={gid}&name=Operations+Division&department=Procurement%2C+Logistics%2C+Inventory"
+        h.headers = {"Content-Length": str(len(payload2))}
+        h.rfile.read.return_value = payload2.encode()
+        h.do_POST()
+        self.assertEqual(len(response_data), 1)
+        self.assertEqual(response_data[0][0], 302)
+
+        row2 = c.execute("SELECT * FROM groups_tbl WHERE id=?", (gid,)).fetchone()
+        self.assertEqual(row2["department"], "Procurement, Logistics, Inventory")
+        c.close()
+
+    def test_group_delete_via_post(self):
+        c = self.server.db()
+        c.execute("INSERT INTO groups_tbl(id, name, department, created_at) VALUES(99, 'Temporary Group', 'Temp Dept', ?)", (self.server.now(),))
+        c.commit()
+        c.close()
+
+        h = self.handler
+        h.path = "/admin/groups/delete"
+        h.client_address = ("127.0.0.1", 12345)
+        response_data = []
+        h.sendbody = lambda code, body, ctype="text/html", extra=None: response_data.append((code, body, extra))
+
+        payload = "id=99"
+        h.headers = {"Content-Length": str(len(payload))}
+        from unittest.mock import MagicMock
+        h.rfile = MagicMock()
+        h.rfile.read.return_value = payload.encode()
+        h.do_POST()
+        self.assertEqual(len(response_data), 1)
+        self.assertEqual(response_data[0][0], 302)
+
+        c = self.server.db()
+        row = c.execute("SELECT * FROM groups_tbl WHERE id=99").fetchone()
+        c.close()
+        self.assertIsNone(row)
+
+    def test_recipient_profile_form_splits_departments_and_maps_groups(self):
+        c = self.server.db()
+        c.execute("INSERT INTO groups_tbl(name, department, created_at) VALUES('IT Division', 'Division Head, IT System, Network', ?)", (self.server.now(),))
+        c.commit()
+        c.close()
+
+        html = self.handler.recipient_profile_form("new")
+        self.assertIn('<option value="Division Head">', html)
+        self.assertIn('<option value="IT System">', html)
+        self.assertIn('<option value="Network">', html)
+        self.assertIn("groupDeptsMap", html)
+        self.assertIn("IT Division", html)
+
+    def test_queue_campaign_targets_multi_department_division(self):
+        c = self.server.db()
+        c.execute("INSERT INTO groups_tbl(name, department, created_at) VALUES('IT Division', 'Division Head, IT System, Network', ?)", (self.server.now(),))
+        c.execute("INSERT INTO recipients(email, name, department, group_name, status, created_at) VALUES('u1@test.com', 'User 1', 'Division Head', 'IT Division', 'Active', ?)", (self.server.now(),))
+        c.execute("INSERT INTO recipients(email, name, department, group_name, status, created_at) VALUES('u2@test.com', 'User 2', 'IT System', '', 'Active', ?)", (self.server.now(),))
+        c.execute("INSERT INTO recipients(email, name, department, group_name, status, created_at) VALUES('u3@test.com', 'User 3', 'HR', 'Human Resources', 'Active', ?)", (self.server.now(),))
+        c.execute("INSERT INTO campaigns(name, status, template, group_name, created_at) VALUES('IT Awareness Drill', 'Scheduled', 'tbl-notice', 'IT Division', ?)", (self.server.now(),))
+        cid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.commit()
+        c.close()
+
+        count = self.server.queue_campaign(cid)
+        self.assertEqual(count, 2)
+
 if __name__ == "__main__":
     unittest.main()
