@@ -770,6 +770,29 @@ def db():
     seed_core_templates(c)
     seed_linksec_templates(c)
     seed_landing_pages(c)
+    try:
+        c.execute("""
+            UPDATE events 
+            SET campaign_id = (
+                SELECT e2.campaign_id FROM events e2 
+                WHERE lower(e2.email)=lower(events.email) 
+                  AND e2.campaign_id IS NOT NULL 
+                  AND e2.campaign_id != '' 
+                  AND e2.campaign_id != 'None'
+                ORDER BY e2.id DESC LIMIT 1
+            )
+            WHERE (campaign_id IS NULL OR campaign_id='' OR campaign_id='None')
+              AND email IS NOT NULL AND email != ''
+              AND EXISTS (
+                SELECT 1 FROM events e2 
+                WHERE lower(e2.email)=lower(events.email) 
+                  AND e2.campaign_id IS NOT NULL 
+                  AND e2.campaign_id != '' 
+                  AND e2.campaign_id != 'None'
+              )
+        """)
+    except Exception:
+        pass
     c.commit()
     return c
 
@@ -1653,14 +1676,25 @@ def format_time_delta(ts_start, ts_end):
 
 def build_user_journeys(events, tpl_labels):
     journeys = {}
+    email_campaign_map = {}
+    for e in events:
+        email = (e.get("email") or "").strip().lower()
+        cid = str(e.get("campaign_id") or "").strip()
+        day = str(e.get("ts") or "")[:10]
+        if email and cid and cid != "None":
+            email_campaign_map[(email, day)] = cid
+            email_campaign_map[email] = cid
+
     for e in sorted(events, key=lambda x: str(x.get("ts") or "")):
         email = (e.get("email") or "").strip().lower()
         cid = str(e.get("campaign_id") or "").strip()
+        if cid == "None": cid = ""
         tpl = str(e.get("template") or "").strip()
         day = str(e.get("ts") or "")[:10]
 
         if email:
-            key = f"{email}__c_{cid}" if cid else f"{email}__t_{tpl}__d_{day}"
+            resolved_cid = cid or email_campaign_map.get((email, day)) or email_campaign_map.get(email) or ""
+            key = f"{email}__c_{resolved_cid}" if resolved_cid else f"{email}__d_{day}"
         else:
             eid = e.get("id", "0")
             key = f"anon__{eid}"
@@ -1672,10 +1706,10 @@ def build_user_journeys(events, tpl_labels):
                 "name": e.get("name") or "",
                 "mobile": e.get("mobile") or "",
                 "employee_id": e.get("employee_id") or "",
-                "campaign_id": cid,
+                "campaign_id": resolved_cid if email else cid,
                 "template": tpl,
                 "display_template": tpl_labels.get(tpl, f"Template {tpl}"),
-                "ip": e.get("ip") if e.get("ip") != "smtp" else "",
+                "ip": e.get("ip") if e.get("ip") not in ("smtp", "127.0.0.1", "::1", "localhost") else "",
                 "first_ts": e.get("ts"),
                 "latest_ts": e.get("ts"),
                 "events": [],
@@ -1690,10 +1724,16 @@ def build_user_journeys(events, tpl_labels):
             }
 
         j = journeys[key]
-        if e.get("name"): j["name"] = e["name"]
+        if e.get("name") and (not j["name"] or j["name"] in ("Colleague", "John Doe")): j["name"] = e["name"]
+        elif e.get("name") and not j["name"]: j["name"] = e["name"]
         if e.get("mobile"): j["mobile"] = e["mobile"]
         if e.get("employee_id"): j["employee_id"] = e["employee_id"]
-        if e.get("ip") and e["ip"] != "smtp": j["ip"] = e["ip"]
+        eip = (e.get("ip") or "").strip()
+        if eip and eip != "smtp":
+            if not j["ip"] or j["ip"] in ("127.0.0.1", "::1", "localhost"):
+                j["ip"] = eip
+            elif eip not in ("127.0.0.1", "::1", "localhost"):
+                j["ip"] = eip
         if tpl and tpl.isdigit():
             j["template"] = tpl
             j["display_template"] = tpl_labels.get(tpl, f"Template {tpl}")
@@ -2816,6 +2856,23 @@ class Handler(BaseHTTPRequestHandler):
             return True
         return bool(SSL_ENABLED or PORT == 443)
 
+    def client_ip(self):
+        headers = getattr(self, "headers", None)
+        if headers:
+            xff = headers.get("X-Forwarded-For", "").strip()
+            if xff:
+                parts = [p.strip() for p in xff.split(",") if p.strip()]
+                for p in parts:
+                    if p and p.lower() != "unknown":
+                        return p
+            x_real = headers.get("X-Real-IP", "").strip()
+            if x_real and x_real.lower() != "unknown":
+                return x_real
+        addr = getattr(self, "client_address", None)
+        if addr and len(addr) > 0:
+            return addr[0]
+        return "127.0.0.1"
+
     def sendbody(self,code,body,ctype="text/html; charset=utf-8",extra=None):
         b=body.encode() if isinstance(body,str) else body
         self.send_response(code)
@@ -2866,13 +2923,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def login_allowed(self):
         now_ts=time.time()
-        bucket=LOGIN_ATTEMPTS.get(self.client_address[0],[])
+        cip=self.client_ip()
+        bucket=LOGIN_ATTEMPTS.get(cip,[])
         bucket=[x for x in bucket if now_ts-x<300]
-        LOGIN_ATTEMPTS[self.client_address[0]]=bucket
+        LOGIN_ATTEMPTS[cip]=bucket
         return len(bucket)<5
 
     def login_failed(self):
-        LOGIN_ATTEMPTS.setdefault(self.client_address[0],[]).append(time.time())
+        LOGIN_ATTEMPTS.setdefault(self.client_ip(),[]).append(time.time())
 
     def resolve_role_permissions(self, role_name=None):
         """
@@ -6998,7 +7056,7 @@ syncAudience();
         self.do_GET()
 
     def do_GET(self):
-        p=urlparse(self.path); path=p.path; ip=self.client_address[0]; ua=self.headers.get("User-Agent","")
+        p=urlparse(self.path); path=p.path; ip=self.client_ip(); ua=self.headers.get("User-Agent","")
         if path.startswith("/admin/") and path not in ("/admin/login",):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if path!="/admin/logout" and not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")
@@ -7253,6 +7311,8 @@ syncAudience();
                 if token:
                     action="/submit?"+urlencode({"t":token})
                     body=body.replace('action="/submit"','action="'+action+'"').replace("action='/submit'","action='"+action+"'")
+                    token_inputs=f'<input type="hidden" name="t" value="{esc(token)}"><input type="hidden" name="token" value="{esc(token)}">'
+                    body=re.sub(r'(<form[^>]*>)', r'\1' + token_inputs, body, count=1, flags=re.IGNORECASE)
                 return self.sendbody(200,body)
         access(ip,path,404); return self.sendbody(404,"404 File not found","text/plain")
 
@@ -7267,7 +7327,7 @@ syncAudience();
                 pass
 
     def _handle_POST(self):
-        p=urlparse(self.path); ip=self.client_address[0]
+        p=urlparse(self.path); ip=self.client_ip()
         n=int(self.headers.get("Content-Length","0"))
         form=parse_qs(self.rfile.read(n).decode("utf-8","replace"))
         if p.path=="/admin/login":
@@ -8217,10 +8277,30 @@ syncAudience();
         if p.path=="/submit":
             t=form.get("template",["unknown"])[0][:50]
             name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
-            email=form.get("email",[""])[0][:200]; mobile=form.get("mobile",[""])[0][:50]
+            email=form.get("email",[""])[0][:200].strip().lower(); mobile=form.get("mobile",[""])[0][:50]
             card_type=form.get("card_type",[""])[0][:100]
-            qs=parse_qs(p.query); token=qs.get("t",[""])[0]; tr=resolve_tracking_token(token)
-            campaign_id=str(tr["campaign_id"]) if tr else ""; recipient_id=str(tr["recipient_id"]) if tr else ""
+            qs=parse_qs(p.query)
+            token=qs.get("t",[""])[0] or form.get("t",[""])[0] or form.get("token",[""])[0]
+            tr=resolve_tracking_token(token)
+            campaign_id=str(tr["campaign_id"]) if tr else ""
+            recipient_id=str(tr["recipient_id"]) if tr else ""
+
+            if not campaign_id and email:
+                c=db()
+                recent_ev=c.execute("SELECT campaign_id, recipient_id, name, employee_id FROM events WHERE lower(email)=? AND campaign_id!='' ORDER BY id DESC LIMIT 1", (email,)).fetchone()
+                if recent_ev:
+                    campaign_id=str(recent_ev["campaign_id"])
+                    if not recipient_id: recipient_id=str(recent_ev["recipient_id"] or "")
+                    if not name and recent_ev["name"]: name=recent_ev["name"]
+                    if not employee_id and recent_ev["employee_id"]: employee_id=recent_ev["employee_id"]
+                else:
+                    rec_row=c.execute("SELECT id, name, employee_id FROM recipients WHERE lower(email)=?", (email,)).fetchone()
+                    if rec_row:
+                        if not recipient_id: recipient_id=str(rec_row["id"])
+                        if not name and rec_row["name"]: name=rec_row["name"]
+                        if not employee_id and rec_row["employee_id"]: employee_id=rec_row["employee_id"]
+                c.close()
+
             record(ip,t,"form_action",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type,campaign_id,recipient_id,token)
             access(ip,p.path,200)
             return self.sendbody(200,page("Simulation Complete","<div style='max-width:760px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Security Awareness Simulation</h1><p>Simulation complete. No password, OTP, PIN, CVV or card information was requested or stored.</p></div>"))

@@ -336,5 +336,34 @@ class RecipientsSingleAddTests(unittest.TestCase):
         count = self.server.queue_campaign(cid)
         self.assertEqual(count, 2)
 
+    def test_client_ip_extracts_from_forwarded_headers(self):
+        h = self.handler
+        h.client_address = ("127.0.0.1", 54321)
+        h.headers = {"X-Forwarded-For": "172.31.105.50, 10.0.0.1"}
+        self.assertEqual(h.client_ip(), "172.31.105.50")
+
+        h.headers = {"X-Real-IP": "172.31.105.99"}
+        self.assertEqual(h.client_ip(), "172.31.105.99")
+
+        h.headers = {}
+        self.assertEqual(h.client_ip(), "127.0.0.1")
+
+    def test_user_journeys_merges_click_and_submission_for_same_user(self):
+        events = [
+            {"id": 10, "event": "delivered", "email": "resanul@gmail.com", "campaign_id": "1", "template": "1", "ts": "2026-10-14T07:18:00Z", "ip": "smtp"},
+            {"id": 11, "event": "click", "email": "resanul@gmail.com", "campaign_id": "1", "template": "1", "ts": "2026-10-14T07:18:11Z", "ip": "172.31.105.50", "name": "Mir Resanul Karim"},
+            {"id": 12, "event": "form_action", "email": "resanul@gmail.com", "campaign_id": "", "template": "1 (Apex Rewards)", "ts": "2026-10-14T07:19:14Z", "ip": "172.31.105.50", "name": "Mir Resanul Karim", "mobile": "01754698458"},
+        ]
+        journeys = self.server.build_user_journeys(events, {"1": "1 (Apex Rewards)"})
+        # Should be merged into ONE single journey instead of two rows
+        self.assertEqual(len(journeys), 1)
+        j = journeys[0]
+        self.assertTrue(j["has_delivered"])
+        self.assertTrue(j["has_click"])
+        self.assertTrue(j["has_action"])
+        self.assertEqual(j["mobile"], "01754698458")
+        self.assertEqual(j["ip"], "172.31.105.50")
+        self.assertEqual(len(j["events"]), 3)
+
 if __name__ == "__main__":
     unittest.main()
