@@ -1607,6 +1607,114 @@ def format_datetime(ts):
     dt=datetime.fromisoformat(ts.replace("Z","+00:00")).astimezone(TZ)
     return dt.strftime("%d-%b-%Y"),dt.strftime("%I:%M:%S %p")
 
+def format_time_delta(ts_start, ts_end):
+    if not ts_start or not ts_end:
+        return ""
+    try:
+        t1 = datetime.fromisoformat(ts_start.replace("Z", "+00:00"))
+        t2 = datetime.fromisoformat(ts_end.replace("Z", "+00:00"))
+        secs = int((t2 - t1).total_seconds())
+        if secs < 0:
+            return ""
+        if secs < 60:
+            return f"+{secs}s"
+        mins = secs // 60
+        rem_secs = secs % 60
+        if mins < 60:
+            return f"+{mins}m {rem_secs}s" if rem_secs else f"+{mins}m"
+        hours = mins // 60
+        rem_mins = mins % 60
+        return f"+{hours}h {rem_mins}m"
+    except Exception:
+        return ""
+
+def build_user_journeys(events, tpl_labels):
+    journeys = {}
+    for e in sorted(events, key=lambda x: str(x.get("ts") or "")):
+        email = (e.get("email") or "").strip().lower()
+        cid = str(e.get("campaign_id") or "").strip()
+        tpl = str(e.get("template") or "").strip()
+        day = str(e.get("ts") or "")[:10]
+
+        if email:
+            key = f"{email}__c_{cid}" if cid else f"{email}__t_{tpl}__d_{day}"
+        else:
+            eid = e.get("id", "0")
+            key = f"anon__{eid}"
+
+        if key not in journeys:
+            journeys[key] = {
+                "id": key,
+                "email": e.get("email") or "",
+                "name": e.get("name") or "",
+                "mobile": e.get("mobile") or "",
+                "employee_id": e.get("employee_id") or "",
+                "campaign_id": cid,
+                "template": tpl,
+                "display_template": tpl_labels.get(tpl, f"Template {tpl}"),
+                "ip": e.get("ip") if e.get("ip") != "smtp" else "",
+                "first_ts": e.get("ts"),
+                "latest_ts": e.get("ts"),
+                "events": [],
+                "has_delivered": False,
+                "has_click": False,
+                "has_action": False,
+                "has_report": False,
+                "delivered_ts": None,
+                "click_ts": None,
+                "action_ts": None,
+                "report_ts": None,
+            }
+
+        j = journeys[key]
+        if e.get("name"): j["name"] = e["name"]
+        if e.get("mobile"): j["mobile"] = e["mobile"]
+        if e.get("employee_id"): j["employee_id"] = e["employee_id"]
+        if e.get("ip") and e["ip"] != "smtp": j["ip"] = e["ip"]
+        if tpl and tpl.isdigit():
+            j["template"] = tpl
+            j["display_template"] = tpl_labels.get(tpl, f"Template {tpl}")
+        elif not j["template"]:
+            j["template"] = tpl
+            j["display_template"] = tpl_labels.get(tpl, tpl)
+
+        ev = e.get("event") or ""
+        j["latest_ts"] = e.get("ts")
+        if ev == "delivered":
+            j["has_delivered"] = True
+            if not j["delivered_ts"]: j["delivered_ts"] = e.get("ts")
+        elif ev == "click":
+            j["has_click"] = True
+            if not j["click_ts"]: j["click_ts"] = e.get("ts")
+        elif ev in ("form_action", "submitted"):
+            j["has_action"] = True
+            if not j["action_ts"]: j["action_ts"] = e.get("ts")
+        elif ev == "report":
+            j["has_report"] = True
+            if not j["report_ts"]: j["report_ts"] = e.get("ts")
+
+        d_str, t_str = format_datetime(e.get("ts")) if e.get("ts") else ("—", "—")
+        ev_dict = dict(e)
+        ev_dict["date"] = d_str
+        ev_dict["time"] = t_str
+        j["events"].append(ev_dict)
+
+    for j in journeys.values():
+        deliv_ts = j["delivered_ts"] or j["first_ts"]
+        j["click_delta"] = format_time_delta(deliv_ts, j["click_ts"])
+        prev_ts = j["click_ts"] or deliv_ts
+        j["action_delta"] = format_time_delta(prev_ts, j["action_ts"])
+        j["total_reaction"] = format_time_delta(deliv_ts, j["latest_ts"])
+
+        for idx, ev in enumerate(j["events"]):
+            if idx == 0:
+                ev["delta"] = "Initial Event"
+            else:
+                prev_ev = j["events"][idx - 1]
+                ev["delta"] = format_time_delta(prev_ev.get("ts"), ev.get("ts"))
+
+    return sorted(journeys.values(), key=lambda x: str(x.get("latest_ts") or ""), reverse=True)
+
 def get_template_labels():
     labels = {
         "1": "1 (Apex Rewards)", "1.html": "1 (Apex Rewards)",
@@ -2040,12 +2148,52 @@ def report_metric_sql(alias="e"):
 COALESCE(SUM(CASE WHEN %s.event='form_action' THEN 1 ELSE 0 END),0) actions,
 COALESCE(SUM(CASE WHEN %s.event='report' THEN 1 ELSE 0 END),0) reports"""%(alias,alias,alias)
 
-DASHBOARD_DRILLDOWN_JS = """<script>
-function filterRows() {
+DASHBOARD_DRILLDOWN_JS = """<style>
+.journey-row:hover { background: #f3f9f6 !important; }
+.btn-timeline-action:hover { background: #087b59 !important; color: #fff !important; }
+.journey-timeline-flow { position: relative; padding-left: 32px; margin-top: 14px; }
+.journey-timeline-flow::before { content: ''; position: absolute; top: 14px; bottom: 14px; left: 13px; width: 2px; background: #cbdad2; }
+.timeline-step-item { position: relative; margin-bottom: 18px; }
+.timeline-step-item:last-child { margin-bottom: 0; }
+.timeline-step-node { position: absolute; left: -32px; top: 8px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; background: #fff; border: 2.5px solid #087b59; z-index: 2; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.timeline-step-card { background: #ffffff; border: 1px solid #dce8e1; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.03); transition: all 0.15s ease; }
+.timeline-step-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #b8d4c6; }
+</style>
+<script>
+function filterActivityRows() {
   const q = (document.getElementById('q').value || '').toLowerCase().trim();
-  document.querySelectorAll('#rows tr').forEach(r => {
-    r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none';
+  document.querySelectorAll('#journeyRows tr.journey-row').forEach(r => {
+    r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
   });
+  document.querySelectorAll('#rawRows tr.raw-row').forEach(r => {
+    r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
+  });
+  document.querySelectorAll('#rows tr').forEach(r => {
+    r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
+  });
+}
+
+function filterRows() {
+  filterActivityRows();
+}
+
+function switchActivityView(mode) {
+  const journeysWrap = document.getElementById('journeysTableWrap');
+  const rawWrap = document.getElementById('rawTableWrap');
+  const btnJourneys = document.getElementById('btnViewJourneys');
+  const btnRaw = document.getElementById('btnViewRaw');
+
+  if (mode === 'raw') {
+    if (journeysWrap) journeysWrap.style.display = 'none';
+    if (rawWrap) rawWrap.style.display = 'block';
+    if (btnJourneys) { btnJourneys.style.background = 'transparent'; btnJourneys.style.color = '#204033'; }
+    if (btnRaw) { btnRaw.style.background = '#087b59'; btnRaw.style.color = '#fff'; }
+  } else {
+    if (journeysWrap) journeysWrap.style.display = 'block';
+    if (rawWrap) rawWrap.style.display = 'none';
+    if (btnJourneys) { btnJourneys.style.background = '#087b59'; btnJourneys.style.color = '#fff'; }
+    if (btnRaw) { btnRaw.style.background = 'transparent'; btnRaw.style.color = '#204033'; }
+  }
 }
 
 let currentStatType = 'total';
@@ -2262,8 +2410,290 @@ function escHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+let currentJourney = null;
+
+function openJourneyModal(journeyId) {
+  let j = null;
+  if (typeof USER_JOURNEYS_DATA !== 'undefined' && Array.isArray(USER_JOURNEYS_DATA)) {
+    j = USER_JOURNEYS_DATA.find(x => x.id === journeyId);
+  }
+  if (!j) {
+    fetch('/admin/api/user_timeline?journey_id=' + encodeURIComponent(journeyId))
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.journey) {
+          renderJourneyModal(d.journey);
+        } else {
+          alert('User journey not found: ' + (d.error || 'Unknown error'));
+        }
+      })
+      .catch(e => alert('Error loading journey: ' + e.message));
+    return;
+  }
+  renderJourneyModal(j);
+}
+
+function renderJourneyModal(j) {
+  currentJourney = j;
+  const modal = document.getElementById('userJourneyModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const userEl = document.getElementById('journeyModalUser');
+  const emailEl = document.getElementById('journeyModalEmail');
+  const badgeEl = document.getElementById('journeyModalBadge');
+  const iconEl = document.getElementById('journeyModalIcon');
+  const cardsEl = document.getElementById('journeyModalCards');
+  const timelineEl = document.getElementById('journeyTimelineContainer');
+
+  const displayName = j.name && j.name.trim() ? j.name : (j.email ? j.email.split('@')[0] : 'Target Recipient');
+  if (userEl) userEl.innerText = displayName;
+  if (emailEl) {
+    const details = [j.email || 'No email', j.display_template || ('Template ' + j.template)];
+    if (j.campaign_id) details.push('Campaign #' + j.campaign_id);
+    emailEl.innerText = details.join(' · ');
+  }
+
+  if (badgeEl) {
+    if (j.has_action) {
+      badgeEl.className = 'pill submitted';
+      badgeEl.style.background = '#fee2e2';
+      badgeEl.style.color = '#991b1b';
+      badgeEl.innerText = '🚨 High Vulnerability: Form Submitted';
+      if (iconEl) iconEl.innerText = '🚨';
+    } else if (j.has_click) {
+      badgeEl.className = 'pill click';
+      badgeEl.style.background = '#ffedd5';
+      badgeEl.style.color = '#9a3412';
+      badgeEl.innerText = '🔗 Lure Clicked (No Submission)';
+      if (iconEl) iconEl.innerText = '🔗';
+    } else if (j.has_delivered) {
+      badgeEl.className = 'pill delivered';
+      badgeEl.style.background = '#e2ece7';
+      badgeEl.style.color = '#0b4d34';
+      badgeEl.innerText = '✉️ Dispatched (Awaiting Reaction)';
+      if (iconEl) iconEl.innerText = '✉️';
+    } else if (j.has_report) {
+      badgeEl.className = 'pill';
+      badgeEl.style.background = '#087b59';
+      badgeEl.style.color = '#fff';
+      badgeEl.innerText = '🛡️ Reported (Phish Vigilant)';
+      if (iconEl) iconEl.innerText = '🛡️';
+    } else {
+      badgeEl.className = 'pill';
+      badgeEl.innerText = 'Telemetry Recorded';
+      if (iconEl) iconEl.innerText = '👤';
+    }
+  }
+
+  const delivEv = (j.events || []).find(e => e.event === 'delivered');
+  const clickEv = (j.events || []).find(e => e.event === 'click');
+  const actionEv = (j.events || []).find(e => e.event === 'form_action' || e.event === 'submitted');
+
+  let card1Html = '';
+  if (j.has_delivered || delivEv) {
+    const ev = delivEv || (j.events && j.events[0]) || {};
+    card1Html = `
+      <div style="background:#fff;border:1.5px solid #b8dfcc;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:750;color:#087b59;text-transform:uppercase;letter-spacing:0.4px">1. Email Dispatched</span>
+          <span style="font-size:15px">✉️</span>
+        </div>
+        <div style="font-size:13px;font-weight:800;color:#0d281f;margin-top:6px">${escHtml(ev.time || '—')}</div>
+        <div style="font-size:11px;color:#507164;margin-top:2px">${escHtml(ev.date || '—')}</div>
+        <div style="font-size:11px;color:#087b59;font-weight:600;margin-top:5px;background:#eef7f2;padding:2px 6px;border-radius:5px;display:inline-block">✅ Delivered to Inbox</div>
+      </div>
+    `;
+  } else {
+    card1Html = `
+      <div style="background:#fff;border:1.5px solid #dce8e1;border-radius:12px;padding:12px 14px;opacity:0.8">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:750;color:#6b867b;text-transform:uppercase;letter-spacing:0.4px">1. Email Dispatched</span>
+          <span style="font-size:15px">✉️</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#6b867b;margin-top:6px">External / Ad-hoc</div>
+        <div style="font-size:11px;color:#8ba59b;margin-top:2px">Simulation link visited</div>
+        <div style="font-size:11px;color:#6b867b;margin-top:5px">—</div>
+      </div>
+    `;
+  }
+
+  let card2Html = '';
+  if (j.has_click || clickEv) {
+    const ev = clickEv || (j.events || []).find(e => e.event === 'click') || {};
+    const reactionText = j.click_delta ? `⚡ ${escHtml(j.click_delta)} reaction` : 'Visited lure';
+    card2Html = `
+      <div style="background:#fff;border:1.5px solid #fdba74;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:750;color:#c2410c;text-transform:uppercase;letter-spacing:0.4px">2. Link Clicked</span>
+          <span style="font-size:15px">🔗</span>
+        </div>
+        <div style="font-size:13px;font-weight:800;color:#0d281f;margin-top:6px">${escHtml(ev.time || '—')}</div>
+        <div style="font-size:11px;color:#507164;margin-top:2px">${escHtml(ev.date || '—')}</div>
+        <div style="font-size:11px;color:#c2410c;font-weight:700;margin-top:5px;background:#fff7ed;padding:2px 6px;border-radius:5px;display:inline-block">${reactionText}</div>
+      </div>
+    `;
+  } else {
+    card2Html = `
+      <div style="background:#fff;border:1.5px solid #dce8e1;border-radius:12px;padding:12px 14px;opacity:0.8">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:750;color:#6b867b;text-transform:uppercase;letter-spacing:0.4px">2. Link Clicked</span>
+          <span style="font-size:15px">🔗</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#6b867b;margin-top:6px">No Click Recorded</div>
+        <div style="font-size:11px;color:#8ba59b;margin-top:2px">Recipient did not click lure</div>
+        <div style="font-size:11px;color:#087b59;font-weight:600;margin-top:5px">🛡️ Safe / Resistant</div>
+      </div>
+    `;
+  }
+
+  let card3Html = '';
+  if (j.has_action || actionEv) {
+    const ev = actionEv || (j.events || []).find(e => e.event === 'form_action' || e.event === 'submitted') || {};
+    const reactionText = j.action_delta ? `⚡ ${escHtml(j.action_delta)} after click` : 'Form submitted';
+    card3Html = `
+      <div style="background:#fff;border:1.5px solid #fca5a5;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:750;color:#b91c1c;text-transform:uppercase;letter-spacing:0.4px">3. Form Submitted</span>
+          <span style="font-size:15px">🚨</span>
+        </div>
+        <div style="font-size:13px;font-weight:800;color:#0d281f;margin-top:6px">${escHtml(ev.time || '—')}</div>
+        <div style="font-size:11px;color:#507164;margin-top:2px">${escHtml(ev.date || '—')}</div>
+        <div style="font-size:11px;color:#b91c1c;font-weight:700;margin-top:5px;background:#fef2f2;padding:2px 6px;border-radius:5px;display:inline-block">${reactionText}</div>
+      </div>
+    `;
+  } else {
+    card3Html = `
+      <div style="background:#fff;border:1.5px solid #dce8e1;border-radius:12px;padding:12px 14px;opacity:0.8">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;font-weight:750;color:#6b867b;text-transform:uppercase;letter-spacing:0.4px">3. Form Submitted</span>
+          <span style="font-size:15px">🚨</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:#6b867b;margin-top:6px">No Submission</div>
+        <div style="font-size:11px;color:#8ba59b;margin-top:2px">No data entered on lure form</div>
+        <div style="font-size:11px;color:#087b59;font-weight:600;margin-top:5px">🛡️ Zero-Compromise</div>
+      </div>
+    `;
+  }
+
+  if (cardsEl) {
+    cardsEl.innerHTML = card1Html + card2Html + card3Html;
+  }
+
+  if (timelineEl) {
+    timelineEl.innerHTML = (j.events || []).map((ev, idx) => {
+      let icon = '📌';
+      let nodeBorder = '#087b59';
+      let title = escHtml(ev.event);
+      let badgeClass = 'pill ' + escHtml(ev.event);
+      let desc = '';
+
+      if (ev.event === 'delivered') {
+        icon = '✉️';
+        nodeBorder = '#087b59';
+        title = 'Simulation Email Dispatched & Delivered';
+        desc = `Email sent to <b>${escHtml(ev.email || j.email)}</b> via SMTP relay.`;
+      } else if (ev.event === 'click') {
+        icon = '🔗';
+        nodeBorder = '#ea580c';
+        title = 'Phishing Lure Link Clicked';
+        desc = `Recipient opened the simulation landing page (<b>${escHtml(j.display_template)}</b>).`;
+      } else if (ev.event === 'form_action' || ev.event === 'submitted') {
+        icon = '🚨';
+        nodeBorder = '#dc2626';
+        title = 'Compromise Recorded: Form Interaction';
+        desc = `Recipient interacted with form. Captured Name: <b>${escHtml(ev.name || j.name || '—')}</b>, Mobile: <b>${escHtml(ev.mobile || j.mobile || '—')}</b>.`;
+      } else if (ev.event === 'report') {
+        icon = '🛡️';
+        nodeBorder = '#087b59';
+        title = 'Vigilance: Phishing Email Reported';
+        desc = `Recipient recognized and reported the simulation email to security operations.`;
+      }
+
+      const deltaBadge = ev.delta && ev.delta !== 'Initial Event' ? 
+        `<span style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:750">⚡ ${escHtml(ev.delta)} elapsed</span>` :
+        `<span style="background:#f0fdf4;color:#15803d;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600">Start of Journey</span>`;
+
+      return `
+        <div class="timeline-step-item">
+          <div class="timeline-step-node" style="border-color:${nodeBorder}">${icon}</div>
+          <div class="timeline-step-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+              <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="${badgeClass}">${escHtml(ev.event)}</span>
+                  <b style="font-size:13.5px;color:#0f2e22">${title}</b>
+                </div>
+                <div style="font-size:12px;color:#456758;margin-top:4px">${desc}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:13px;font-weight:750;color:#0b3b29">${escHtml(ev.time)}</div>
+                <div style="font-size:11px;color:#6d887c">${escHtml(ev.date)}</div>
+                <div style="margin-top:4px">${deltaBadge}</div>
+              </div>
+            </div>
+            <div style="margin-top:10px;padding-top:8px;border-top:1px dashed #e2ede7;display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:#5a776a">
+              <div><b>Source IP:</b> <code style="background:#eaf4ef;color:#0b4d34;padding:1px 5px;border-radius:3px">${escHtml(ev.ip || '—')}</code></div>
+              <div><b>Template:</b> <span>${escHtml(j.display_template)}</span></div>
+              ${ev.user_agent ? `<div style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(ev.user_agent)}"><b>Client:</b> <span style="color:#718f82">${escHtml(ev.user_agent)}</span></div>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+function closeJourneyModal() {
+  const modal = document.getElementById('userJourneyModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function exportUserJourneyCSV() {
+  if (!currentJourney || !currentJourney.events || !currentJourney.events.length) {
+    alert('No journey events to export.');
+    return;
+  }
+  const j = currentJourney;
+  const headers = ["Step", "Date", "Time", "Event", "Elapsed Delta", "Template", "Source IP", "Recipient Name", "Email Address", "Mobile", "Client User Agent"];
+  const rows = j.events.map((ev, idx) => [
+    idx + 1,
+    ev.date || "",
+    ev.time || "",
+    ev.event || "",
+    ev.delta || "",
+    j.display_template || "",
+    ev.ip || "",
+    ev.name || j.name || "",
+    ev.email || j.email || "",
+    ev.mobile || j.mobile || "",
+    ev.user_agent || ""
+  ]);
+
+  const csvRows = [];
+  csvRows.push(headers.map(h => '"' + String(h).replace(/"/g, '""') + '"').join(','));
+  for (const r of rows) {
+    csvRows.push(r.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(','));
+  }
+  const blob = new Blob([csvRows.join('\\r\\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeEmail = (j.email || 'target').replace(/[^a-zA-Z0-9_-]/g, '_');
+  a.download = `simulation-journey-${safeEmail}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeStatDrilldown();
+  if (e.key === 'Escape') {
+    closeStatDrilldown();
+    closeJourneyModal();
+  }
 });
 </script>"""
 
@@ -2283,6 +2713,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/reports/campaign.csv":"report.export",
         "/admin/reports/campaign.pdf":"report.export",
         "/admin/api/stat_details":"report.view",
+        "/admin/api/user_timeline":"report.view",
         "/admin/risk":"risk.view",
         "/admin/settings":"risk.manage",
         "/admin.csv":"report.export",
@@ -2714,7 +3145,7 @@ class Handler(BaseHTTPRequestHandler):
         subs=c.execute("SELECT COUNT(*) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
         ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]
         templates=c.execute("SELECT template, COUNT(*) n FROM events GROUP BY template ORDER BY n DESC").fetchall()
-        recent=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 80").fetchall()
+        recent_raw=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 500").fetchall()
         since=(datetime.now(timezone.utc)-timedelta(days=6)).isoformat()
         trend=c.execute("SELECT substr(ts,1,10) d, COUNT(*) n FROM events WHERE ts>=? GROUP BY d ORDER BY d", (since,)).fetchall()
         c.close()
@@ -2734,15 +3165,70 @@ class Handler(BaseHTTPRequestHandler):
         max_d=max([x[1] for x in days],default=1) or 1
         trend_html="".join(f'<div class="day"><b>{n}</b><div class="daybar" style="height:{max(3,n/max_d*135):.0f}px"></div><small>{d[5:]}</small></div>' for d,n in days)
 
-        rows=[]
-        for r in recent:
+        recent_raw_dicts=[dict(r) for r in recent_raw]
+        journeys=build_user_journeys(recent_raw_dicts, tpl_labels)
+
+        journey_rows=[]
+        for j in journeys:
+            d_str, t_str = format_datetime(j["latest_ts"]) if j["latest_ts"] else ("—", "—")
+            display_tpl = j["display_template"]
+            name_val = esc(j["name"]) if j["name"] else '<span style="color:#8ba59b">—</span>'
+            email_val = esc(j["email"]) if j["email"] else '<span style="color:#8ba59b">—</span>'
+            mobile_val = esc(j["mobile"]) if j["mobile"] else '<span style="color:#8ba59b">—</span>'
+            ip_val = esc(j["ip"]) if j["ip"] else '<span style="color:#8ba59b">—</span>'
+
+            ev_count = len(j["events"])
+            count_badge = f'<span style="font-size:11px;background:#e2ece7;color:#0b4d34;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:6px">{ev_count} event{"s" if ev_count!=1 else ""}</span>'
+
+            if j["has_action"]:
+                status_badge = '<span class="pill submitted" style="font-weight:700;background:#fee2e2;color:#991b1b">🚨 Form Submitted</span>'
+                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span>✉️ Sent</span> ➔ <span>🔗 Click</span> ➔ <span style="color:#b91c1c;font-weight:750">🚨 Submit</span></div>'
+            elif j["has_click"]:
+                status_badge = '<span class="pill click" style="font-weight:700;background:#ffedd5;color:#9a3412">🔗 Link Clicked</span>'
+                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span>✉️ Sent</span> ➔ <span style="color:#087b59;font-weight:750">🔗 Click</span> ➔ <span style="color:#94a3b8">⏳ No Form</span></div>'
+            elif j["has_delivered"]:
+                status_badge = '<span class="pill delivered" style="font-weight:600;background:#e2ece7;color:#0b4d34">✉️ Email Dispatched</span>'
+                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span style="color:#087b59;font-weight:750">✉️ Sent</span> ➔ <span style="color:#94a3b8">⏳ No Click</span></div>'
+            elif j["has_report"]:
+                status_badge = '<span class="pill" style="background:#087b59;color:#fff;font-weight:700">🛡️ Phish Reported</span>'
+                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px">🛡️ Reported by employee</div>'
+            else:
+                last_ev = j["events"][-1].get("event", "event") if j["events"] else "event"
+                status_badge = f'<span class="pill">{esc(last_ev)}</span>'
+                flow_dots = ''
+
+            if j.get("total_reaction"):
+                reaction_html = f'<div style="font-size:11px;color:#b91c1c;font-weight:700;margin-top:2px">⚡ Reaction: {esc(j["total_reaction"])}</div>'
+            else:
+                reaction_html = ''
+
+            jid_esc = esc(j["id"])
+            journey_rows.append(
+                f'<tr class="journey-row" onclick="openJourneyModal(\'{jid_esc}\')" style="cursor:pointer" title="Click to view interactive user journey timeline">'
+                f'<td><b>{esc(d_str)}</b><div style="font-size:11.5px;color:#5c786c">{esc(t_str)}</div></td>'
+                f'<td><div>{status_badge}{count_badge}</div>{flow_dots}{reaction_html}</td>'
+                f'<td><b>{esc(display_tpl)}</b></td>'
+                f'<td><code style="background:#eaf4ef;color:#0b4d34;padding:2px 6px;border-radius:4px">{ip_val}</code></td>'
+                f'<td>{name_val}</td>'
+                f'<td><span style="color:#087b59;font-weight:600">{email_val}</span></td>'
+                f'<td>{mobile_val}</td>'
+                f'<td style="text-align:right"><button type="button" class="btn-timeline-action" onclick="openJourneyModal(\'{jid_esc}\');event.stopPropagation()" style="background:#eaf5ef;border:1.5px solid #087b59;color:#087b59;font-size:11px;font-weight:700;padding:5px 9px;border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">📜 View Timeline</button></td>'
+                f'</tr>'
+            )
+        journeys_table="".join(journey_rows) or '<tr><td colspan="8" style="text-align:center;padding:28px;color:#6b867b">No user simulation activity recorded yet.</td></tr>'
+
+        raw_rows=[]
+        for r in recent_raw[:100]:
             d,t=format_datetime(r["ts"])
             display_tpl = tpl_labels.get(str(r["template"]), "Template " + str(r["template"]))
             name_val = esc(r["name"]) if r["name"] else '<span style="color:#8ba59b">—</span>'
             email_val = esc(r["email"]) if r["email"] else '<span style="color:#8ba59b">—</span>'
             mobile_val = esc(r["mobile"]) if r["mobile"] else '<span style="color:#8ba59b">—</span>'
-            rows.append(f'<tr><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td><b>{esc(display_tpl)}</b></td><td><code>{esc(r["ip"])}</code></td><td>{name_val}</td><td>{email_val}</td><td>{mobile_val}</td></tr>')
-        table="".join(rows) or '<tr><td colspan="8">No activity yet.</td></tr>'
+            raw_rows.append(f'<tr class="raw-row"><td>{esc(d)}</td><td>{esc(t)}</td><td><span class="pill {esc(r["event"])}">{esc(r["event"])}</span></td><td><b>{esc(display_tpl)}</b></td><td><code>{esc(r["ip"])}</code></td><td>{name_val}</td><td>{email_val}</td><td>{mobile_val}</td></tr>')
+        raw_table="".join(raw_rows) or '<tr><td colspan="8">No activity yet.</td></tr>'
+        table=raw_table
+
+        journeys_json = json.dumps(journeys).replace("</script>", "<\\/script>")
 
         body=f"""<header class="topbar"><div class="topbrand"><div class="mark">🛡️</div>Trust PhishGuard</div><div class="top-actions"><span class="top-role-badge">ADMIN CONTROL CENTER</span><a href="/admin.csv">📥 Export CSV</a><a href="/admin/logout">🚪 Logout</a></div></header>
 <main class="wrap"><div class="hero"><div><h1>Dashboard</h1><p>Simulation telemetry and engagement overview · Asia/Dhaka</p></div><div style="display:flex;gap:10px;align-items:center"><a class="btn primary" href="/admin/campaigns/new">+ New Campaign</a><a class="btn" href="/admin/landing-pages/new">+ New Landing Page</a><a class="btn" href="/admin.csv">📥 Export CSV</a></div></div>
@@ -2786,12 +3272,63 @@ class Handler(BaseHTTPRequestHandler):
 </section>
 <section class="card activity" style="margin-top:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:12px">
-    <div><h3 style="margin:0">Recent Activity</h3><div class="sub" style="margin-top:4px">Latest simulation events · dates and times shown in Bangladesh Standard Time</div></div>
-    <div class="filter" style="margin:0"><input id="q" oninput="filterRows()" placeholder="Filter IP, template, email..."><button onclick="document.getElementById('q').value='';filterRows()">Clear</button></div>
+    <div>
+      <h3 style="margin:0;display:flex;align-items:center;gap:8px">
+        <span>Recent Activity</span>
+        <span class="live-status-pill" style="font-size:11px;font-weight:600;background:#e1f5eb;color:#087b59;padding:2px 8px;border-radius:12px">Live Telemetry</span>
+      </h3>
+      <div class="sub" style="margin-top:4px">Consolidated recipient journeys & telemetry events · Asia/Dhaka (BST)</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div class="view-switch-tabs" style="display:inline-flex;background:#e5eee9;padding:3px;border-radius:9px;border:1px solid #d2e3da">
+        <button id="btnViewJourneys" type="button" onclick="switchActivityView('journeys')" style="padding:6px 13px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:#087b59;color:#fff;transition:all 0.15s ease">👥 User Journeys ({len(journeys)})</button>
+        <button id="btnViewRaw" type="button" onclick="switchActivityView('raw')" style="padding:6px 13px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#204033;transition:all 0.15s ease">📋 Raw Events ({len(recent_raw)})</button>
+      </div>
+      <div class="filter" style="margin:0">
+        <input id="q" oninput="filterActivityRows()" placeholder="Filter recipient, email, template, IP...">
+        <button type="button" onclick="document.getElementById('q').value='';filterActivityRows()">Clear</button>
+      </div>
+    </div>
   </div>
-  <div class="table-wrap">
-    <table class="table"><thead><tr><th>Date</th><th>Time</th><th>Event</th><th>Template</th><th>Source IP</th><th>Name</th><th>Email</th><th>Mobile</th></tr></thead><tbody id="rows">{table}</tbody></table>
+
+  <!-- Consolidated User Journeys Table (Default View) -->
+  <div id="journeysTableWrap" class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Last Active</th>
+          <th>Simulation Progress</th>
+          <th>Template</th>
+          <th>Source IP</th>
+          <th>Recipient</th>
+          <th>Email Address</th>
+          <th>Mobile</th>
+          <th style="text-align:right">Action</th>
+        </tr>
+      </thead>
+      <tbody id="journeyRows">{journeys_table}</tbody>
+    </table>
   </div>
+
+  <!-- Raw Events Table (Secondary Log View) -->
+  <div id="rawTableWrap" class="table-wrap" style="display:none">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Event</th>
+          <th>Template</th>
+          <th>Source IP</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Mobile</th>
+        </tr>
+      </thead>
+      <tbody id="rawRows">{raw_table}</tbody>
+    </table>
+  </div>
+  <table style="display:none"><tbody id="rows">{table}</tbody></table>
 </section>
 
 <div id="statDrilldownModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.65);z-index:99999;backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;box-sizing:border-box" onclick="if(event.target===this)closeStatDrilldown()">
@@ -2832,6 +3369,55 @@ class Handler(BaseHTTPRequestHandler):
     </div>
   </div>
 </div>
+
+<div id="userJourneyModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.7);z-index:99999;backdrop-filter:blur(5px);align-items:center;justify-content:center;padding:16px;box-sizing:border-box" onclick="if(event.target===this)closeJourneyModal()">
+  <div style="background:#ffffff;border-radius:20px;width:100%;max-width:860px;max-height:92vh;box-shadow:0 30px 70px rgba(0,0,0,0.35);overflow:hidden;display:flex;flex-direction:column;animation:popIn 0.22s cubic-bezier(0.16,1,0.3,1)">
+    <!-- Modal Header -->
+    <div style="background:linear-gradient(135deg,#0d3829,#15543e);color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div id="journeyModalIcon" style="background:linear-gradient(135deg,#10b981,#087b59);width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(0,0,0,0.25)">👤</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <h2 id="journeyModalUser" style="margin:0;font-size:18px;font-weight:750;color:#fff">Target Recipient</h2>
+            <span id="journeyModalBadge" class="pill" style="font-size:11.5px;padding:3px 9px">Telemetry</span>
+          </div>
+          <p id="journeyModalEmail" style="margin:4px 0 0;font-size:13px;color:#d8efe5;opacity:0.95">recipient@tblbd.com · Simulation Timeline</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeJourneyModal()" style="background:none;border:none;color:#fff;font-size:30px;cursor:pointer;opacity:0.85;line-height:1" title="Close (Esc)">&times;</button>
+    </div>
+
+    <!-- 3 Milestone Cards -->
+    <div id="journeyModalCards" style="background:#f4faf7;border-bottom:1px solid #dbebe3;padding:16px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;flex-shrink:0"></div>
+
+    <!-- Timeline & Details Section -->
+    <div style="flex:1;overflow-y:auto;padding:20px 24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div>
+          <h4 style="margin:0;font-size:14px;color:#18362a;display:flex;align-items:center;gap:6px">
+            <span>⏱️ Chronological Simulation Stepper</span>
+          </h4>
+          <span style="font-size:11.5px;color:#608072;font-weight:500">Dates & times synchronized in Asia/Dhaka Standard Time</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="button" onclick="exportUserJourneyCSV()" style="border:1.5px solid #087b59;background:#eef7f2;color:#087b59;padding:6px 12px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="Export this user's journey as CSV">📥 Export CSV</button>
+          <button type="button" onclick="window.print()" style="border:1.5px solid #cbdad2;background:#fff;color:#1e382c;padding:6px 12px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px" title="Print or Save as PDF">🖨️ Print / PDF</button>
+        </div>
+      </div>
+
+      <div id="journeyTimelineContainer" class="journey-timeline-flow"></div>
+
+      <div style="margin-top:20px;padding:12px 16px;background:#f0f9f4;border:1px solid #cce8da;border-radius:10px;display:flex;align-items:center;gap:10px;font-size:12px;color:#15543e">
+        <span style="font-size:20px">🛡️</span>
+        <div><b>Strict Zero-Credential Architecture:</b> Simulation telemetry only tracks delivery status, click reaction speeds, and awareness engagement. Employee passwords, OTPs, PINs, or credentials are never collected, logged, or stored.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const USER_JOURNEYS_DATA = {journeys_json};
+</script>
 """ + DASHBOARD_DRILLDOWN_JS + "</main>"
         dashboard_main=body[body.index("<main"):body.rindex("</main>")+7]
         return self.admin_shell("Overview",dashboard_main,"Overview")
@@ -6134,6 +6720,40 @@ syncAudience();
         except Exception as e:
             return self.sendbody(500, json.dumps({"ok": False, "error": str(e)}), "application/json; charset=utf-8")
 
+    def user_timeline_api(self, query=""):
+        try:
+            params = parse_qs(query or "")
+            jid = params.get("journey_id", [""])[0].strip()
+            email = params.get("email", [""])[0].strip().lower()
+            cid = params.get("campaign_id", [""])[0].strip()
+
+            c = db()
+            tpl_labels = get_template_labels()
+
+            if jid:
+                raw = c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 1000").fetchall()
+                c.close()
+                journeys = build_user_journeys([dict(r) for r in raw], tpl_labels)
+                matched = next((j for j in journeys if j["id"] == jid), None)
+                if not matched:
+                    return self.sendbody(404, json.dumps({"ok": False, "error": "Journey not found"}), "application/json; charset=utf-8")
+                return self.sendbody(200, json.dumps({"ok": True, "journey": matched}), "application/json; charset=utf-8")
+            elif email:
+                if cid:
+                    raw = c.execute("SELECT * FROM events WHERE lower(email)=? AND campaign_id=? ORDER BY id ASC", (email, cid)).fetchall()
+                else:
+                    raw = c.execute("SELECT * FROM events WHERE lower(email)=? ORDER BY id ASC", (email,)).fetchall()
+                c.close()
+                if not raw:
+                    return self.sendbody(404, json.dumps({"ok": False, "error": "No events found for email"}), "application/json; charset=utf-8")
+                journeys = build_user_journeys([dict(r) for r in raw], tpl_labels)
+                return self.sendbody(200, json.dumps({"ok": True, "journey": journeys[0] if journeys else None}), "application/json; charset=utf-8")
+            else:
+                c.close()
+                return self.sendbody(400, json.dumps({"ok": False, "error": "Missing journey_id or email"}), "application/json; charset=utf-8")
+        except Exception as exc:
+            return self.sendbody(500, json.dumps({"ok": False, "error": str(exc)}), "application/json; charset=utf-8")
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -6166,6 +6786,8 @@ syncAudience();
             return self.sendbody(200,out.getvalue(),"text/csv",{"Content-Disposition":"attachment; filename=phish-test.csv"})
         if path=="/admin/api/stat_details":
             return self.stat_details_api(p.query)
+        if path=="/admin/api/user_timeline":
+            return self.user_timeline_api(p.query)
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/reports.csv","/admin/reports/campaign.csv","/admin/reports/campaign.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             if not self.permission_allowed(path,"GET",query=p.query): return self.sendbody(403,"Insufficient role permission","text/plain")

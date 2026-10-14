@@ -399,8 +399,132 @@ class DashboardTelemetryTests(unittest.TestCase):
         self.assertIn('.layout.collapsed{grid-template-columns:68px 1fr}', html)
         self.assertIn('localStorage.getItem', html)
 
+    def test_format_time_delta_and_build_user_journeys(self):
+        # Test reaction delta formatting
+        self.assertEqual(self.server.format_time_delta("2026-10-14T10:47:09Z", "2026-10-14T10:47:17Z"), "+8s")
+        self.assertEqual(self.server.format_time_delta("2026-10-14T10:47:17Z", "2026-10-14T10:48:09Z"), "+52s")
+        self.assertEqual(self.server.format_time_delta("2026-10-14T10:47:09Z", "2026-10-14T10:48:09Z"), "+1m")
+
+        # Test grouping 3 simulation events (delivered, click, form_action) into 1 user journey
+        raw_events = [
+            {
+                "id": 1,
+                "ts": "2026-10-14T10:47:09Z",
+                "event": "delivered",
+                "template": "1",
+                "ip": "smtp",
+                "name": "Saad Abser",
+                "email": "saad.abser@tblbd.com",
+                "mobile": "",
+                "campaign_id": "1",
+            },
+            {
+                "id": 2,
+                "ts": "2026-10-14T10:47:17Z",
+                "event": "click",
+                "template": "1",
+                "ip": "172.31.105.10",
+                "name": "Saad Abser",
+                "email": "saad.abser@tblbd.com",
+                "mobile": "",
+                "campaign_id": "1",
+            },
+            {
+                "id": 3,
+                "ts": "2026-10-14T10:48:09Z",
+                "event": "form_action",
+                "template": "1",
+                "ip": "172.31.105.10",
+                "name": "Saad Abser",
+                "email": "saad.abser@tblbd.com",
+                "mobile": "01711000000",
+                "campaign_id": "1",
+            },
+        ]
+        labels = {"1": "1 (Apex Rewards)"}
+        journeys = self.server.build_user_journeys(raw_events, labels)
+        self.assertEqual(len(journeys), 1, "Should consolidate all 3 events of the user into 1 journey")
+        j = journeys[0]
+        self.assertEqual(j["email"], "saad.abser@tblbd.com")
+        self.assertEqual(j["name"], "Saad Abser")
+        self.assertEqual(j["mobile"], "01711000000")
+        self.assertEqual(j["ip"], "172.31.105.10")
+        self.assertTrue(j["has_delivered"])
+        self.assertTrue(j["has_click"])
+        self.assertTrue(j["has_action"])
+        self.assertEqual(len(j["events"]), 3)
+        self.assertEqual(j["click_delta"], "+8s")
+        self.assertEqual(j["action_delta"], "+52s")
+        self.assertEqual(j["total_reaction"], "+1m")
+
+    def test_dashboard_consolidated_user_journeys_and_modal(self):
+        c = self.server.db()
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,mobile,campaign_id)
+                     VALUES('2026-10-14T10:47:09Z','smtp','1','delivered','Saad Abser','saad.abser@tblbd.com','','1')""")
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,mobile,campaign_id)
+                     VALUES('2026-10-14T10:47:17Z','172.31.105.10','1','click','Saad Abser','saad.abser@tblbd.com','','1')""")
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,mobile,campaign_id)
+                     VALUES('2026-10-14T10:48:09Z','172.31.105.10','1','form_action','Saad Abser','saad.abser@tblbd.com','01711000000','1')""")
+        c.commit()
+        c.close()
+
+        html = self.handler.dashboard()
+        self.assertIn("journeysTableWrap", html)
+        self.assertIn("rawTableWrap", html)
+        self.assertIn("btnViewJourneys", html)
+        self.assertIn("btnViewRaw", html)
+        self.assertIn("userJourneyModal", html)
+        self.assertIn("journeyModalCards", html)
+        self.assertIn("journeyTimelineContainer", html)
+        self.assertIn("USER_JOURNEYS_DATA", html)
+        self.assertIn("saad.abser@tblbd.com", html)
+        self.assertIn("🚨 Form Submitted", html)
+        self.assertIn("📜 View Timeline", html)
+
+    def test_user_timeline_api_endpoints_and_dispatch(self):
+        import json
+        c = self.server.db()
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,mobile,campaign_id)
+                     VALUES('2026-10-14T10:47:09Z','smtp','1','delivered','Saad Abser','saad.abser@tblbd.com','','1')""")
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,mobile,campaign_id)
+                     VALUES('2026-10-14T10:47:17Z','172.31.105.10','1','click','Saad Abser','saad.abser@tblbd.com','','1')""")
+        c.commit()
+        c.close()
+
+        # Test query by email
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html", extra=None: sent.append((code, body))
+        self.handler.user_timeline_api("email=saad.abser@tblbd.com&campaign_id=1")
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], 200)
+        data = json.loads(sent[0][1])
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["journey"]["email"], "saad.abser@tblbd.com")
+        self.assertEqual(len(data["journey"]["events"]), 2)
+
+        # Test query by missing params
+        sent.clear()
+        self.handler.user_timeline_api("")
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], 400)
+
+        # Test dispatch in do_GET
+        self.handler.path = "/admin/api/user_timeline?email=saad.abser@tblbd.com"
+        self.handler.client_address = ("127.0.0.1", 12345)
+        self.handler.headers = {}
+        self.handler.auth = lambda: True
+        self.handler.permission_allowed = lambda *a, **k: True
+        sent.clear()
+        self.handler.do_GET()
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], 200)
+        data = json.loads(sent[0][1])
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["journey"]["email"], "saad.abser@tblbd.com")
+
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
