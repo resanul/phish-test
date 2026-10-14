@@ -102,5 +102,50 @@ class LandingPageClickTelemetryTests(unittest.TestCase):
         self.assertIn("victim@example.com", dash_html)
         self.assertIn("3 (Microsoft 365)", dash_html)
 
+    def test_trust_bank_gozayaan_landing_page_serving_and_submission(self):
+        # 1. Test GET /trust-gozayaan-travel-oct26.html
+        self.handler.path = "/trust-gozayaan-travel-oct26.html"
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html; charset=utf-8", extra=None: sent.append((code, body))
+        self.handler.do_GET()
+        self.assertEqual(sent[-1][0], 200)
+        self.assertIn("Trust Bank", sent[-1][1])
+        self.assertIn("GoZayaan", sent[-1][1])
+        self.assertIn("+8809678332211", sent[-1][1])
+        self.assertIn("10% off flights", sent[-1][1])
+        self.assertIn("65% off hotels", sent[-1][1])
+
+        # 2. Test GET /11.html
+        self.handler.path = "/11.html"
+        self.handler.do_GET()
+        self.assertEqual(sent[-1][0], 200)
+        self.assertIn("Trust Bank", sent[-1][1])
+
+        # 3. Test POST /submit
+        import io
+        from urllib.parse import urlencode
+        form_data = {
+            "name": "Mir Resanul Karim",
+            "email": "resanul@gmail.com",
+            "mobile": "01754698458",
+            "card_type": "Trust Bank Platinum Credit Card",
+            "template": "trust-gozayaan-travel-oct26"
+        }
+        encoded = urlencode(form_data).encode("utf-8")
+        self.handler.path = "/submit"
+        self.handler.headers = {"Content-Length": str(len(encoded)), "User-Agent": "Mozilla/5.0"}
+        self.handler.rfile = io.BytesIO(encoded)
+        self.handler.do_POST()
+        self.assertEqual(sent[-1][0], 200)
+
+        c = self.server.db()
+        ev = c.execute("SELECT * FROM events WHERE event='form_action' ORDER BY id DESC LIMIT 1").fetchone()
+        self.assertIsNotNone(ev)
+        self.assertEqual(ev["name"], "Mir Resanul Karim")
+        self.assertEqual(ev["email"], "resanul@gmail.com")
+        self.assertEqual(ev["mobile"], "01754698458")
+        self.assertEqual(ev["card_type"], "Trust Bank Platinum Credit Card")
+        c.close()
+
 if __name__ == "__main__":
     unittest.main()

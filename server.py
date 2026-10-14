@@ -378,6 +378,13 @@ LANDING_PAGE_SEEDS = [
         "brand": "Security Awareness",
         "scenario": "Educational Incident Drill",
         "file": "10.html"
+    },
+    {
+        "template": "11",
+        "name": "Trust Bank × GoZayaan — Exclusive Travel Discounts & Booking Portal",
+        "brand": "Trust Bank",
+        "scenario": "Travel Discounts & Flight/Hotel Booking",
+        "file": "11.html"
     }
 ]
 
@@ -1790,6 +1797,9 @@ def get_template_labels():
         "8": "8 (Zoom Meetings)", "8.html": "8 (Zoom Meetings)",
         "9": "9 (AWS IAM Console)", "9.html": "9 (AWS IAM Console)",
         "10": "10 (Awareness Drill)", "10.html": "10 (Awareness Drill)",
+        "11": "11 (Trust Bank x GoZayaan)", "11.html": "11 (Trust Bank x GoZayaan)",
+        "trust-gozayaan-travel-oct26": "Trust Bank x GoZayaan Travel",
+        "trust-gozayaan-travel-oct26.html": "Trust Bank x GoZayaan Travel",
     }
     try:
         c = db()
@@ -7313,14 +7323,21 @@ syncAudience();
             event="report" if path=="/report" else "QR_scan"
             c=db(); recrow=c.execute("SELECT * FROM recipients WHERE id=?",(tr["recipient_id"],)).fetchone(); c.close()
             record(ip,str(tr["campaign_id"]),event,recrow["name"] if recrow else "",recrow["email"] if recrow else "", "",ua,recrow["employee_id"] if recrow else "", "",str(tr["campaign_id"]),str(tr["recipient_id"]),token)
-            return self.sendbody(200,page("PhishGuard","<div style='max-width:700px;margin:80px auto;background:#fff;padding:35px;border-radius:18px;border:1px solid #dce7e2'><h1>Thank you</h1><p>Your report has been recorded as part of the authorized security-awareness simulation.</p></div>"))
-        is_html_tpl = path.startswith("/") and path.endswith(".html") and path[1:-5].isdigit()
+        is_html_tpl = path.startswith("/") and path.endswith(".html") and not path.startswith("/admin/")
+        is_numeric_path = path.startswith("/") and path[1:].isdigit()
         is_landing_path = path in ("/landing", "/landing.html")
-        if is_html_tpl or is_landing_path:
+        if is_html_tpl or is_numeric_path or is_landing_path:
             q=parse_qs(p.query); token=q.get("t",[""])[0]; tr=resolve_tracking_token(token)
             campaign_id=str(tr["campaign_id"]) if tr else ""; recipient_id=str(tr["recipient_id"]) if tr else ""
-            t=path[1:] if is_html_tpl else ""
-            t_num=path[1:-5] if is_html_tpl else ""
+            if is_html_tpl:
+                t=path[1:]
+                t_num=path[1:-5]
+            elif is_numeric_path:
+                t_num=path[1:]
+                t=f"{t_num}.html"
+            else:
+                t=""
+                t_num=""
             if not t_num and tr:
                 c=db()
                 crow=c.execute("SELECT c.template, c.landing_page_id, lp.template as lp_template FROM campaigns c LEFT JOIN landing_pages lp ON lp.id=c.landing_page_id WHERE c.id=?",(tr["campaign_id"],)).fetchone()
