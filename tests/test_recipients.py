@@ -130,6 +130,53 @@ class RecipientsSingleAddTests(unittest.TestCase):
         c.close()
         self.assertIsNone(deleted)
 
+    def test_update_existing_recipient_with_employee_id_via_do_post(self):
+        c = self.server.db()
+        c.execute("INSERT INTO recipients(email,name,employee_id,department,status,created_at) VALUES('ahasan.kabir@tblbd.com','Ahasan Kabir','4078','Division Head','Suppressed',?)", (self.server.now(),))
+        rid = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.commit()
+        c.close()
+
+        h = self.handler
+        h.path = "/admin/recipients/save"
+        h.client_address = ("127.0.0.1", 12345)
+        response_data = []
+        h.sendbody = lambda code, body, ctype="text/html", extra=None: response_data.append((code, body, extra))
+
+        import urllib.parse
+        payload = urllib.parse.urlencode({
+            "id": str(rid),
+            "email": "ahasan.kabir@tblbd.com",
+            "name": "A. K. M. Ahasan Kabir",
+            "employee_id": "4078",
+            "designation": "Executive Vice President, Head of Information Technology Divis",
+            "department": "Division Head",
+            "group_name": "IT Division",
+            "location": "Dhaka",
+            "manager": "Sarah Jenkins",
+            "language": "English",
+            "timezone": "Asia/Dhaka",
+            "status": "Active"
+        })
+        h.headers = {"Content-Length": str(len(payload))}
+        from unittest.mock import MagicMock
+        h.rfile = MagicMock()
+        h.rfile.read.return_value = payload.encode()
+
+        h.do_POST()
+        self.assertEqual(len(response_data), 1)
+        self.assertEqual(response_data[0][0], 302)
+        self.assertEqual(response_data[0][2]["Location"], "/admin/recipients")
+
+        # Verify updated values in DB
+        c = self.server.db()
+        updated = c.execute("SELECT * FROM recipients WHERE id=?", (rid,)).fetchone()
+        c.close()
+        self.assertEqual(updated["name"], "A. K. M. Ahasan Kabir")
+        self.assertEqual(updated["employee_id"], "4078")
+        self.assertEqual(updated["status"], "Active")
+        self.assertEqual(updated["group_name"], "IT Division")
+
     def test_quick_add_recipient_via_post_endpoint(self):
         h = self.handler
         h.path = "/admin/recipients/quick_add"

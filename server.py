@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json
+import os, sys, sqlite3, csv, io, secrets, html, smtplib, ssl, subprocess, tempfile, re, threading, time, hashlib, hmac, base64, socket, json, traceback
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, urlencode, quote_plus, urlsplit, unquote
 from http import cookies
@@ -7005,6 +7005,16 @@ syncAudience();
         access(ip,path,404); return self.sendbody(404,"404 File not found","text/plain")
 
     def do_POST(self):
+        try:
+            return self._handle_POST()
+        except Exception as e:
+            traceback.print_exc()
+            try:
+                return self.sendbody(500, f"500 Internal Server Error: {str(e)}", "text/plain")
+            except Exception:
+                pass
+
+    def _handle_POST(self):
         p=urlparse(self.path); ip=self.client_address[0]
         n=int(self.headers.get("Content-Length","0"))
         form=parse_qs(self.rfile.read(n).decode("utf-8","replace"))
@@ -7643,7 +7653,7 @@ syncAudience();
                 existing=c.execute("SELECT id FROM recipients WHERE lower(email)=? AND id!=?",(email,rid)).fetchone()
                 if existing: c.close(); return self.sendbody(409,"A recipient with this email already exists","text/plain")
                 if employee:
-                    emp_conflict=c.execute("SELECT id FROM recipients WHERE employee_id=? AND employee_id!=''",(employee,rid)).fetchone()
+                    emp_conflict=c.execute("SELECT id FROM recipients WHERE employee_id=? AND employee_id!='' AND id!=?",(employee,rid)).fetchone()
                     if emp_conflict: c.close(); return self.sendbody(409,"Employee ID is already assigned to another recipient","text/plain")
                 c.execute("UPDATE recipients SET email=?,name=?,employee_id=?,department=?,designation=?,location=?,manager=?,language=?,timezone=?,group_name=?,status=? WHERE id=?",
                           (email,name,employee,department,designation,location,manager,language,timezone_val,group_name,status_val,rid))
