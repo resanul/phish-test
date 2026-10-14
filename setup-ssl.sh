@@ -195,7 +195,7 @@ server {
 }
 
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
     server_name _;
 
     ssl_certificate $cert_path;
