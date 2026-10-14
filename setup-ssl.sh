@@ -178,11 +178,14 @@ setup_nginx() {
   # SELinux permission for Nginx to connect to network upstream
   if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
     echo "Configuring SELinux boolean httpd_can_network_connect..."
-    setsebool -P httpd_can_network_connect 1 || true
+    setsebool httpd_can_network_connect 1 2>/dev/null || true
+    setsebool -P httpd_can_network_connect 1 2>/dev/null || true
   fi
 
   # In Nginx mode, backend runs HTTP on 8899, Nginx handles HTTPS on 443
   set_env_var "SSL_ENABLED" "0"
+  set_env_var "SSL_CERT" ""
+  set_env_var "SSL_KEY" ""
   set_env_var "PORT" "$DEFAULT_PORT"
   set_env_var "PUBLIC_BASE_URL" "https://${host_ident}"
 

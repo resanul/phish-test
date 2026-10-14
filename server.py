@@ -18,7 +18,11 @@ PORT=int(os.environ.get("PORT","8899"))
 PUBLIC_BASE_URL=os.environ.get("PUBLIC_BASE_URL","").rstrip("/")
 SSL_CERT=os.environ.get("SSL_CERT","").strip()
 SSL_KEY=os.environ.get("SSL_KEY","").strip()
-SSL_ENABLED=os.environ.get("SSL_ENABLED","0").strip().lower() in ("1","true","yes") or ("--ssl" in sys.argv) or bool(SSL_CERT and SSL_KEY)
+_raw_ssl=os.environ.get("SSL_ENABLED","").strip().lower()
+if _raw_ssl in ("0","false","no","off"):
+    SSL_ENABLED=False
+else:
+    SSL_ENABLED=_raw_ssl in ("1","true","yes","on") or ("--ssl" in sys.argv) or bool(SSL_CERT and SSL_KEY)
 SEND_DELAY=float(os.environ.get("SEND_DELAY_SECONDS","0.2"))
 ADMIN_USERNAME=os.environ.get("ADMIN_USERNAME","admin")
 ADMIN_PASSWORD=os.environ.get("ADMIN_PASSWORD","CHANGE_ME")
