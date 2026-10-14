@@ -7421,7 +7421,14 @@ if __name__=="__main__":
         cert_file = SSL_CERT or os.path.join(DATA, "cert.pem")
         key_file = SSL_KEY or os.path.join(DATA, "key.pem")
         cert_file, key_file = ensure_self_signed_cert(cert_file, key_file)
-        ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        try:
+            proto = ssl.PROTOCOL_TLS_SERVER
+        except AttributeError:
+            proto = getattr(ssl, "PROTOCOL_TLSv1_2", getattr(ssl, "PROTOCOL_TLS", ssl.PROTOCOL_SSLv23))
+        try:
+            ssl_ctx = ssl.SSLContext(proto)
+        except Exception:
+            ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_ctx.load_cert_chain(certfile=cert_file, keyfile=key_file)
         httpd.socket = ssl_ctx.wrap_socket(httpd.socket, server_side=True)
     httpd.serve_forever()

@@ -53,8 +53,12 @@ generate_ssl_cert() {
   mkdir -p "$(dirname "$cert_out")" "$(dirname "$key_out")"
 
   if [ -f "$cert_out" ] && [ -f "$key_out" ]; then
-    echo "Existing SSL certificate and key found: $cert_out"
-    return 0
+    if openssl x509 -in "$cert_out" -text -noout 2>/dev/null | grep -q "$host_ident"; then
+      echo "Existing SSL certificate matching $host_ident found: $cert_out"
+      return 0
+    fi
+    echo "Replacing certificate for new host/IP: $host_ident..."
+    rm -f "$cert_out" "$key_out"
   fi
 
   echo "Generating self-signed SSL certificate for $host_ident..."
@@ -111,6 +115,13 @@ setup_direct() {
   fi
   set_env_var "PUBLIC_BASE_URL" "$base_url"
 
+  # Ensure systemd service file loads /etc/phish-test.env
+  local svc_file="/etc/systemd/system/${SERVICE}.service"
+  if [ -f "$svc_file" ] && ! grep -qs "EnvironmentFile" "$svc_file"; then
+    echo "Adding EnvironmentFile=-$ENV_FILE to $svc_file..."
+    sed -i '/\[Service\]/a EnvironmentFile=-'"$ENV_FILE" "$svc_file"
+  fi
+
   open_firewall_port "$port"
 
   echo "Restarting $SERVICE..."
@@ -118,7 +129,7 @@ setup_direct() {
   systemctl restart "$SERVICE"
 
   echo "Verifying HTTPS health check..."
-  if curl -fsSk --max-time 10 "https://127.0.0.1:${port}/1.html" >/dev/null 2>&1; then
+  if curl -fsSk --noproxy "*" --max-time 10 "https://127.0.0.1:${port}/1.html" >/dev/null 2>&1; then
     echo "✓ HTTPS health check passed!"
     echo "=========================================================="
     echo " HTTPS is now active!"
@@ -131,8 +142,9 @@ setup_direct() {
     echo "will display an initial security warning. Click 'Advanced'"
     echo "-> 'Proceed' to access."
   else
-    echo "WARNING: Direct HTTPS check failed. Check status:"
-    systemctl status "$SERVICE" --no-pager || true
+    echo "WARNING: Direct HTTPS check failed. Service status and recent logs:"
+    systemctl status "$SERVICE" --no-pager -l || true
+    journalctl -u "$SERVICE" -n 25 --no-pager || true
   fi
 }
 
@@ -223,7 +235,7 @@ CONF
   systemctl restart nginx
 
   echo "Verifying HTTPS health check through Nginx..."
-  if curl -fsSk --max-time 10 "https://127.0.0.1/1.html" >/dev/null 2>&1; then
+  if curl -fsSk --noproxy "*" --max-time 10 "https://127.0.0.1/1.html" >/dev/null 2>&1; then
     echo "✓ Nginx HTTPS reverse proxy is active and healthy!"
     echo "=========================================================="
     echo " HTTPS (Port 443) is now active!"
