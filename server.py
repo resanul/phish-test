@@ -1763,11 +1763,11 @@ def build_user_journeys(events, tpl_labels):
         j["events"].append(ev_dict)
 
     for j in journeys.values():
-        deliv_ts = j["delivered_ts"] or j["first_ts"]
-        j["click_delta"] = format_time_delta(deliv_ts, j["click_ts"])
+        deliv_ts = j["delivered_ts"] or (j["first_ts"] if len(j["events"]) > 1 else None)
+        j["click_delta"] = format_time_delta(deliv_ts, j["click_ts"]) if deliv_ts and j["click_ts"] and deliv_ts != j["click_ts"] else ""
         prev_ts = j["click_ts"] or deliv_ts
-        j["action_delta"] = format_time_delta(prev_ts, j["action_ts"])
-        j["total_reaction"] = format_time_delta(deliv_ts, j["latest_ts"])
+        j["action_delta"] = format_time_delta(prev_ts, j["action_ts"]) if prev_ts and j["action_ts"] and prev_ts != j["action_ts"] else ""
+        j["total_reaction"] = format_time_delta(deliv_ts, j["latest_ts"]) if deliv_ts and j["latest_ts"] and deliv_ts != j["latest_ts"] else ""
 
         for idx, ev in enumerate(j["events"]):
             if idx == 0:
@@ -2221,6 +2221,36 @@ DASHBOARD_DRILLDOWN_JS = """<style>
 .timeline-step-node { position: absolute; left: -32px; top: 8px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; background: #fff; border: 2.5px solid #087b59; z-index: 2; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
 .timeline-step-card { background: #ffffff; border: 1px solid #dce8e1; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.03); transition: all 0.15s ease; }
 .timeline-step-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #b8d4c6; }
+
+/* Simulation Progress Visual Pipeline */
+.sim-progress-cell { display: flex; flex-direction: column; gap: 7px; min-width: 250px; }
+.sim-meta-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-wrap: nowrap; }
+.sim-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 750; line-height: 1.25; white-space: nowrap; }
+.sim-status-pill.submitted { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.sim-status-pill.click { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+.sim-status-pill.delivered { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.sim-status-pill.report { background: #087b59; color: #ffffff; border: 1px solid #066246; }
+.sim-status-pill.default { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+.sim-count-tag { font-size: 10.5px; background: #f1f5f9; color: #475569; padding: 2.5px 7px; border-radius: 6px; font-weight: 700; border: 1px solid #e2e8f0; white-space: nowrap; line-height: 1.2; }
+.sim-reaction-tag { font-size: 10.5px; background: #fef2f2; color: #b91c1c; padding: 2.5px 7px; border-radius: 6px; font-weight: 750; border: 1px solid #fecaca; white-space: nowrap; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px; }
+
+.sim-stepper-track { display: flex; align-items: center; width: 100%; max-width: 250px; padding: 1px 0; white-space: nowrap; }
+.sim-step-node { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 650; color: #94a3b8; white-space: nowrap; user-select: none; }
+.sim-step-bullet { width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; background: #f8fafc; border: 1.5px solid #cbd5e1; color: #94a3b8; line-height: 1; }
+.sim-step-node.is-done { color: #065f46; font-weight: 700; }
+.sim-step-node.is-done .sim-step-bullet { background: #ecfdf5; border-color: #10b981; color: #047857; }
+.sim-step-node.is-warning { color: #c2410c; font-weight: 700; }
+.sim-step-node.is-warning .sim-step-bullet { background: #fffbeb; border-color: #f59e0b; color: #b45309; }
+.sim-step-node.is-danger { color: #b91c1c; font-weight: 800; }
+.sim-step-node.is-danger .sim-step-bullet { background: #fef2f2; border-color: #ef4444; color: #b91c1c; }
+.sim-step-node.is-success { color: #047857; font-weight: 800; }
+.sim-step-node.is-success .sim-step-bullet { background: #ecfdf5; border-color: #10b981; color: #047857; }
+
+.sim-connector-line { flex: 1; min-width: 14px; height: 2px; background: #e2e8f0; margin: 0 5px; border-radius: 1px; }
+.sim-connector-line.is-done { background: #10b981; }
+.sim-connector-line.is-warning { background: #f59e0b; }
+.sim-connector-line.is-danger { background: #ef4444; }
+.sim-connector-line.is-success { background: #10b981; }
 </style>
 <script>
 function filterActivityRows() {
@@ -3260,35 +3290,58 @@ class Handler(BaseHTTPRequestHandler):
             ip_val = esc(j["ip"]) if j["ip"] else '<span style="color:#8ba59b">—</span>'
 
             ev_count = len(j["events"])
-            count_badge = f'<span style="font-size:11px;background:#e2ece7;color:#0b4d34;padding:2px 7px;border-radius:10px;font-weight:700;margin-left:6px">{ev_count} event{"s" if ev_count!=1 else ""}</span>'
+            count_badge = f'<span class="sim-count-tag">{ev_count} event{"s" if ev_count!=1 else ""}</span>'
+
+            reaction_badge = ''
+            tot_rx = str(j.get("total_reaction") or "").strip()
+            if tot_rx and tot_rx not in ("+0s", "0s"):
+                reaction_badge = f'<span class="sim-reaction-tag" title="Time from email dispatch to interaction">⚡ {esc(tot_rx)}</span>'
 
             if j["has_action"]:
-                status_badge = '<span class="pill submitted" style="font-weight:700;background:#fee2e2;color:#991b1b">🚨 Form Submitted</span>'
-                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span>✉️ Sent</span> ➔ <span>🔗 Click</span> ➔ <span style="color:#b91c1c;font-weight:750">🚨 Submit</span></div>'
+                status_badge = '<span class="pill submitted sim-status-pill submitted" style="font-weight:750">🚨 Form Submitted</span>'
+                step1 = '<div class="sim-step-node is-done" title="Email dispatched to recipient"><span class="sim-step-bullet">✓</span><span>Sent</span></div>'
+                conn1 = '<span class="sim-connector-line is-warning"></span>'
+                step2 = '<div class="sim-step-node is-warning" title="Recipient clicked phishing link"><span class="sim-step-bullet">!</span><span>Clicked</span></div>'
+                conn2 = '<span class="sim-connector-line is-danger"></span>'
+                step3 = '<div class="sim-step-node is-danger" title="Recipient submitted form data"><span class="sim-step-bullet">✕</span><span>Submitted</span></div>'
             elif j["has_click"]:
-                status_badge = '<span class="pill click" style="font-weight:700;background:#ffedd5;color:#9a3412">🔗 Link Clicked</span>'
-                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span>✉️ Sent</span> ➔ <span style="color:#087b59;font-weight:750">🔗 Click</span> ➔ <span style="color:#94a3b8">⏳ No Form</span></div>'
+                status_badge = '<span class="pill click sim-status-pill click" style="font-weight:750">🔗 Link Clicked</span>'
+                step1 = '<div class="sim-step-node is-done" title="Email dispatched to recipient"><span class="sim-step-bullet">✓</span><span>Sent</span></div>'
+                conn1 = '<span class="sim-connector-line is-warning"></span>'
+                step2 = '<div class="sim-step-node is-warning" title="Recipient clicked phishing link"><span class="sim-step-bullet">!</span><span>Clicked</span></div>'
+                conn2 = '<span class="sim-connector-line"></span>'
+                step3 = '<div class="sim-step-node" title="No form submitted"><span class="sim-step-bullet">·</span><span>No Form</span></div>'
             elif j["has_delivered"]:
-                status_badge = '<span class="pill delivered" style="font-weight:600;background:#e2ece7;color:#0b4d34">✉️ Email Dispatched</span>'
-                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:4px"><span style="color:#087b59;font-weight:750">✉️ Sent</span> ➔ <span style="color:#94a3b8">⏳ No Click</span></div>'
+                status_badge = '<span class="pill delivered sim-status-pill delivered" style="font-weight:750">✉️ Email Dispatched</span>'
+                step1 = '<div class="sim-step-node is-done" title="Email dispatched to recipient"><span class="sim-step-bullet">✓</span><span>Sent</span></div>'
+                conn1 = '<span class="sim-connector-line"></span>'
+                step2 = '<div class="sim-step-node" title="Awaiting user click"><span class="sim-step-bullet">·</span><span>No Click</span></div>'
+                conn2 = '<span class="sim-connector-line"></span>'
+                step3 = '<div class="sim-step-node" title="No form submitted"><span class="sim-step-bullet">·</span><span>No Form</span></div>'
             elif j["has_report"]:
-                status_badge = '<span class="pill" style="background:#087b59;color:#fff;font-weight:700">🛡️ Phish Reported</span>'
-                flow_dots = '<div style="font-size:11.5px;color:#087b59;font-weight:600;margin-top:3px">🛡️ Reported by employee</div>'
+                status_badge = '<span class="pill report sim-status-pill report" style="font-weight:750">🛡️ Phish Reported</span>'
+                step1 = '<div class="sim-step-node is-done" title="Email dispatched to recipient"><span class="sim-step-bullet">✓</span><span>Sent</span></div>'
+                conn1 = '<span class="sim-connector-line is-success"></span>'
+                step2 = '<div class="sim-step-node is-warning" title="Link examined"><span class="sim-step-bullet">!</span><span>Clicked</span></div>' if j["has_click"] else '<div class="sim-step-node is-done" title="Reported from inbox"><span class="sim-step-bullet">✓</span><span>Inbox</span></div>'
+                conn2 = '<span class="sim-connector-line is-success"></span>'
+                step3 = '<div class="sim-step-node is-success" title="Simulation reported by employee"><span class="sim-step-bullet">🛡</span><span>Reported</span></div>'
             else:
                 last_ev = j["events"][-1].get("event", "event") if j["events"] else "event"
-                status_badge = f'<span class="pill">{esc(last_ev)}</span>'
-                flow_dots = ''
+                status_badge = f'<span class="pill sim-status-pill default">{esc(last_ev)}</span>'
+                step1 = '<div class="sim-step-node is-done" title="Direct simulation link visit"><span class="sim-step-bullet">✓</span><span>Visit</span></div>'
+                conn1 = '<span class="sim-connector-line"></span>'
+                step2 = '<div class="sim-step-node" title="Event recorded"><span class="sim-step-bullet">·</span><span>Event</span></div>'
+                conn2 = '<span class="sim-connector-line"></span>'
+                step3 = '<div class="sim-step-node" title="Completed"><span class="sim-step-bullet">·</span><span>Done</span></div>'
 
-            if j.get("total_reaction"):
-                reaction_html = f'<div style="font-size:11px;color:#b91c1c;font-weight:700;margin-top:2px">⚡ Reaction: {esc(j["total_reaction"])}</div>'
-            else:
-                reaction_html = ''
+            flow_stepper = f'<div class="sim-stepper-track">{step1}{conn1}{step2}{conn2}{step3}</div>'
+            progress_cell = f'<div class="sim-progress-cell"><div class="sim-meta-row">{status_badge}{count_badge}{reaction_badge}</div>{flow_stepper}</div>'
 
             jid_esc = esc(j["id"])
             journey_rows.append(
                 f'<tr class="journey-row" onclick="openJourneyModal(\'{jid_esc}\')" style="cursor:pointer" title="Click to view interactive user journey timeline">'
                 f'<td><b>{esc(d_str)}</b><div style="font-size:11.5px;color:#5c786c">{esc(t_str)}</div></td>'
-                f'<td><div>{status_badge}{count_badge}</div>{flow_dots}{reaction_html}</td>'
+                f'<td>{progress_cell}</td>'
                 f'<td><b>{esc(display_tpl)}</b></td>'
                 f'<td><code style="background:#eaf4ef;color:#0b4d34;padding:2px 6px;border-radius:4px">{ip_val}</code></td>'
                 f'<td>{name_val}</td>'
@@ -3378,14 +3431,14 @@ class Handler(BaseHTTPRequestHandler):
     <table class="table">
       <thead>
         <tr>
-          <th>Last Active</th>
-          <th>Simulation Progress</th>
-          <th>Template</th>
-          <th>Source IP</th>
-          <th>Recipient</th>
-          <th>Email Address</th>
-          <th>Mobile</th>
-          <th style="text-align:right">Action</th>
+          <th style="min-width:130px">Last Active</th>
+          <th style="min-width:270px">Simulation Progress</th>
+          <th style="min-width:150px">Template</th>
+          <th style="min-width:115px">Source IP</th>
+          <th style="min-width:130px">Recipient</th>
+          <th style="min-width:160px">Email Address</th>
+          <th style="min-width:110px">Mobile</th>
+          <th style="text-align:right;min-width:110px">Action</th>
         </tr>
       </thead>
       <tbody id="journeyRows">{journeys_table}</tbody>
