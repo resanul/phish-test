@@ -804,6 +804,32 @@ def db():
         """)
     except Exception:
         pass
+    try:
+        healed = c.execute("SELECT value FROM system_settings WHERE key='event_recipient_email_healed_v2'").fetchone()
+        if not healed:
+            mismatched = c.execute("""
+                SELECT e.id, e.email as old_email, r.email as correct_email, r.name as correct_name, r.employee_id as correct_emp_id
+                FROM events e
+                JOIN recipients r ON r.id = e.recipient_id
+                WHERE e.recipient_id IS NOT NULL 
+                  AND e.recipient_id != '' 
+                  AND lower(e.email) != lower(r.email)
+            """).fetchall()
+            affected_emails = set()
+            for m in mismatched:
+                if m["old_email"]: affected_emails.add(m["old_email"])
+                if m["correct_email"]: affected_emails.add(m["correct_email"])
+                c.execute("""
+                    UPDATE events 
+                    SET email = ?, 
+                        name = CASE WHEN ? != '' THEN ? ELSE name END, 
+                        employee_id = CASE WHEN ? != '' THEN ? ELSE employee_id END
+                    WHERE id = ?
+                """, (m["correct_email"], m["correct_name"] or "", m["correct_name"] or "", m["correct_emp_id"] or "", m["correct_emp_id"] or "", m["id"]))
+            c.execute("INSERT OR REPLACE INTO system_settings(key, value, updated_at) VALUES('event_recipient_email_healed_v2', '1', ?)", (now(),))
+            c.commit()
+    except Exception:
+        pass
     c.commit()
     return c
 
@@ -1688,8 +1714,25 @@ def format_time_delta(ts_start, ts_end):
 def build_user_journeys(events, tpl_labels):
     journeys = {}
     email_campaign_map = {}
+    recipient_email_map = {}
+    recipient_meta_map = {}
+
     for e in events:
-        email = (e.get("email") or "").strip().lower()
+        rid = str(e.get("recipient_id") or "").strip()
+        em = (e.get("email") or "").strip().lower()
+        ev_type = str(e.get("event") or "").strip()
+        if rid and rid != "None" and em:
+            if ev_type in ("delivered", "click") or rid not in recipient_email_map:
+                recipient_email_map[rid] = em
+                if e.get("name") or e.get("employee_id"):
+                    recipient_meta_map[rid] = {
+                        "name": e.get("name") or "",
+                        "employee_id": e.get("employee_id") or ""
+                    }
+
+    for e in events:
+        rid = str(e.get("recipient_id") or "").strip()
+        email = (recipient_email_map.get(rid) if (rid and rid in recipient_email_map) else (e.get("email") or "")).strip().lower()
         cid = str(e.get("campaign_id") or "").strip()
         day = str(e.get("ts") or "")[:10]
         if email and cid and cid != "None":
@@ -1697,7 +1740,8 @@ def build_user_journeys(events, tpl_labels):
             email_campaign_map[email] = cid
 
     for e in sorted(events, key=lambda x: str(x.get("ts") or "")):
-        email = (e.get("email") or "").strip().lower()
+        rid = str(e.get("recipient_id") or "").strip()
+        email = (recipient_email_map.get(rid) if (rid and rid in recipient_email_map) else (e.get("email") or "")).strip().lower()
         cid = str(e.get("campaign_id") or "").strip()
         if cid == "None": cid = ""
         tpl = str(e.get("template") or "").strip()
@@ -1711,12 +1755,15 @@ def build_user_journeys(events, tpl_labels):
             key = f"anon__{eid}"
 
         if key not in journeys:
+            meta = recipient_meta_map.get(rid, {})
+            name_val = meta.get("name") or e.get("name") or ""
+            emp_val = meta.get("employee_id") or e.get("employee_id") or ""
             journeys[key] = {
                 "id": key,
-                "email": e.get("email") or "",
-                "name": e.get("name") or "",
+                "email": email or e.get("email") or "",
+                "name": name_val,
                 "mobile": e.get("mobile") or "",
-                "employee_id": e.get("employee_id") or "",
+                "employee_id": emp_val,
                 "campaign_id": resolved_cid if email else cid,
                 "template": tpl,
                 "display_template": tpl_labels.get(tpl, f"Template {tpl}"),
@@ -1735,8 +1782,13 @@ def build_user_journeys(events, tpl_labels):
             }
 
         j = journeys[key]
-        if e.get("name") and (not j["name"] or j["name"] in ("Colleague", "John Doe")): j["name"] = e["name"]
-        elif e.get("name") and not j["name"]: j["name"] = e["name"]
+        canonical_name = recipient_meta_map.get(rid, {}).get("name") if (rid and rid in recipient_meta_map) else ""
+        if canonical_name:
+            j["name"] = canonical_name
+        elif e.get("name") and (not j["name"] or j["name"] in ("Colleague", "John Doe")):
+            j["name"] = e["name"]
+        elif e.get("name") and not j["name"]:
+            j["name"] = e["name"]
         if e.get("mobile"): j["mobile"] = e["mobile"]
         if e.get("employee_id"): j["employee_id"] = e["employee_id"]
         eip = (e.get("ip") or "").strip()
@@ -8361,30 +8413,53 @@ syncAudience();
 
         if p.path=="/submit":
             t=form.get("template",["unknown"])[0][:50]
-            name=form.get("name",[""])[0][:150]; employee_id=form.get("employee_id",[""])[0][:100]
-            email=form.get("email",[""])[0][:200].strip().lower(); mobile=form.get("mobile",[""])[0][:50]
-            card_type=form.get("card_type",[""])[0][:100]
+            entered_name=form.get("name",[""])[0][:150].strip()
+            entered_employee_id=form.get("employee_id",[""])[0][:100].strip()
+            entered_email=form.get("email",[""])[0][:200].strip().lower()
+            mobile=form.get("mobile",[""])[0][:50].strip()
+            card_type=form.get("card_type",[""])[0][:100].strip()
             qs=parse_qs(p.query)
             token=qs.get("t",[""])[0] or form.get("t",[""])[0] or form.get("token",[""])[0]
             tr=resolve_tracking_token(token)
             campaign_id=str(tr["campaign_id"]) if tr else ""
             recipient_id=str(tr["recipient_id"]) if tr else ""
 
-            if not campaign_id and email:
-                c=db()
-                recent_ev=c.execute("SELECT campaign_id, recipient_id, name, employee_id FROM events WHERE lower(email)=? AND campaign_id!='' ORDER BY id DESC LIMIT 1", (email,)).fetchone()
-                if recent_ev:
-                    campaign_id=str(recent_ev["campaign_id"])
-                    if not recipient_id: recipient_id=str(recent_ev["recipient_id"] or "")
-                    if not name and recent_ev["name"]: name=recent_ev["name"]
-                    if not employee_id and recent_ev["employee_id"]: employee_id=recent_ev["employee_id"]
-                else:
-                    rec_row=c.execute("SELECT id, name, employee_id FROM recipients WHERE lower(email)=?", (email,)).fetchone()
-                    if rec_row:
-                        if not recipient_id: recipient_id=str(rec_row["id"])
-                        if not name and rec_row["name"]: name=rec_row["name"]
-                        if not employee_id and rec_row["employee_id"]: employee_id=rec_row["employee_id"]
-                c.close()
+            target_email=""
+            target_name=""
+            target_employee_id=""
+            c=db()
+            if recipient_id:
+                rec_row=c.execute("SELECT id, name, email, employee_id FROM recipients WHERE id=?", (recipient_id,)).fetchone()
+                if rec_row:
+                    target_email=(rec_row["email"] or "").strip().lower()
+                    target_name=(rec_row["name"] or "").strip()
+                    target_employee_id=(rec_row["employee_id"] or "").strip()
+
+            if target_email:
+                email=target_email
+                name=target_name or entered_name
+                employee_id=target_employee_id or entered_employee_id
+                if entered_email and entered_email != target_email:
+                    typed_note=f"Typed: {entered_email}"
+                    card_type=f"{card_type} ({typed_note})" if card_type else typed_note
+            else:
+                email=entered_email
+                name=entered_name
+                employee_id=entered_employee_id
+                if not campaign_id and email:
+                    recent_ev=c.execute("SELECT campaign_id, recipient_id, name, employee_id FROM events WHERE lower(email)=? AND campaign_id!='' ORDER BY id DESC LIMIT 1", (email,)).fetchone()
+                    if recent_ev:
+                        campaign_id=str(recent_ev["campaign_id"])
+                        if not recipient_id: recipient_id=str(recent_ev["recipient_id"] or "")
+                        if not name and recent_ev["name"]: name=recent_ev["name"]
+                        if not employee_id and recent_ev["employee_id"]: employee_id=recent_ev["employee_id"]
+                    else:
+                        rec_row=c.execute("SELECT id, name, employee_id FROM recipients WHERE lower(email)=?", (email,)).fetchone()
+                        if rec_row:
+                            if not recipient_id: recipient_id=str(rec_row["id"])
+                            if not name and rec_row["name"]: name=rec_row["name"]
+                            if not employee_id and rec_row["employee_id"]: employee_id=rec_row["employee_id"]
+            c.close()
 
             record(ip,t,"form_action",name,email,mobile,self.headers.get("User-Agent",""),employee_id,card_type,campaign_id,recipient_id,token)
             access(ip,p.path,200)

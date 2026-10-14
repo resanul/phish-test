@@ -147,5 +147,104 @@ class LandingPageClickTelemetryTests(unittest.TestCase):
         self.assertEqual(ev["card_type"], "Trust Bank Platinum Credit Card")
         c.close()
 
+    def test_recipient_attribution_when_different_email_entered_on_form(self):
+        c = self.server.db()
+        c.execute("INSERT INTO campaigns(name,template,status,created_at) VALUES('Campaign 13','11','Active','2026-10-14')")
+        camp_id = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.execute("INSERT INTO recipients(email,name,employee_id,status,created_at) VALUES('saad.abser@tblbd.com','Saad Abser','EMP-01','Pending','2026-10-14')")
+        saad_id = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.execute("INSERT INTO recipients(email,name,employee_id,status,created_at) VALUES('resanul@gmail.com','Mir Resanul Karim','EMP-02','Pending','2026-10-14')")
+        resanul_id = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        c.commit()
+        c.close()
+
+        saad_token = self.server.create_tracking_token(camp_id, saad_id)
+        resanul_token = self.server.create_tracking_token(camp_id, resanul_id)
+
+        # 1. Simulate deliveries for both recipients
+        self.server.record("smtp", "11", "delivered", "Saad Abser", "saad.abser@tblbd.com", "", "campaign-delivery", "EMP-01", "", camp_id, saad_id, saad_token)
+        self.server.record("smtp", "11", "delivered", "Mir Resanul Karim", "resanul@gmail.com", "", "campaign-delivery", "EMP-02", "", camp_id, resanul_id, resanul_token)
+
+        # 2. Resanul clicks his email link (Saad NEVER clicks)
+        self.handler.path = f"/11.html?t={resanul_token}"
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html; charset=utf-8", extra=None: sent.append((code, body))
+        self.handler.do_GET()
+        self.assertEqual(sent[-1][0], 200)
+
+        # 3. Resanul submits form, but enters Saad's email into the input field!
+        import io
+        from urllib.parse import urlencode
+        form_data = {
+            "name": "Saad Abser",
+            "email": "saad.abser@tblbd.com",
+            "mobile": "01711223344",
+            "card_type": "Trust Bank Platinum",
+            "template": "11",
+            "t": resanul_token
+        }
+        encoded = urlencode(form_data).encode("utf-8")
+        self.handler.path = f"/submit?t={resanul_token}"
+        self.handler.headers = {"Content-Length": str(len(encoded)), "User-Agent": "Mozilla/5.0"}
+        self.handler.rfile = io.BytesIO(encoded)
+        self.handler.do_POST()
+        self.assertEqual(sent[-1][0], 200)
+
+        # 4. In events table:
+        # The form_action MUST belong to Resanul (recipient_id=resanul_id, email=resanul@gmail.com)
+        c = self.server.db()
+        saad_actions = c.execute("SELECT * FROM events WHERE email='saad.abser@tblbd.com' AND event='form_action'").fetchall()
+        self.assertEqual(len(saad_actions), 0, "Saad never clicked or submitted, no form_action should be attributed to Saad")
+
+        res_action = c.execute("SELECT * FROM events WHERE email='resanul@gmail.com' AND event='form_action'").fetchone()
+        self.assertIsNotNone(res_action, "Resanul submitted the form, so compromise must be attributed to Resanul")
+        self.assertEqual(str(res_action["recipient_id"]), str(resanul_id))
+        self.assertIn("Typed: saad.abser@tblbd.com", res_action["card_type"])
+
+        # 5. In User Journeys:
+        all_events = [dict(r) for r in c.execute("SELECT * FROM events WHERE campaign_id=?", (camp_id,)).fetchall()]
+        c.close()
+
+        journeys = self.server.build_user_journeys(all_events, {"11": "11 (Trust Bank x GoZayaan)"})
+        saad_j = next((j for j in journeys if j["email"] == "saad.abser@tblbd.com"), None)
+        res_j = next((j for j in journeys if j["email"] == "resanul@gmail.com"), None)
+
+        self.assertIsNotNone(saad_j)
+        self.assertIsNotNone(res_j)
+
+        # Saad: ONLY delivered (1 event)
+        self.assertTrue(saad_j["has_delivered"])
+        self.assertFalse(saad_j["has_click"])
+        self.assertFalse(saad_j["has_action"])
+        self.assertEqual(len(saad_j["events"]), 1)
+
+        # Resanul: delivered + click + form_action (3 events)
+        self.assertTrue(res_j["has_delivered"])
+        self.assertTrue(res_j["has_click"])
+        self.assertTrue(res_j["has_action"])
+        self.assertEqual(len(res_j["events"]), 3)
+
+    def test_database_self_healing_heals_mismatched_recipient_emails(self):
+        c = self.server.db()
+        c.execute("INSERT INTO recipients(email,name,employee_id,status,created_at) VALUES('resanul@gmail.com','Mir Resanul Karim','EMP-99','Pending','2026-10-14')")
+        rec_id = c.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        # Corrupted historical event where recipient_id=rec_id, but email is typed as saad
+        c.execute("""INSERT INTO events(ts,ip,template,event,name,email,mobile,recipient_id,campaign_id)
+                     VALUES('2026-10-14T11:00:00Z','172.31.105.10','11','form_action','Saad Abser','saad.abser@tblbd.com','01711223344',?,'13')""", (rec_id,))
+        # Reset healed flag to simulate startup migration
+        c.execute("DELETE FROM system_settings WHERE key='event_recipient_email_healed_v2'")
+        c.commit()
+        c.close()
+
+        # Re-run db() to trigger self-healing
+        c2 = self.server.db()
+        healed_ev = c2.execute("SELECT * FROM events WHERE recipient_id=? AND event='form_action'", (rec_id,)).fetchone()
+        self.assertIsNotNone(healed_ev)
+        self.assertEqual(healed_ev["email"], "resanul@gmail.com", "Self-healing must restore the authentic recipient email")
+        self.assertEqual(healed_ev["name"], "Mir Resanul Karim")
+        self.assertEqual(healed_ev["employee_id"], "EMP-99")
+        c2.close()
+
 if __name__ == "__main__":
     unittest.main()
+
