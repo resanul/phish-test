@@ -4,6 +4,10 @@ set -euo pipefail
 APP="/opt/phish-test"
 SERVICE="phish-test"
 PORT="${PORT:-8899}"
+if [ -f /etc/phish-test.env ]; then
+  ENV_PORT="$(grep -E "^PORT=" /etc/phish-test.env 2>/dev/null | cut -d'=' -f2 || true)"
+  [ -n "$ENV_PORT" ] && PORT="$ENV_PORT"
+fi
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ERROR: Run as root."

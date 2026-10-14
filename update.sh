@@ -5,6 +5,10 @@ APP="/opt/phish-test"
 BRANCH="${BRANCH:-main}"
 SERVICE="phish-test"
 PORT="${PORT:-8899}"
+if [ -f /etc/phish-test.env ]; then
+  ENV_PORT="$(grep -E "^PORT=" /etc/phish-test.env 2>/dev/null | cut -d'=' -f2 || true)"
+  [ -n "$ENV_PORT" ] && PORT="$ENV_PORT"
+fi
 STATE="$APP/.deploy-state"
 
 if [ "$(id -u)" -ne 0 ]; then
