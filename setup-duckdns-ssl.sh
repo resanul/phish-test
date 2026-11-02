@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-DUCK_DOMAIN="${1:-tblbdpromotion}"
+DUCK_DOMAIN="${1:-tblbd}"
 TOKEN="${2:-cb7a49cb-107d-49e2-8668-bb19425121ca}"
 PRIVATE_IP="${3:-172.31.105.11}"
 PROXY_URL="${4:-http://172.31.3.25:3128}"
