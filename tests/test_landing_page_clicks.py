@@ -245,6 +245,31 @@ class LandingPageClickTelemetryTests(unittest.TestCase):
         self.assertEqual(healed_ev["employee_id"], "EMP-99")
         c2.close()
 
+
+    def test_ca_crt_download_route(self):
+        # 1. Test when ca file does not exist
+        self.handler.path = "/ca.crt"
+        sent = []
+        self.handler.sendbody = lambda code, body, ctype="text/html; charset=utf-8", extra=None: sent.append((code, body, ctype, extra))
+        self.handler.do_GET()
+        self.assertEqual(sent[-1][0], 404)
+
+        # 2. Test when ca file exists in DATA
+        ca_test_file = os.path.join(self.server.DATA, "trust-root-ca.crt")
+        os.makedirs(self.server.DATA, exist_ok=True)
+        with open(ca_test_file, "wb") as f:
+            f.write(b"-----BEGIN CERTIFICATE-----\nTESTDATA\n-----END CERTIFICATE-----")
+
+        try:
+            sent.clear()
+            self.handler.do_GET()
+            self.assertEqual(sent[-1][0], 200)
+            self.assertEqual(sent[-1][2], "application/x-x509-ca-cert")
+            self.assertIn(b"TESTDATA", sent[-1][1])
+        finally:
+            if os.path.exists(ca_test_file):
+                os.remove(ca_test_file)
+
 if __name__ == "__main__":
     unittest.main()
 

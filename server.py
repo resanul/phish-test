@@ -7194,6 +7194,24 @@ syncAudience();
         if path=="/dashboard":
             if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
             return self.sendbody(302,b"",extra={"Location":"/"})
+        if path in ("/ca.crt", "/trust-ca.crt", "/root-ca.crt", "/ssl/ca.crt"):
+            ca_paths = [
+                "/etc/pki/tls/certs/trust-root-ca.crt",
+                "/etc/pki/tls/certs/ca.crt",
+                os.path.join(DATA, "trust-root-ca.crt"),
+                os.path.join(DATA, "ca.crt"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "trust-root-ca.crt"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "trust-root-ca.crt"),
+            ]
+            for cp in ca_paths:
+                if os.path.isfile(cp):
+                    try:
+                        with open(cp, "rb") as cf:
+                            ca_data = cf.read()
+                        return self.sendbody(200, ca_data, "application/x-x509-ca-cert", {"Content-Disposition": 'attachment; filename="TrustBank-RootCA.crt"'})
+                    except Exception:
+                        pass
+            return self.sendbody(404, "Root CA certificate not found on server", "text/plain")
         if path=="/admin/logout":
             c=cookies.SimpleCookie(self.headers.get("Cookie","")); s=c.get("admin_session")
             if s: SESSIONS.pop(s.value,None)

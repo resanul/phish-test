@@ -52,38 +52,77 @@ generate_ssl_cert() {
 
   mkdir -p "$(dirname "$cert_out")" "$(dirname "$key_out")"
 
+  local ca_dir="/etc/pki/tls/certs"
+  local ca_key_dir="/etc/pki/tls/private"
+  local ca_cert="$ca_dir/trust-root-ca.crt"
+  local ca_key="$ca_key_dir/trust-root-ca.key"
+
+  mkdir -p "$ca_dir" "$ca_key_dir"
+
+  # 1. Ensure Trust Bank Enterprise Root CA exists
+  if [ ! -f "$ca_cert" ] || [ ! -f "$ca_key" ]; then
+    echo "Creating Trust Bank Enterprise Root CA ($ca_cert)..."
+    openssl genrsa -out "$ca_key" 4096 2>/dev/null
+    openssl req -x509 -new -nodes -key "$ca_key" -sha256 -days 3650       -out "$ca_cert"       -subj "/C=BD/O=Trust Bank PLC/OU=Information Security/CN=Trust Bank Enterprise Root CA" 2>/dev/null
+    chmod 600 "$ca_key"
+    chmod 644 "$ca_cert"
+    echo "[OK] Enterprise Root CA created successfully."
+  fi
+
+  # Copy to app data directory so server.py can serve it at /ca.crt
+  mkdir -p "$APP/data" 2>/dev/null || true
+  cp -f "$ca_cert" "$APP/data/trust-root-ca.crt" 2>/dev/null || true
+  chmod 644 "$APP/data/trust-root-ca.crt" 2>/dev/null || true
+
+  # 2. Check existing certificate
   if [ -f "$cert_out" ] && [ -f "$key_out" ]; then
-    if openssl x509 -in "$cert_out" -text -noout 2>/dev/null | grep -q "$host_ident"; then
-      echo "Existing SSL certificate matching $host_ident found: $cert_out"
+    if openssl x509 -in "$cert_out" -text -noout 2>/dev/null | grep -q "$host_ident" &&        openssl x509 -in "$cert_out" -issuer -noout 2>/dev/null | grep -q "Trust Bank Enterprise Root CA"; then
+      echo "Existing CA-signed SSL certificate matching $host_ident found: $cert_out"
       return 0
     fi
-    echo "Replacing certificate for new host/IP: $host_ident..."
+    echo "Regenerating certificate to ensure Enterprise Root CA signature and multi-SAN support..."
     rm -f "$cert_out" "$key_out"
   fi
 
-  echo "Generating self-signed SSL certificate for $host_ident..."
+  # 3. Build comprehensive SAN
   local san="DNS:localhost,IP:127.0.0.1"
   if [[ "$host_ident" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     san="$san,IP:$host_ident"
   else
-    san="$san,DNS:$host_ident"
+    san="$san,DNS:$host_ident,DNS:*.$host_ident"
   fi
 
-  openssl req -x509 -newkey rsa:2048 -nodes \
-    -keyout "$key_out" \
-    -out "$cert_out" \
-    -days 365 \
-    -subj "/CN=$host_ident/O=Trust PhishGuard/OU=Security" \
-    -addext "subjectAltName=$san" >/dev/null 2>&1 || \
-  openssl req -x509 -newkey rsa:2048 -nodes \
-    -keyout "$key_out" \
-    -out "$cert_out" \
-    -days 365 \
-    -subj "/CN=$host_ident/O=Trust PhishGuard/OU=Security" >/dev/null 2>&1
+  if [[ "$san" != *"172.31.105.11"* ]]; then
+    san="$san,IP:172.31.105.11"
+  fi
+  if [[ "$san" != *"tblbdpromotion.com"* ]]; then
+    san="$san,DNS:tblbdpromotion.com,DNS:*.tblbdpromotion.com"
+  fi
 
+  echo "Generating SSL certificate for $host_ident signed by Trust Bank Enterprise Root CA..."
+  echo "SAN entries: $san"
+
+  local ext_file
+  ext_file="$(mktemp)"
+  cat > "$ext_file" <<EXT
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = $san
+EXT
+
+  local csr_file
+  csr_file="$(mktemp)"
+  openssl genrsa -out "$key_out" 2048 2>/dev/null
+  openssl req -new -key "$key_out" -out "$csr_file"     -subj "/C=BD/O=Trust Bank PLC/OU=Security Operations/CN=$host_ident" 2>/dev/null
+
+  openssl x509 -req -in "$csr_file" -CA "$ca_cert" -CAkey "$ca_key" -CAcreateserial     -out "$cert_out" -days 825 -sha256 -extfile "$ext_file" 2>/dev/null
+
+  rm -f "$ext_file" "$csr_file"
   chmod 600 "$key_out"
   chmod 644 "$cert_out"
-  echo "Certificate generated: $cert_out"
+  echo "[OK] Certificate signed by Enterprise Root CA generated: $cert_out"
 }
 
 setup_direct() {
@@ -194,7 +233,16 @@ setup_nginx() {
 server {
     listen 80;
     server_name _;
-    return 301 https://\$host\$request_uri;
+
+    location /ca.crt {
+        alias /etc/pki/tls/certs/trust-root-ca.crt;
+        default_type application/x-x509-ca-cert;
+        add_header Content-Disposition 'attachment; filename="TrustBank-RootCA.crt"';
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
 }
 
 server {
@@ -245,8 +293,19 @@ CONF
     echo " Access URL:      https://$host_ident/admin"
     echo " Base URL:        https://$host_ident"
     echo " Port 80:         Automatically redirected to HTTPS (443)"
-    echo " Certificate:     $cert_path"
+    echo " Server Cert:     $cert_path"
+    echo " Root CA Cert:    /etc/pki/tls/certs/trust-root-ca.crt"
+    echo " CA Download URL: http://$host_ident/ca.crt"
     echo "=========================================================="
+    echo ""
+    echo ">> To remove 'Not secure' in Chrome on Windows (1-Time Setup):"
+    echo " 1. Visit: http://$host_ident/ca.crt to download 'TrustBank-RootCA.crt'"
+    echo " 2. Double-click the file -> 'Install Certificate...'"
+    echo " 3. Select 'Local Machine' -> Next"
+    echo " 4. Choose 'Place all certificates in the following store' -> Browse"
+    echo " 5. Select 'Trusted Root Certification Authorities' -> Next -> Finish"
+    echo " 6. Reopen Chrome -> https://$host_ident and https://tblbdpromotion.com"
+    echo "    will both show the SECURE LOCK (PROTECTED)!"
   else
     echo "WARNING: Nginx HTTPS check failed. Check status:"
     systemctl status nginx --no-pager || true
