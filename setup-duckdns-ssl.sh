@@ -70,7 +70,6 @@ certbot certonly --manual \
   --agree-tos \
   --register-unsafely-without-email \
   --non-interactive \
-  --manual-public-ip-logging-ok
 
 rm -f "$AUTH_HOOK" "$CLEANUP_HOOK"
 
