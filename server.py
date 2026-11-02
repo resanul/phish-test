@@ -88,6 +88,7 @@ LINKSEC_KNOWN_TITLES = {
     "apex-rewards-employee-voucher": ("Apex Rewards - Exclusive 55% Employee Gift Voucher", "[Exclusive] Claim Your Apex 55% Employee Discount Voucher", "Medium"),
     "trust-bank-corporate-card": ("Trust Bank PLC - Exclusive Employee Card Pre-Approval", "[Pre-Approved] Exclusive Corporate Credit Card Privileges for {{name}}", "Medium"),
     "trust-bank-gozayaan-travel": ("Trust Bank × GoZayaan — Exclusive Travel Discounts", "[Exclusive] Enjoy Up to 65% Travel Discounts with Your Trust Bank Card!", "Medium"),
+    "trust-bank-promotion-announcement": ("Trust Bank PLC — Promotion Announcement", "Trust Bank PLC | Promotion Announcement — Check Your Eligibility", "Medium"),
     "trust-gozayaan-travel-oct26": ("Trust Bank × GoZayaan — Exclusive Travel Discounts", "[Exclusive] Enjoy Up to 65% Travel Discounts with Your Trust Bank Card!", "Medium"),
     "zoom-urgent-account-update-required": ("Zoom - Urgent Account Update Required", "Urgent: Immediate Action Required to Prevent Zoom Account Suspension", "Hard"),
     "zoom-urgent-zoom-account-security-alert": ("Zoom - Urgent Security Alert", "Zoom - Urgent Security Alert: Unusual Login Detected", "Medium"),
@@ -246,6 +247,25 @@ CORE_EMAIL_TEMPLATES = [
         "owner": "LinkSec Awareness Library",
         "status": "Active",
         "text_body": "Dear {{name}},\n\nUsing Trust Bank cards Enjoy travel discounts with GoZayaan!\n\nUp to 10% off flights & 65% off hotels till Oct 31, 2026.\nFor Details Call +8809678332211. T&C apply.\n\nExclusive Offers:\n- Up to 10% OFF on Flights\n- Up to 65% OFF on Hotels\n- Valid Till: October 31, 2026\n\nBook your discounted flights and hotels now:\n{{tracking_link}}\n\nIf you suspect this email is suspicious or unauthorized, please report it immediately:\n{{report_link}}\n\nTrust Bank PLC & GoZayaan\nShadhinata Tower, Bir Sreshtha Shaheed Jahangir Gate, Dhaka Cantonment, Dhaka"
+    },
+    {
+        "template": "trust-bank-promotion-announcement",
+        "name": "Trust Bank PLC ? Promotion Announcement",
+        "subject": "Trust Bank PLC | Promotion Announcement ? Check Your Eligibility",
+        "preheader": "As per Management approval, the list of promoted employees is attached herewith.",
+        "category": "HR & Internal Communication",
+        "difficulty": "Medium",
+        "language": "English",
+        "brand": "Trust Bank",
+        "industry": "Banking & Financial Services",
+        "tags": "Call to action, Visual Imitation, Authority Figures, Promotion Announcement, HRD",
+        "file": os.path.join("email", "trust-bank", "trust-bank-promotion-announcement.html"),
+        "from_name": "Human Resources Department - Trust Bank PLC",
+        "from_email": "hrd@trustbank-corporate.com",
+        "reply_to": "hrd@trustbank-corporate.com",
+        "owner": "LinkSec Awareness Library",
+        "status": "Active",
+        "text_body": "Dear {{name}},\n\nPROMOTION ANNOUNCEMENT\n\nAs per Management approval, the list of promoted employees (Executives and Officers) is published.\n\nCongratulations in Advance to All Employees on Their Upcoming Promotions!\n\nEffective Dates of Promotion: 01 January 2025 | 01 July 2025\nPromotional Benefits Effective From: 01 January 2026\n\nTo check your eligibility and view your promotion letter, please visit the HRIS portal below:\n{{tracking_link}}\n\nIf you suspect this email is unauthorized or suspicious, please report it immediately:\n{{report_link}}\n\nHuman Resources Department\nTrust Bank PLC\nA Bank for Financial Inclusion"
     }
 ]
 
