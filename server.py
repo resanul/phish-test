@@ -12,6 +12,7 @@ BASE=os.environ.get("PHISH_BASE","/opt/phish-test" if os.path.isdir("/opt/phish-
 TEMPLATES=os.path.join(BASE,"templates")
 DATA=os.path.join(BASE,"data")
 LOGS=os.path.join(BASE,"logs")
+STATIC=os.path.join(BASE,"static")
 DB=os.path.join(DATA,"phish.db")
 LOG=os.path.join(LOGS,"access.log")
 PORT=int(os.environ.get("PORT","8899"))
@@ -63,6 +64,7 @@ def now():
 os.makedirs(TEMPLATES,exist_ok=True)
 os.makedirs(DATA,exist_ok=True)
 os.makedirs(LOGS,exist_ok=True)
+os.makedirs(STATIC,exist_ok=True)
 
 LINKSEC_BRAND_MAP = {
     "apex": ("Apex", "Retail & Rewards", "Apex Corporate Benefits", "rewards@apex-corporate.com", "Medium"),
@@ -295,7 +297,7 @@ def seed_core_templates(c):
                 or "Apex Rewards — Security Awareness Simulation" in (row["html_body"] or "")
                 or "Trust Bank PLC | Exclusive Employee Card Offer" in (row["html_body"] or "")
             )
-            if is_placeholder and html_body:
+            if (is_placeholder or (html_body and html_body != (row["html_body"] or ""))) and html_body:
                 c.execute("""UPDATE template_library
                              SET name=?, subject=?, preheader=?, category=?, difficulty=?, language=?,
                                  brand=?, industry=?, tags=?, html_body=?, text_body=?, from_name=?,
@@ -1561,6 +1563,15 @@ def _send_campaign_recipient(campaign,rec,queue_id):
         text_body="Hello %s,\n\n%s\n\nReview the message here:\n%s\n\nReport this simulation:\n%s\n\nQR scan tracking endpoint:\n%s"%(rec["name"] or "Colleague",campaign["subject"] or "Security Awareness Simulation",link,links["report_link"],links["qr_link"])
     msg.set_content(text_body+"\n\nThis email is part of an authorized internal security-awareness simulation. No password, OTP, PIN, CVV or full card number is requested.")
     msg.add_alternative(html_body,subtype="html")
+    if "cid:trust-bank-logo" in html_body:
+        logo_path = os.path.join(STATIC, "trust-bank-logo.png")
+        if os.path.isfile(logo_path):
+            try:
+                with open(logo_path, "rb") as lfp:
+                    logo_bytes = lfp.read()
+                msg.get_payload()[1].add_related(logo_bytes, maintype="image", subtype="png", cid="<trust-bank-logo>")
+            except Exception:
+                pass
     smtp=None
     try:
         smtp=smtp_connect(campaign)
@@ -7214,6 +7225,18 @@ syncAudience();
         if path=="/dashboard":
             if not self.auth(): return self.sendbody(302,b"",extra={"Location":"/admin"})
             return self.sendbody(302,b"",extra={"Location":"/"})
+        if path.startswith("/static/"):
+            fname = path[len("/static/"):].lstrip("/")
+            safe_p = os.path.normpath(os.path.join(STATIC, fname))
+            if safe_p.startswith(STATIC) and os.path.isfile(safe_p):
+                ctype = "image/png" if fname.endswith(".png") else ("image/svg+xml" if fname.endswith(".svg") else ("image/jpeg" if (fname.endswith(".jpg") or fname.endswith(".jpeg")) else "text/plain"))
+                try:
+                    with open(safe_p, "rb") as fp:
+                        fdata = fp.read()
+                    return self.sendbody(200, fdata, ctype, extra={"Cache-Control": "public, max-age=86400"})
+                except Exception:
+                    pass
+            return self.sendbody(404, "Not found", "text/plain")
         if path in ("/ca.crt", "/trust-ca.crt", "/root-ca.crt", "/ssl/ca.crt"):
             ca_paths = [
                 "/etc/pki/tls/certs/trust-root-ca.crt",
@@ -7333,6 +7356,7 @@ syncAudience();
             rendered=render_template_variables(html_content,mock_recipient,mock_campaign,mock_links)
             if mode=="realistic":
                 rendered=re.sub(r'style="background-color:\s*#[a-fA-F0-9]+;\s*outline:\s*3px solid\s*#[a-fA-F0-9]+"', 'style="background-color:transparent;outline:none"', rendered)
+            rendered = rendered.replace("cid:trust-bank-logo", "/static/trust-bank-logo.png")
             return self.sendbody(200,rendered,"text/html; charset=utf-8",extra={"X-Frame-Options":"SAMEORIGIN"})
         if path in ("/admin/campaigns","/admin/templates","/admin/landing-pages","/admin/smtp","/admin/training","/admin/recipients","/admin/recipients/new","/admin/groups","/admin/users","/admin/reports","/admin/reports.pdf","/admin/reports.csv","/admin/reports/campaign.csv","/admin/reports/campaign.pdf","/admin/risk","/admin/exports","/admin/settings","/admin/audit","/admin/admins"):
             return self.sendbody(200,self.feature_page(path,p.query))
