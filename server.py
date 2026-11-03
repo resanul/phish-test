@@ -2917,6 +2917,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/landing-pages/new":"landing_page.create",
         "/admin/smtp/diagnostics":"smtp.diagnostics",
         "/admin/smtp/new":"smtp.manage",
+        "/admin/smtp/toggle":"smtp.manage",
         "/admin/training/new":"training.assign",
         "/admin/training/course/new":"training.manage",
         "/admin/recipients/import":"recipient.import",
@@ -2944,6 +2945,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/risk/settings":"risk.manage",
         "/admin/smtp/save":"smtp.manage",
         "/admin/smtp/delete":"smtp.manage",
+        "/admin/smtp/toggle":"smtp.manage",
         "/admin/smtp/diagnostics":"smtp.diagnostics",
         "/admin/smtp/test":"smtp.diagnostics",
         "/admin/training/update":"training.manage",
@@ -4481,7 +4483,44 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
             rows=c.execute("SELECT id,name,provider,host,port,security,username,from_name,from_email,reply_to,enabled,updated_at FROM smtp_profiles ORDER BY id DESC").fetchall(); c.close()
             total_smtp=len(rows)
             active_smtp=sum(1 for r in rows if r["enabled"])
-            table="".join('<tr><td><b>#%s</b></td><td><div style="font-weight:700;color:#10221a">%s</div><div class="sub" style="font-size:11px">%s</div></td><td><code>%s:%s</code></td><td><span class="pill" style="background:#eaf4ef;color:#087b59">%s</span></td><td>%s</td><td><span class="camp-status-badge %s">%s</span></td><td style="text-align:right"><a class="btn primary" href="/admin/smtp?id=%s">✏️ Edit</a> <a class="btn" href="/admin/smtp/diagnostics?id=%s">🩺 Diagnostics</a></td></tr>'%(r["id"],esc(r["name"]),esc(r["provider"]),esc(r["host"]),r["port"],esc(r["security"]),esc(r["from_email"]),"status-active" if r["enabled"] else "status-draft","Enabled" if r["enabled"] else "Disabled",r["id"],r["id"]) for r in rows) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
+            row_htmls=[]
+            for r in rows:
+                is_en=bool(r["enabled"])
+                status_cls="is-enabled" if is_en else "is-disabled"
+                status_txt="ENABLED" if is_en else "DISABLED"
+                toggle_btn_text="⏸️ Disable" if is_en else "▶️ Enable"
+                toggle_btn_style="background:#fff5f5;border:1.5px solid #fed7d7;color:#9b2c2c" if is_en else "background:#edf8f4;border:1.5px solid #a3cfbb;color:#0f5132"
+                toggle_title="Click to Disable profile" if is_en else "Click to Enable profile"
+
+                status_cell=f'''<form method="post" action="/admin/smtp/toggle" style="display:inline-block;margin:0">
+                  <input type="hidden" name="id" value="{r['id']}">
+                  <button type="submit" class="smtp-toggle-badge {status_cls}" title="{toggle_title}">
+                    <span class="smtp-toggle-dot"></span>
+                    <span class="toggle-text">{status_txt}</span>
+                  </button>
+                </form>'''
+
+                action_cell=f'''<div style="display:inline-flex;align-items:center;gap:6px;justify-content:flex-end">
+                  <form method="post" action="/admin/smtp/toggle" style="display:inline;margin:0">
+                    <input type="hidden" name="id" value="{r['id']}">
+                    <button type="submit" class="btn" style="{toggle_btn_style};padding:4px 9px;font-size:11.5px;font-weight:700;cursor:pointer" title="{toggle_title}">{toggle_btn_text}</button>
+                  </form>
+                  <a class="btn primary" href="/admin/smtp?id={r['id']}" style="padding:4px 9px;font-size:11.5px">✏️ Edit</a>
+                  <a class="btn" href="/admin/smtp/diagnostics?id={r['id']}" style="padding:4px 9px;font-size:11.5px">🩺 Diagnostics</a>
+                </div>'''
+
+                row_htmls.append(
+                    f'<tr>'
+                    f'<td><b>#{r["id"]}</b></td>'
+                    f'<td><div style="font-weight:700;color:#10221a">{esc(r["name"])}</div><div class="sub" style="font-size:11px">{esc(r["provider"])}</div></td>'
+                    f'<td><code>{esc(r["host"])}:{r["port"]}</code></td>'
+                    f'<td><span class="pill" style="background:#eaf4ef;color:#087b59">{esc(r["security"])}</span></td>'
+                    f'<td>{esc(r["from_email"])}</td>'
+                    f'<td>{status_cell}</td>'
+                    f'<td style="text-align:right">{action_cell}</td>'
+                    f'</tr>'
+                )
+            table="".join(row_htmls) or '<tr><td colspan="7">No SMTP profiles configured.</td></tr>'
             note='<div class="card" style="margin-bottom:20px;padding:16px 20px;background:#f8faf9;border:1px solid #dbe7e1;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px">🛡️</span><span style="font-size:12.5px;color:#2b4539"><b>Zero-Exposure Credential Encryption:</b> SMTP passwords and OAuth tokens are AES-encrypted at rest using a server-local 0600 key file. Secrets are never displayed, exported, or committed to Git.</span></div></div>'
             body=f'''<div class="camp-header">
   <div>
@@ -4513,7 +4552,65 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
       <tbody>{table}</tbody>
     </table>
   </div>
-</div>'''
+</div>
+
+<style>
+.smtp-toggle-badge {{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+}}
+.smtp-toggle-badge.is-enabled {{
+  background: #eaf5ef;
+  border-color: #10b981;
+  color: #0b4d34;
+}}
+.smtp-toggle-badge.is-enabled:hover {{
+  background: #fff5f5;
+  border-color: #f87171;
+  color: #991b1b;
+  transform: translateY(-1px);
+}}
+.smtp-toggle-badge.is-enabled:hover .toggle-text::after {{
+  content: " (DISABLE)";
+}}
+.smtp-toggle-badge.is-disabled {{
+  background: #fdf2f2;
+  border-color: #f87171;
+  color: #991b1b;
+}}
+.smtp-toggle-badge.is-disabled:hover {{
+  background: #eaf5ef;
+  border-color: #10b981;
+  color: #0b4d34;
+  transform: translateY(-1px);
+}}
+.smtp-toggle-badge.is-disabled:hover .toggle-text::after {{
+  content: " (ENABLE)";
+}}
+.smtp-toggle-dot {{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}}
+.is-enabled .smtp-toggle-dot {{
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}}
+.is-disabled .smtp-toggle-dot {{
+  background: #ef4444;
+}}
+</style>'''
             return self.admin_shell("SMTP Providers",body,"SMTP Providers")
         if path=="/admin/training":
             courses=c.execute("SELECT * FROM training_courses ORDER BY id DESC").fetchall()
@@ -7379,6 +7476,19 @@ syncAudience();
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
+        if path=="/admin/smtp/toggle":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            sid=parse_qs(p.query).get("id",[""])[0]
+            if sid and sid.isdigit():
+                c=db()
+                profile=c.execute("SELECT id,name,enabled FROM smtp_profiles WHERE id=?",(int(sid),)).fetchone()
+                if profile:
+                    new_val=0 if profile["enabled"] else 1
+                    c.execute("UPDATE smtp_profiles SET enabled=?, updated_at=? WHERE id=?",(new_val,now(),int(sid)))
+                    c.commit()
+                    audit(ADMIN_USERNAME,"SMTP_PROFILE_TOGGLE","profile=%s set to %s"%(profile["name"],"Enabled" if new_val else "Disabled"),ip)
+                c.close()
+            return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
         if path=="/admin/training/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             c=db(); courses=c.execute("SELECT id,name FROM training_courses WHERE status='Active' ORDER BY name").fetchall(); recipients=c.execute("SELECT id,email,name,department FROM recipients WHERE status!='Suppressed' ORDER BY email").fetchall(); campaigns=c.execute("SELECT id,name FROM campaigns ORDER BY id DESC").fetchall(); c.close()
@@ -8063,6 +8173,19 @@ syncAudience();
             c.execute("DELETE FROM smtp_profiles WHERE id=?",(int(sid),))
             c.commit(); c.close()
             audit(ADMIN_USERNAME,"SMTP_PROFILE_DELETE","profile=%s"%profile["name"],ip)
+            return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
+        if p.path=="/admin/smtp/toggle":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            sid=form.get("id",[""])[0]
+            if sid and sid.isdigit():
+                c=db()
+                profile=c.execute("SELECT id,name,enabled FROM smtp_profiles WHERE id=?",(int(sid),)).fetchone()
+                if profile:
+                    new_val=0 if profile["enabled"] else 1
+                    c.execute("UPDATE smtp_profiles SET enabled=?, updated_at=? WHERE id=?",(new_val,now(),int(sid)))
+                    c.commit()
+                    audit(ADMIN_USERNAME,"SMTP_PROFILE_TOGGLE","profile=%s set to %s"%(profile["name"],"Enabled" if new_val else "Disabled"),ip)
+                c.close()
             return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
         if p.path=="/admin/smtp/diagnostics":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
