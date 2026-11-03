@@ -946,24 +946,25 @@ def ensure_self_signed_cert(cert_path, key_path):
 
 def get_public_base_url(fallback_host=None, is_secure=None):
     global PUBLIC_BASE_URL
-    env_val = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
-    if env_val:
-        if (is_secure or SSL_ENABLED) and env_val.startswith("http://"):
-            env_val = "https://" + env_val[7:]
-        PUBLIC_BASE_URL = env_val
-        return env_val
+    # 1. Database system_settings (highest priority, user configured in UI)
     try:
         c = db()
         r = c.execute("SELECT value FROM system_settings WHERE key='public_base_url'").fetchone()
         c.close()
         if r and r["value"] and r["value"].strip():
             val = r["value"].strip().rstrip("/")
-            if (is_secure or SSL_ENABLED) and val.startswith("http://"):
-                val = "https://" + val[7:]
             PUBLIC_BASE_URL = val
             return val
     except Exception:
         pass
+
+    # 2. Environment variable if explicitly set
+    env_val = os.environ.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if env_val:
+        PUBLIC_BASE_URL = env_val
+        return env_val
+
+    # 3. Fallback host autodetection
     if fallback_host:
         if is_secure is not None:
             proto = "https" if is_secure else "http"
@@ -979,10 +980,11 @@ def get_public_base_url(fallback_host=None, is_secure=None):
             pass
         PUBLIC_BASE_URL = detected
         return detected
+
     if PUBLIC_BASE_URL:
         return PUBLIC_BASE_URL
     scheme = "https" if (is_secure or SSL_ENABLED or PORT == 443) else "http"
-    return f"{scheme}://127.0.0.1:{PORT}"
+    return f"{scheme}://172.31.105.11:{PORT}" if PORT != 80 else f"{scheme}://172.31.105.11"
 
 def create_tracking_token(campaign_id,recipient_id):
     token=secrets.token_urlsafe(32)
@@ -5112,8 +5114,12 @@ function closeQuickAddModal(){{document.getElementById('quickAddModal').style.di
             return self.admin_shell("Admin Users",body,"Admin Users")
         if path=="/admin/settings":
             cfg=risk_settings(c); c.close()
-            cur_base_url = get_public_base_url(self.headers.get("Host"), is_secure=self.is_https())
-            body='''<h1>Settings</h1><div class="card"><h3>Public Simulation Base URL</h3><p>The public base URL used for email tracking links, landing pages, and QR codes sent to target users.</p><form class="form" method="post" action="/admin/settings/base-url"><label>Base URL (e.g., http://192.168.10.242:8899 or https://phish.example.com)<input type="text" name="public_base_url" value="%s" required maxlength="255"></label><button class="btn primary" type="submit">Save Base URL</button></form><p class="sub" style="margin-top:8px">Currently active: <code>%s</code></p></div><div class="card" style="margin-top:15px"><h3>System Environment</h3><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'''%(esc(cur_base_url),esc(cur_base_url),cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
+            cur_base_url = get_public_base_url()
+            saved_banner = ""
+            if "saved=1" in (p.query or ""):
+                saved_banner = '<div style="background:#eaf5ef;border:1.5px solid #10b981;color:#0b4d34;padding:12px 16px;border-radius:10px;margin-bottom:18px;font-weight:600;display:flex;align-items:center;gap:10px"><span style="font-size:18px">✓</span><span>Public Simulation Base URL has been successfully saved and is now active across all campaigns!</span></div>'
+            proto_badge = '<span style="background:#087b59;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700">HTTP · PROXY BYPASS</span>' if cur_base_url.startswith("http://") else '<span style="background:#2563eb;color:#fff;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700">HTTPS · SSL</span>'
+            body='''<h1>Settings</h1>%s<div class="card"><h3>Public Simulation Base URL</h3><p>The public base URL used for email tracking links, landing pages, and QR codes sent to target users.</p><form class="form" method="post" action="/admin/settings/base-url"><label>Base URL (e.g., http://172.31.105.11 or http://172.31.105.11:8899 or https://phish.example.com)<input type="text" id="public_base_url_input" name="public_base_url" value="%s" required maxlength="255" placeholder="http://172.31.105.11"></label><div style="margin:-4px 0 14px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span style="font-size:12px;color:#5c786c">Quick Presets:</span><button type="button" class="btn" onclick="document.getElementById('public_base_url_input').value='http://172.31.105.11'" style="padding:4px 10px;font-size:11.5px;cursor:pointer">http://172.31.105.11 (Port 80)</button><button type="button" class="btn" onclick="document.getElementById('public_base_url_input').value='http://172.31.105.11:8899'" style="padding:4px 10px;font-size:11.5px;cursor:pointer">http://172.31.105.11:8899 (Direct Port)</button></div><button class="btn primary" type="submit">Save Base URL</button></form><div style="margin-top:14px;padding:10px 14px;background:#f8faf9;border:1px solid #dbebe3;border-radius:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="font-size:12px;color:#496557">Currently active:</span><code style="background:#eaf4ef;color:#0b4d34;padding:3px 8px;border-radius:4px;font-weight:700">%s</code>%s</div></div><div class="card" style="margin-top:15px"><h3>System Environment</h3><p>Admin credentials are environment variables. Database: SQLite. Timezone: Asia/Dhaka.</p><p>Simulation policy: never request or store passwords, OTPs, PINs, CVV or full card numbers.</p></div><div class="card" style="margin-top:15px"><h3>Risk Scoring Configuration</h3><p>Weights apply only to measured telemetry inside the configured lookback window.</p><form class="form" method="post" action="/admin/risk/settings"><label>Click weight<input type="number" min="0" max="100" name="click_weight" value="%s"></label><label>Form-action weight<input type="number" min="0" max="100" name="form_action_weight" value="%s"></label><label>Report bonus<input type="number" min="-100" max="0" name="report_bonus" value="%s"></label><label>Repeat-offender bonus<input type="number" min="0" max="100" name="repeat_bonus" value="%s"></label><label>Lookback days<input type="number" min="1" max="3650" name="lookback_days" value="%s"></label><label>High threshold<input type="number" min="1" max="100" name="high_threshold" value="%s"></label><label>Medium threshold<input type="number" min="1" max="100" name="medium_threshold" value="%s"></label><button class="btn primary">Save Risk Settings</button></form></div>'''%(saved_banner,esc(cur_base_url),esc(cur_base_url),proto_badge,cfg["click_weight"],cfg["form_action_weight"],cfg["report_bonus"],cfg["repeat_bonus"],cfg["lookback_days"],cfg["high_threshold"],cfg["medium_threshold"])
             return self.admin_shell("Settings",body,"Settings")
         c.close(); return None
 
@@ -8013,7 +8019,7 @@ syncAudience();
             global PUBLIC_BASE_URL
             PUBLIC_BASE_URL=base_url
             audit(ADMIN_USERNAME,"SETTINGS_UPDATE","public_base_url updated to %s"%base_url,ip)
-            return self.sendbody(302,b"",extra={"Location":"/admin/settings"})
+            return self.sendbody(302,b"",extra={"Location":"/admin/settings?saved=1"})
         if p.path=="/admin/smtp/save":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]; name=form.get("name",[""])[0][:100]; provider=form.get("provider",["Custom SMTP"])[0]
