@@ -1,9 +1,28 @@
+# Database & Data Directories
 data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Employee Data, Exports & Sensitive Lists
+*employee*
+*emp_browse*
+*tblbd_employees*
+*.csv
+*.xlsx
+*.xls
+recipients_export*
+dump_*.json
+parsed_*.json
+
+# Logs, Cache & Backups
 logs/
+*.log
 *.pyc
 __pycache__/
 .deploy-state
 .deploy-backups/
 *.backup.*
-*.db
-
+scratch/
+tmp/
+.env
