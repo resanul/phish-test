@@ -6230,10 +6230,13 @@ function escapeHtml(str) {{
                         break
                     except Exception:
                         pass
+            b_name = s["brand"]
+            cat = "banking" if b_name in ("Trust Bank", "bKash / Bank", "Apex") else ("cloud" if b_name in ("Microsoft 365", "Google Workspace", "AWS", "Zoom", "GlobalProtect") else "corporate")
             presets_dict[t_num] = {
                 "name": s["name"],
-                "brand": s["brand"],
+                "brand": b_name,
                 "scenario": s["scenario"],
+                "category": cat,
                 "html": h_body
             }
         aliases = {"m365": "3", "google": "4", "hr_portal": "5", "it_sso": "6", "fin_bkash": "7", "awareness": "10"}
@@ -6242,289 +6245,472 @@ function escapeHtml(str) {{
                 presets_dict[alias] = presets_dict[target]
         presets_json = json.dumps(presets_dict).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
-        name=esc(r["name"]) if r else "New Simulation Portal"
-        status=esc(r["status"]) if r else "Enabled"
-        html_body=r["html_body"] if (r and r["html_body"]) else presets_dict.get("1", {}).get("html", "")
-        text_body=esc(r["text_body"]) if (r and r["text_body"]) else "Authorized security-awareness simulation landing page."
-        versions_html="".join("<tr><td><b>v%s</b></td><td>%s</td><td>%s</td></tr>"%(v["version"],esc(v["created_at"] or ""),esc(v["created_by"] or "system")) for v in versions) or "<tr><td colspan='3'>No saved versions yet.</td></tr>"
+        starter_scaffold = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corporate Security Verification</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f4f2; margin: 0; padding: 40px 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
+    .card { background: #ffffff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); max-width: 440px; width: 100%; padding: 32px 28px; }
+    .logo { font-size: 20px; font-weight: 800; color: #087b59; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+    h2 { margin: 0 0 10px 0; font-size: 20px; color: #12251e; }
+    p { margin: 0 0 24px 0; font-size: 13.5px; color: #556c62; line-height: 1.5; }
+    .form-group { margin-bottom: 18px; text-align: left; }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: #233b32; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; padding: 11px 13px; border: 1.5px solid #cbdad2; border-radius: 8px; font-size: 14px; outline: none; }
+    input:focus { border-color: #087b59; box-shadow: 0 0 0 3px rgba(8,123,89,0.12); }
+    button { width: 100%; padding: 12px; background: #087b59; color: #ffffff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; }
+    button:hover { background: #066246; }
+    .footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #edf3f0; font-size: 11px; color: #7f958c; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🛡️ Trust PhishGuard</div>
+    <h2>Security Verification</h2>
+    <p>Please confirm your employee information to maintain authorized system access.</p>
+    <form method="post" action="/submit">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" name="name" placeholder="Enter your full name" required>
+      </div>
+      <div class="form-group">
+        <label>Corporate Email</label>
+        <input type="email" name="email" placeholder="username@tblbd.com" required>
+      </div>
+      <button type="submit">Verify Identity</button>
+    </form>
+    <div class="footer">Authorized Security Awareness Simulation • Trust Bank PLC</div>
+  </div>
+</body>
+</html>"""
+        starter_json = json.dumps(starter_scaffold).replace("<", "\\u003c").replace(">", "\\u003e")
 
-        preview_header=f'<a class="btn" target="_blank" href="/admin/landing-pages/preview?id={lid}">👁️ Live Preview Tab</a>' if lid else ""
+        is_new = (r is None)
+        name = esc(r["name"]) if r else ""
+        status = esc(r["status"]) if r else "Enabled"
+        html_body = r["html_body"] if (r and r["html_body"]) else ""
+        text_body = esc(r["text_body"]) if (r and r["text_body"]) else ""
+        versions_html = "".join("<tr><td><b>v%s</b></td><td>%s</td><td>%s</td></tr>"%(v["version"],esc(v["created_at"] or ""),esc(v["created_by"] or "system")) for v in versions) or "<tr><td colspan='3'>No saved versions yet.</td></tr>"
 
-        body=f"""<div class="camp-editor lp-editor">
-<div class="camp-header">
+        preview_header = f'<a class="btn" target="_blank" href="/admin/landing-pages/preview?id={lid}" style="display:inline-flex;align-items:center;gap:5px"><span>👁️</span> Live Tab</a>' if lid else ""
+
+        preset_cards_html = []
+        for s in LANDING_PAGE_SEEDS:
+            t = s["template"]
+            b = s["brand"]
+            cat = "banking" if b in ("Trust Bank", "bKash / Bank", "Apex") else ("cloud" if b in ("Microsoft 365", "Google Workspace", "AWS", "Zoom", "GlobalProtect") else "corporate")
+            icon = "🎁" if b=="Apex" else ("🏦" if b=="Trust Bank" and t=="2" else ("✈️" if "GoZayaan" in s["name"] else ("🔐" if b=="Microsoft 365" else ("🌐" if b=="Google Workspace" else ("📋" if b=="HR Portal" else ("🛡️" if b=="GlobalProtect" else ("📱" if "bKash" in b else ("📹" if b=="Zoom" else ("☁️" if b=="AWS" else "🎓")))))))))
+            short_name = s["name"].split("—")[0].strip()
+            preset_cards_html.append(f'''
+            <div class="lp-preset-card" data-cat="{cat}" onclick="loadPreset(\'{t}\')">
+              <div class="lp-preset-top">
+                <span class="lp-preset-icon">{icon}</span>
+                <span class="lp-preset-brand">{esc(b)}</span>
+              </div>
+              <div class="lp-preset-title">{esc(short_name)}</div>
+              <div class="lp-preset-desc">{esc(s["scenario"])}</div>
+              <div class="lp-preset-footer">
+                <span class="lp-preset-badge">Template #{t}</span>
+                <span class="lp-preset-action">⚡ Load</span>
+              </div>
+            </div>''')
+        preset_cards_str = "".join(preset_cards_html)
+
+        body=f"""<div class="camp-editor lp-editor-wrap">
+<div class="lp-header">
   <div>
-    <div class="camp-crumb"><a href="/admin/landing-pages">Landing Pages</a> <span>/</span> <span>{"Edit Portal #"+str(lid) if lid else "Create New Portal"}</span></div>
-    <div class="camp-title-row">
+    <div class="lp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <a href="/admin/landing-pages">Landing Pages</a> <span>/</span> <span>{"Edit Portal #"+str(lid) if lid else "Create New Portal"}</span></div>
+    <div class="lp-title-row">
       <h1>{"Edit" if r else "Create"} Simulation Landing Page</h1>
       <span class="camp-status-badge {'status-active' if status=='Enabled' else 'status-draft'}" id="lpStatusBadge">{status}</span>
     </div>
   </div>
-  <div class="camp-actions">
+  <div class="lp-actions">
     {preview_header}
     <a class="btn" href="/admin/landing-pages">Cancel</a>
-    <button class="btn primary" type="submit" form="lpForm">Save Landing Page</button>
+    <button class="btn primary" type="submit" form="lpForm" style="display:inline-flex;align-items:center;gap:6px">
+      <span>💾</span> Save Landing Page
+    </button>
   </div>
 </div>
 
 <form id="lpForm" method="post" action="/admin/landing-pages/save">
 <input type="hidden" name="id" value="{lid or ''}">
 
-<div class="camp-grid" style="grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);">
-  <!-- Left Side: Configuration, Presets, HTML Editor -->
-  <div class="camp-main">
-
-    <!-- Card 1: Portal Settings -->
-    <div class="camp-card">
-      <div class="camp-card-header">
-        <div class="camp-icon">🌐</div>
-        <div class="camp-card-title">
-          <h3>Portal Settings &amp; Metadata</h3>
-          <p>Define portal name, visibility, and version information.</p>
-        </div>
+<!-- Card 1: Portal Settings -->
+<div class="lp-card">
+  <div class="lp-card-header">
+    <div class="lp-card-title">
+      <div class="lp-card-icon">🌐</div>
+      <div>
+        <h3>Portal Metadata &amp; Configuration</h3>
+        <p>Define scenario title, operational availability, and versioning.</p>
       </div>
-      <div class="camp-fields">
-        <div class="camp-label col-full">
-          <span>Portal Name <b style="color:#a12d2d">*</b></span>
-          <input name="name" id="lpName" value="{name}" required maxlength="150" placeholder="e.g. Microsoft 365 Enterprise Sign-In Portal">
-          <div class="field-hint">A clear scenario title shown in campaign selectors and audit logs.</div>
-        </div>
-        <div class="camp-label">
-          <span>Status</span>
-          <select name="status" id="lpStatus" onchange="syncStatusBadge()">
-            <option value="Enabled" {"selected" if status=="Enabled" else ""}>Enabled</option>
-            <option value="Disabled" {"selected" if status=="Disabled" else ""}>Disabled</option>
-          </select>
-          <div class="field-hint">Enabled portals are selectable in campaigns.</div>
-        </div>
-        <div class="camp-label">
-          <span>Active Version</span>
-          <input value="v{r['version'] if r else '1'}" disabled style="background:#f5f8f6;color:#556c62">
-          <div class="field-hint">Every save automatically archives a new version snapshot.</div>
-        </div>
+    </div>
+    <div style="font-size:12px;color:#556c62">
+      Version: <span class="pill" style="background:#eaf5ef;color:#087b59;font-weight:700">{"v"+str(r["version"]) if r else "v1 (New)"}</span>
+    </div>
+  </div>
+  <div class="lp-settings-grid">
+    <div class="lp-field">
+      <label for="lpName">Portal Name <span style="color:#dc2626">*</span></label>
+      <input name="name" id="lpName" value="{name}" required maxlength="150" placeholder="e.g. Trust Bank Corporate Verification Portal">
+    </div>
+    <div class="lp-field">
+      <label for="lpStatus">Simulation Status</label>
+      <select name="status" id="lpStatus" onchange="syncStatusBadge()">
+        <option value="Enabled" {"selected" if status=="Enabled" else ""}>Enabled (Active for Campaigns)</option>
+        <option value="Disabled" {"selected" if status=="Disabled" else ""}>Disabled (Inactive)</option>
+      </select>
+    </div>
+    <div class="lp-field" style="text-align:right">
+      <button type="button" class="btn" onclick="clearCanvas()" style="width:100%;font-size:12px;font-weight:700;color:#64748b;background:#f8faf9" title="Clear form and canvas">
+        ✨ Clear Canvas
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Card 2: Market Presets Gallery -->
+<div class="lp-card">
+  <div class="lp-card-header">
+    <div class="lp-card-title">
+      <div class="lp-card-icon">⚡</div>
+      <div>
+        <h3>One-Click Authentic Market Presets ({len(LANDING_PAGE_SEEDS)} Enterprise Portals)</h3>
+        <p>Select any preset below to instantly load authentic corporate design and safe input fields into the editor.</p>
+      </div>
+    </div>
+  </div>
+  <div class="lp-presets-filter-bar">
+    <div class="lp-filter-pills">
+      <button type="button" class="lp-filter-pill active" onclick="filterPresets('all', this)">All Presets ({len(LANDING_PAGE_SEEDS)})</button>
+      <button type="button" class="lp-filter-pill" onclick="filterPresets('banking', this)">🏦 Banking &amp; Finance (3)</button>
+      <button type="button" class="lp-filter-pill" onclick="filterPresets('cloud', this)">🔐 Cloud &amp; SSO (5)</button>
+      <button type="button" class="lp-filter-pill" onclick="filterPresets('corporate', this)">🏢 Corporate &amp; HR (3)</button>
+    </div>
+    <div style="font-size:11.5px;color:#5c746a">
+      Click a card to populate the editor &amp; live preview
+    </div>
+  </div>
+  <div class="lp-presets-scroll" id="presetsGrid">
+    {preset_cards_str}
+  </div>
+</div>
+
+<!-- Studio Toolbar -->
+<div class="lp-studio-topbar">
+  <div class="lp-view-modes">
+    <button type="button" class="lp-view-btn active" id="viewSplit" onclick="setStudioView('split')">
+      <span>🌗</span> Split View
+    </button>
+    <button type="button" class="lp-view-btn" id="viewEditor" onclick="setStudioView('editor')">
+      <span>✏️</span> Code Studio
+    </button>
+    <button type="button" class="lp-view-btn" id="viewPreview" onclick="setStudioView('preview')">
+      <span>👁️</span> Live Preview
+    </button>
+  </div>
+  <div class="lp-safety-badge">
+    <span class="lp-shield-dot"></span>
+    <b>Platform Safety Policy Active:</b> Password, OTP, PIN &amp; CVV collection blocked.
+  </div>
+</div>
+
+<!-- Workspace Grid: Editor & Device Preview -->
+<div class="lp-workspace-grid" id="workspaceGrid">
+  
+  <!-- Left Column: Code Studio Card -->
+  <div class="lp-card lp-editor-card" id="editorCard">
+    <div class="lp-editor-tabs-row">
+      <div class="lp-editor-tabs">
+        <button type="button" class="lp-tab-btn active" id="tabHtml" onclick="switchEditorTab('html')">
+          <span>📄</span> index.html (Source Code)
+        </button>
+        <button type="button" class="lp-tab-btn" id="tabText" onclick="switchEditorTab('text')">
+          <span>📝</span> Plain Text Fallback
+        </button>
+      </div>
+      <div class="lp-editor-tools">
+        <button type="button" class="lp-tool-btn" onclick="loadStarterTemplate()" title="Load starter scaffold">
+          <span>⚡</span> Starter Template
+        </button>
+        <button type="button" class="lp-tool-btn danger" onclick="clearCode()" title="Clear code">
+          <span>🗑️</span> Clear
+        </button>
       </div>
     </div>
 
-    <!-- Card 2: Market Presets Library -->
-    <div class="camp-card">
-      <div class="camp-card-header">
-        <div class="camp-icon">⚡</div>
-        <div class="camp-card-title">
-          <h3>One-Click Authentic Market Presets (10 Enterprise Portals)</h3>
-          <p>Load battle-tested, high-converting corporate phishing simulation portals with authentic layouts and compliant fields.</p>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
-        <div class="preset-card" onclick="loadPreset('1')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>🎁</span> Apex Rewards Voucher
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Exclusive employee gift voucher &amp; discount claim portal.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('2')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>🏛️</span> Trust Bank Corporate
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Corporate banking privileges &amp; employee card claim.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('m365')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>🏢</span> Microsoft 365 Sign-In
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Entra ID / Outlook corporate sign-in simulation.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('4')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>🌐</span> Google Workspace SSO
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Google Drive &amp; Workspace account verification.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('5')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>👥</span> HR Benefits &amp; Appraisal
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Employee portal compensation statement review.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('6')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>💻</span> GlobalProtect IT Gateway
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Enterprise remote VPN &amp; identity gate verification.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('7')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>💳</span> bKash / Financial Alert
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Suspicious transaction halt &amp; verify alert (bKash/Bank).</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('8')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>📹</span> Zoom Meeting Gateway
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Executive conference pre-call check &amp; verification.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('9')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>☁️</span> AWS Cloud Console IAM
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Cloud infrastructure identity &amp; root device verification.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('10')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>🎓</span> Teachable Moment (Awareness)
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Instant interactive drill with phishing red flag breakdown.</p>
-        </div>
-        <div class="preset-card" onclick="loadPreset('11')">
-          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
-            <span>✈️</span> Trust Bank × GoZayaan Travel
-          </div>
-          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Exclusive cardholder 10% flight &amp; 65% hotel discounts portal.</p>
-        </div>
+    <div class="lp-tokens-bar" id="lpTokensBar">
+      <span class="lp-tokens-label">Quick Insert Field:</span>
+      <button type="button" class="token-chip" onclick="insertField('<div class=\"form-group\"><label>Full Name</label><input type=\"text\" name=\"name\" placeholder=\"Enter your full name\" required></div>')">+ Name</button>
+      <button type="button" class="token-chip" onclick="insertField('<div class=\"form-group\"><label>Corporate Email</label><input type=\"email\" name=\"email\" placeholder=\"name@tblbd.com\" required></div>')">+ Email</button>
+      <button type="button" class="token-chip" onclick="insertField('<div class=\"form-group\"><label>Employee ID</label><input type=\"text\" name=\"employee_id\" placeholder=\"e.g. EMP-9021\" required></div>')">+ Employee ID</button>
+      <button type="button" class="token-chip" onclick="insertField('<div class=\"form-group\"><label>Mobile Number</label><input type=\"tel\" name=\"mobile\" placeholder=\"017XXXXXXXX\" required></div>')">+ Mobile</button>
+      <button type="button" class="token-chip" onclick="insertField('<div class=\"form-group\"><label>Department</label><input type=\"text\" name=\"department\" placeholder=\"e.g. Information Technology\"></div>')">+ Dept</button>
+      <button type="button" class="token-chip" onclick="insertField('<button type=\"submit\" class=\"btn-submit\">Verify &amp; Continue</button>')">+ Submit Button</button>
+    </div>
+
+    <div id="htmlTabContent">
+      <textarea id="htmlEditor" name="html_body" rows="22" placeholder="Write or paste your custom simulation HTML here, or click a Market Preset above..." oninput="updateLivePreview()" required>{esc(html_body)}</textarea>
+      <div class="lp-editor-footer">
+        <span id="charCount">0 characters • 0 lines</span>
+        <span class="lp-editor-hint">Must submit to <code>/submit</code> to record simulation click &amp; engagement</span>
       </div>
     </div>
 
-    <!-- Card 3: Code Editor -->
-    <div class="camp-card">
-      <div class="camp-card-header" style="justify-content:space-between">
-        <div style="display:flex;align-items:flex-start;gap:14px">
-          <div class="camp-icon">💻</div>
-          <div class="camp-card-title">
-            <h3>HTML Source Code Editor</h3>
-            <p>Customize portal branding and input fields. Form must submit to <code>/submit</code>.</p>
-          </div>
-        </div>
-        <div style="font-size:11.5px;color:#087b59;background:#e8f4ef;padding:5px 10px;border-radius:6px;font-weight:700;display:flex;align-items:center;gap:5px">
-          <span>🔒</span> Safety Policy Guard Active
-        </div>
-      </div>
-
-      <div class="token-row" style="margin-bottom:12px">
-        <small style="color:#556c62;font-weight:600">Quick Insert:</small>
-        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;text&quot; name=&quot;name&quot; placeholder=&quot;Full Legal Name&quot; required&gt;')">+ Name Field</button>
-        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;email&quot; name=&quot;email&quot; placeholder=&quot;Work Email&quot; required&gt;')">+ Email Field</button>
-        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;text&quot; name=&quot;employee_id&quot; placeholder=&quot;Employee ID (e.g. EMP-9021)&quot; required&gt;')">+ Employee ID</button>
-        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;text&quot; name=&quot;mobile&quot; placeholder=&quot;Mobile Number&quot; required&gt;')">+ Mobile Number</button>
-        <button type="button" class="token-chip" onclick="insertField('&lt;button type=&quot;submit&quot;&gt;Continue&lt;/button&gt;')">+ Submit Button</button>
-      </div>
-
-      <div class="camp-label">
-        <textarea id="htmlEditor" name="html_body" rows="22" style="font-family:'SF Mono',Consolas,Menlo,monospace;font-size:12px;line-height:1.55;background:#0d1814;color:#d5ede2;border:1px solid #1a382c;border-radius:10px;padding:16px;box-sizing:border-box" oninput="updateLivePreview()" required>{esc(html_body)}</textarea>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11.5px;color:#556c62">
-        <span>Blocked by policy: <code>password</code>, <code>otp</code>, <code>pin</code>, <code>cvv</code> (prevents accidental credential theft).</span>
-        <span id="charCount">0 characters</span>
+    <div id="textTabContent" style="display:none">
+      <textarea id="textEditor" name="text_body" rows="12" placeholder="Alternative plain text fallback rendered for non-HTML environments and accessibility readers...">{text_body}</textarea>
+      <div class="lp-editor-footer">
+        <span>Plain text alternative</span>
+        <span class="lp-editor-hint">Useful for text-only email clients and accessibility readers</span>
       </div>
     </div>
-
-    <!-- Card 4: Plain Text Fallback -->
-    <div class="camp-card">
-      <div class="camp-card-header">
-        <div class="camp-icon">📝</div>
-        <div class="camp-card-title">
-          <h3>Plain Text Fallback</h3>
-          <p>Alternative message rendered for non-HTML environments and accessibility readers.</p>
-        </div>
-      </div>
-      <div class="camp-label">
-        <textarea name="text_body" rows="4" style="font-size:13px">{text_body}</textarea>
-      </div>
-    </div>
-
-    <!-- Card 5: Version History -->
-    {f'''<div class="camp-card">
-      <div class="camp-card-header">
-        <div class="camp-icon">📜</div>
-        <div class="camp-card-title">
-          <h3>Version Revision History</h3>
-          <p>Audit trail of all previous revisions saved for this landing page.</p>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table class="table" style="width:100%">
-          <thead><tr><th>Version</th><th>Saved At</th><th>Author</th></tr></thead>
-          <tbody>{versions_html}</tbody>
-        </table>
-      </div>
-    </div>''' if lid else ''}
-
-    <div class="camp-bottom-bar">
-      <a class="btn" href="/admin/landing-pages">Cancel</a>
-      <button class="btn primary" type="submit">Save Landing Page</button>
-    </div>
-
   </div>
 
-  <!-- Right Side: Live Interactive Device Preview -->
-  <div class="camp-sidebar">
-    <div class="camp-sidebar-sticky" style="top:20px">
-      <div class="camp-card" style="padding:16px;margin-bottom:0">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:16px">👁️</span>
-            <span style="font-weight:700;font-size:13.5px;color:#12251e">Live Real-time Preview</span>
-          </div>
-          <div style="display:flex;gap:4px;background:#edf3f0;padding:3px;border-radius:8px">
-            <button type="button" id="btnDesk" class="preset-btn active" style="font-size:11px;padding:3px 8px;border:none" onclick="setDevice('desktop')">💻 Desktop</button>
-            <button type="button" id="btnMob" class="preset-btn" style="font-size:11px;padding:3px 8px;border:none" onclick="setDevice('mobile')">📱 Mobile</button>
-          </div>
-        </div>
+  <!-- Right Column: Live Device Sandbox Preview -->
+  <div class="lp-card lp-preview-card" id="lpPreviewCard">
+    <div class="lp-preview-topbar">
+      <div class="lp-preview-title-wrap">
+        <span class="lp-live-dot"></span>
+        <b>Live Real-Time Device Sandbox</b>
+      </div>
+      <div class="lp-device-pills">
+        <button type="button" id="btnDesk" class="lp-device-btn active" onclick="setDevice('desktop')">
+          <span>💻</span> Desktop
+        </button>
+        <button type="button" id="btnMob" class="lp-device-btn" onclick="setDevice('mobile')">
+          <span>📱</span> Mobile
+        </button>
+      </div>
+    </div>
 
-        <!-- Fake Browser Navigation Bar -->
-        <div style="background:#edf3f0;border:1px solid #dbe7e1;border-radius:8px 8px 0 0;padding:8px 12px;display:flex;align-items:center;gap:8px">
-          <div style="display:flex;gap:5px">
-            <span style="width:8px;height:8px;border-radius:50%;background:#f87171;display:inline-block"></span>
-            <span style="width:8px;height:8px;border-radius:50%;background:#fbbf24;display:inline-block"></span>
-            <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block"></span>
-          </div>
-          <div style="flex:1;background:#fff;border-radius:6px;padding:3px 10px;font-size:11px;color:#445b51;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            🔒 https://secure-login.portal-verify.local/auth
-          </div>
-        </div>
+    <!-- Browser Window Chrome -->
+    <div class="lp-browser-chrome">
+      <div class="lp-browser-dots">
+        <span class="dot red"></span>
+        <span class="dot yellow"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="lp-browser-url-bar">
+        <span class="lp-ssl-icon">🔒</span>
+        <span class="lp-url-text" id="mockUrlText">https://secure.tblbd.com/auth/login</span>
+        <span class="lp-badge-safe">SECURE DRILL</span>
+      </div>
+      <button type="button" class="lp-browser-refresh" onclick="updateLivePreview()" title="Refresh preview frame">
+        🔄
+      </button>
+    </div>
 
-        <!-- Iframe Sandbox Container -->
-        <div id="previewContainer" style="border:1px solid #dbe7e1;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;background:#fff;display:flex;justify-content:center;transition:all 0.2s">
-          <iframe id="previewFrame" style="width:100%;height:580px;border:none;background:#fff" sandbox="allow-same-origin allow-forms allow-scripts"></iframe>
-        </div>
-
-        <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#647b71">
-          <span>Updates immediately as you edit code</span>
-          <span id="viewportSizeLabel">Desktop (100%)</span>
+    <!-- Sandboxed Iframe Container -->
+    <div id="previewContainer" class="lp-preview-container">
+      <div id="emptyPreviewNotice" class="lp-empty-preview" style="display:{'flex' if not html_body else 'none'}">
+        <div class="lp-empty-icon">🎨</div>
+        <h4>Blank Simulation Canvas</h4>
+        <p>Pick any <b>Market Preset</b> above to load an authentic corporate template, or start typing HTML in the code editor.</p>
+        <div class="lp-empty-actions">
+          <button type="button" class="btn primary" onclick="loadPreset('2')">🏦 Load Trust Bank Preset</button>
+          <button type="button" class="btn" onclick="loadPreset('3')">🔐 Load M365 Preset</button>
+          <button type="button" class="btn" onclick="loadStarterTemplate()">⚡ Load Starter Template</button>
         </div>
       </div>
+      <iframe id="previewFrame" style="display:{'none' if not html_body else 'block'}" sandbox="allow-same-origin allow-forms allow-scripts"></iframe>
+    </div>
+
+    <div class="lp-preview-statusbar">
+      <span id="viewportSizeLabel">Desktop View (100% Fluid)</span>
+      <span>Live updates on every keystroke</span>
     </div>
   </div>
 
 </div>
+
+<!-- Version History if editing -->
+{f'''<div class="lp-card" style="margin-top:20px">
+  <div class="lp-card-header">
+    <div class="lp-card-title">
+      <div class="lp-card-icon">📜</div>
+      <div>
+        <h3>Version Revision History</h3>
+        <p>Audit trail of previous version snapshots saved for this portal.</p>
+      </div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table" style="width:100%">
+      <thead><tr><th>Version</th><th>Saved At</th><th>Author</th></tr></thead>
+      <tbody>{versions_html}</tbody>
+    </table>
+  </div>
+</div>''' if lid else ''}
+
+<!-- Bottom Bar -->
+<div class="camp-bottom-bar" style="margin-top:24px">
+  <a class="btn" href="/admin/landing-pages">Cancel</a>
+  <button class="btn primary" type="submit" style="display:inline-flex;align-items:center;gap:6px">
+    <span>💾</span> Save Landing Page
+  </button>
+</div>
+
 </form>
 </div>
 
 <style>
-.preset-card {{ background:#ffffff; border:1.5px solid #dce8e2; border-radius:10px; padding:12px 14px; cursor:pointer; transition:all 0.15s ease; }}
-.preset-card:hover {{ border-color:#087b59; background:#f4faf7; transform:translateY(-1px); box-shadow:0 3px 8px rgba(8,123,89,0.08); }}
-.preset-btn.active {{ background:#087b59; color:#fff; }}
+.lp-editor-wrap {{ max-width: 1480px; margin: 0 auto; }}
+.lp-header {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid #e0e9e4; }}
+.lp-crumb {{ display: flex; align-items: center; gap: 8px; font-size: 13px; color: #556c62; margin-bottom: 6px; }}
+.lp-crumb a {{ color: #087b59; text-decoration: none; font-weight: 600; }}
+.lp-title-row {{ display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }}
+.lp-title-row h1 {{ margin: 0; font-size: 26px; font-weight: 800; color: #12251e; letter-spacing: -0.02em; }}
+.lp-actions {{ display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }}
+
+.lp-card {{ background: #ffffff; border: 1px solid #e2ebe6; border-radius: 14px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.03); }}
+.lp-card-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #edf3f0; flex-wrap: wrap; gap: 10px; }}
+.lp-card-title {{ display: flex; align-items: center; gap: 12px; }}
+.lp-card-icon {{ width: 36px; height: 36px; border-radius: 9px; background: #edf7f3; color: #087b59; display: flex; align-items: center; justify-content: center; font-size: 18px; }}
+.lp-card-title h3 {{ margin: 0; font-size: 16px; font-weight: 750; color: #12251e; }}
+.lp-card-title p {{ margin: 2px 0 0; font-size: 12px; color: #5c746a; }}
+
+.lp-settings-grid {{ display: grid; grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr) 140px; gap: 16px; align-items: end; }}
+@media (max-width: 860px) {{ .lp-settings-grid {{ grid-template-columns: 1fr; }} }}
+.lp-field {{ display: flex; flex-direction: column; gap: 6px; }}
+.lp-field label {{ font-size: 12.5px; font-weight: 700; color: #1a3328; display: flex; align-items: center; gap: 4px; }}
+.lp-field input, .lp-field select {{ width: 100%; min-height: 42px; border: 1.5px solid #cbdad2; border-radius: 8px; padding: 8px 12px; background: #ffffff; color: #12251e; font-size: 13.5px; transition: all 0.15s ease; box-sizing: border-box; }}
+.lp-field input:focus, .lp-field select:focus {{ outline: none; border-color: #087b59; box-shadow: 0 0 0 3px rgba(8, 123, 89, 0.14); }}
+
+.lp-presets-filter-bar {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }}
+.lp-filter-pills {{ display: flex; gap: 6px; flex-wrap: wrap; }}
+.lp-filter-pill {{ padding: 5px 12px; border-radius: 20px; border: 1px solid #cfe0d8; background: #f8faf9; color: #2d4c3f; font-size: 11.5px; font-weight: 650; cursor: pointer; transition: all 0.15s; }}
+.lp-filter-pill:hover {{ border-color: #087b59; background: #edf7f3; }}
+.lp-filter-pill.active {{ background: #087b59; color: #ffffff; border-color: #087b59; box-shadow: 0 2px 5px rgba(8, 123, 89, 0.2); }}
+
+.lp-presets-scroll {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; max-height: 250px; overflow-y: auto; padding: 2px; }}
+.lp-presets-scroll::-webkit-scrollbar {{ width: 5px; }}
+.lp-presets-scroll::-webkit-scrollbar-thumb {{ background: #cbdad2; border-radius: 4px; }}
+.lp-preset-card {{ background: #ffffff; border: 1.5px solid #dce8e2; border-radius: 10px; padding: 12px; cursor: pointer; transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; justify-content: space-between; }}
+.lp-preset-card:hover {{ border-color: #087b59; background: #f6fbf9; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(8, 123, 89, 0.1); }}
+.lp-preset-top {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }}
+.lp-preset-icon {{ font-size: 18px; }}
+.lp-preset-brand {{ font-size: 10.5px; font-weight: 700; padding: 2px 7px; background: #edf6f2; color: #087b59; border-radius: 4px; }}
+.lp-preset-title {{ font-size: 12.5px; font-weight: 750; color: #12251e; line-height: 1.35; margin-bottom: 4px; }}
+.lp-preset-desc {{ font-size: 11px; color: #5c746a; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }}
+.lp-preset-footer {{ display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f0f5f2; padding-top: 6px; font-size: 10.5px; }}
+.lp-preset-badge {{ color: #607b70; font-weight: 600; }}
+.lp-preset-action {{ color: #087b59; font-weight: 800; display: inline-flex; align-items: center; gap: 3px; }}
+
+.lp-studio-topbar {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; background: #ffffff; border: 1px solid #e2ebe6; border-radius: 12px; padding: 10px 16px; }}
+.lp-view-modes {{ display: inline-flex; background: #edf4f0; border-radius: 8px; padding: 3px; gap: 3px; }}
+.lp-view-btn {{ padding: 6px 14px; border-radius: 6px; border: none; background: transparent; color: #355346; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }}
+.lp-view-btn.active {{ background: #ffffff; color: #087b59; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+.lp-safety-badge {{ display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #087b59; background: #eaf6f1; padding: 5px 12px; border-radius: 20px; font-weight: 600; }}
+.lp-shield-dot {{ width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block; }}
+
+.lp-workspace-grid {{ display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(440px, 0.92fr); gap: 20px; align-items: start; }}
+.lp-workspace-grid.mode-editor {{ grid-template-columns: 1fr; }}
+.lp-workspace-grid.mode-editor .lp-preview-card {{ display: none !important; }}
+.lp-workspace-grid.mode-preview {{ grid-template-columns: 1fr; }}
+.lp-workspace-grid.mode-preview .lp-editor-card {{ display: none !important; }}
+@media (max-width: 1080px) {{
+  .lp-workspace-grid {{ grid-template-columns: 1fr; }}
+}}
+
+.lp-editor-tabs-row {{ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #edf4f0; }}
+.lp-editor-tabs {{ display: flex; gap: 6px; }}
+.lp-tab-btn {{ padding: 6px 12px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: #4b665a; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 5px; }}
+.lp-tab-btn.active {{ background: #eef6f2; border-color: #cfe0d8; color: #087b59; }}
+.lp-editor-tools {{ display: flex; gap: 6px; }}
+.lp-tool-btn {{ padding: 4px 9px; font-size: 11px; font-weight: 650; border: 1px solid #cbdad2; border-radius: 6px; background: #ffffff; color: #355346; cursor: pointer; transition: background 0.15s; display: inline-flex; align-items: center; gap: 4px; }}
+.lp-tool-btn:hover {{ background: #f0f7f4; border-color: #087b59; }}
+.lp-tool-btn.danger:hover {{ background: #fef2f2; border-color: #fca5a5; color: #991b1b; }}
+
+.lp-tokens-bar {{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; background: #f8faf9; padding: 8px 12px; border-radius: 8px; border: 1px solid #e2ebe6; }}
+.lp-tokens-label {{ font-size: 11.5px; font-weight: 700; color: #446154; margin-right: 4px; }}
+
+#htmlEditor, #textEditor {{ width: 100%; font-family: 'JetBrains Mono', Consolas, Monaco, monospace; font-size: 12.5px; line-height: 1.55; background: #0c1511; color: #d3f3e4; border: 1.5px solid #204536; border-radius: 10px; padding: 16px; box-sizing: border-box; resize: vertical; transition: border-color 0.15s; }}
+#htmlEditor:focus, #textEditor:focus {{ outline: none; border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }}
+.lp-editor-footer {{ display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 11.5px; color: #5c746a; }}
+.lp-editor-hint {{ font-style: italic; }}
+
+.lp-preview-card {{ position: sticky; top: 20px; overflow: hidden; padding: 0; }}
+.lp-preview-topbar {{ display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #edf4f0; background: #ffffff; flex-wrap: wrap; gap: 8px; }}
+.lp-preview-title-wrap {{ display: flex; align-items: center; gap: 8px; font-size: 13px; color: #12251e; font-weight: 700; }}
+.lp-live-dot {{ width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b981; }}
+.lp-device-pills {{ display: flex; gap: 4px; background: #edf4f0; padding: 3px; border-radius: 8px; }}
+.lp-device-btn {{ padding: 4px 10px; border-radius: 6px; border: none; background: transparent; font-size: 11px; font-weight: 700; color: #3b5a4d; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; gap: 4px; }}
+.lp-device-btn.active {{ background: #087b59; color: #ffffff; }}
+
+.lp-browser-chrome {{ background: #f0f4f2; border-bottom: 1px solid #dce8e2; padding: 8px 14px; display: flex; align-items: center; gap: 10px; }}
+.lp-browser-dots {{ display: flex; gap: 5px; }}
+.lp-browser-dots .dot {{ width: 9px; height: 9px; border-radius: 50%; }}
+.lp-browser-dots .dot.red {{ background: #f87171; }}
+.lp-browser-dots .dot.yellow {{ background: #fbbf24; }}
+.lp-browser-dots .dot.green {{ background: #34d399; }}
+.lp-browser-url-bar {{ flex: 1; background: #ffffff; border: 1px solid #cbdad2; border-radius: 6px; padding: 4px 10px; font-size: 11.5px; font-family: monospace; color: #2d4c3f; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; }}
+.lp-ssl-icon {{ font-size: 11px; color: #087b59; }}
+.lp-url-text {{ flex: 1; overflow: hidden; text-overflow: ellipsis; }}
+.lp-badge-safe {{ font-size: 9.5px; font-weight: 800; background: #e8f5ee; color: #087b59; padding: 1px 6px; border-radius: 4px; }}
+.lp-browser-refresh {{ background: none; border: none; font-size: 13px; cursor: pointer; color: #556c62; padding: 2px 4px; }}
+
+.lp-preview-container {{ min-height: 580px; max-height: 640px; background: #f9fbfb; display: flex; justify-content: center; align-items: stretch; overflow: hidden; position: relative; transition: all 0.25s ease; }}
+#previewFrame {{ width: 100%; height: 590px; border: none; background: #ffffff; transition: width 0.25s ease; }}
+
+.lp-empty-preview {{ width: 100%; height: 590px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; box-sizing: border-box; background: #fbfdfc; }}
+.lp-empty-icon {{ font-size: 42px; margin-bottom: 12px; }}
+.lp-empty-preview h4 {{ margin: 0 0 6px 0; font-size: 16px; font-weight: 750; color: #12251e; }}
+.lp-empty-preview p {{ margin: 0 0 20px 0; font-size: 12.5px; color: #556c62; max-width: 320px; line-height: 1.5; }}
+.lp-empty-actions {{ display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 250px; }}
+.lp-empty-actions button {{ padding: 8px 14px; font-size: 12px; font-weight: 700; width: 100%; justify-content: center; }}
+
+.lp-preview-statusbar {{ display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; border-top: 1px solid #edf4f0; background: #ffffff; font-size: 11px; color: #647b71; }}
 </style>
 
 <script>
 const PRESETS = {presets_json};
+const STARTER_TEMPLATE = {starter_json};
+
 function loadPreset(key) {{
   const p = PRESETS[key];
   if (!p) return;
   const ed = document.getElementById('htmlEditor');
   const nameInput = document.getElementById('lpName');
-  if (confirm("Load " + p.name + " preset? This will replace the editor content.")) {{
+  const textEd = document.getElementById('textEditor');
+  
+  if (ed && (!ed.value.trim() || confirm("Load \"" + p.name + "\" preset? This will replace your current editor content."))) {{
     ed.value = p.html;
-    if (nameInput && (!nameInput.value || nameInput.value === 'New Simulation Portal')) {{
+    if (nameInput && (!nameInput.value.trim() || nameInput.value === 'New Simulation Portal')) {{
       nameInput.value = p.name;
+    }}
+    if (textEd && !textEd.value.trim()) {{
+      textEd.value = "Authorized security awareness simulation: " + p.name;
     }}
     updateLivePreview();
   }}
 }}
 
-function insertField(fieldHtml) {{
-  const ed = document.getElementById('htmlEditor');
-  const pos = ed.selectionStart || ed.value.length;
-  ed.value = ed.value.slice(0, pos) + fieldHtml + ed.value.slice(pos);
-  ed.focus();
+function clearCanvas() {{
+  if (confirm("Reset canvas to blank? This will clear the portal name and editor contents.")) {{
+    document.getElementById('lpName').value = '';
+    document.getElementById('htmlEditor').value = '';
+    document.getElementById('textEditor').value = '';
+    updateLivePreview();
+  }}
+}}
+
+function clearCode() {{
+  if (confirm("Clear HTML editor contents?")) {{
+    document.getElementById('htmlEditor').value = '';
+    updateLivePreview();
+  }}
+}}
+
+function loadStarterTemplate() {{
+  document.getElementById('htmlEditor').value = STARTER_TEMPLATE;
+  if (!document.getElementById('lpName').value.trim()) {{
+    document.getElementById('lpName').value = "Corporate Security Verification Portal";
+  }}
   updateLivePreview();
 }}
 
@@ -6532,13 +6718,64 @@ function updateLivePreview() {{
   const ed = document.getElementById('htmlEditor');
   const val = ed ? ed.value : '';
   const frame = document.getElementById('previewFrame');
-  if (frame) {{
-    frame.srcdoc = val;
-  }}
+  const emptyNotice = document.getElementById('emptyPreviewNotice');
   const countEl = document.getElementById('charCount');
-  if (countEl) {{
-    countEl.textContent = val.length.toLocaleString() + ' characters';
+
+  if (!val.trim()) {{
+    if (frame) frame.style.display = 'none';
+    if (emptyNotice) emptyNotice.style.display = 'flex';
+  }} else {{
+    if (emptyNotice) emptyNotice.style.display = 'none';
+    if (frame) {{
+      frame.style.display = 'block';
+      frame.srcdoc = val;
+    }}
   }}
+
+  if (countEl) {{
+    const lines = val ? val.split('\n').length : 0;
+    countEl.textContent = val.length.toLocaleString() + ' characters • ' + lines.toLocaleString() + ' lines';
+  }}
+}}
+
+function filterPresets(cat, btn) {{
+  document.querySelectorAll('.lp-filter-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.lp-preset-card').forEach(card => {{
+    if (cat === 'all' || card.getAttribute('data-cat') === cat) {{
+      card.style.display = 'flex';
+    }} else {{
+      card.style.display = 'none';
+    }}
+  }});
+}}
+
+function setStudioView(mode) {{
+  const grid = document.getElementById('workspaceGrid');
+  document.querySelectorAll('.lp-view-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(mode === 'split' ? 'viewSplit' : (mode === 'editor' ? 'viewEditor' : 'viewPreview'));
+  if (btn) btn.classList.add('active');
+
+  grid.classList.remove('mode-editor', 'mode-preview');
+  if (mode === 'editor') grid.classList.add('mode-editor');
+  if (mode === 'preview') grid.classList.add('mode-preview');
+}}
+
+function switchEditorTab(tab) {{
+  document.getElementById('tabHtml').classList.toggle('active', tab === 'html');
+  document.getElementById('tabText').classList.toggle('active', tab === 'text');
+  document.getElementById('htmlTabContent').style.display = tab === 'html' ? 'block' : 'none';
+  document.getElementById('textTabContent').style.display = tab === 'text' ? 'block' : 'none';
+  document.getElementById('lpTokensBar').style.display = tab === 'html' ? 'flex' : 'none';
+}}
+
+function insertField(fieldHtml) {{
+  const ed = document.getElementById('htmlEditor');
+  if (!ed) return;
+  const pos = ed.selectionStart || ed.value.length;
+  ed.value = ed.value.slice(0, pos) + fieldHtml + ed.value.slice(pos);
+  ed.focus();
+  updateLivePreview();
 }}
 
 function setDevice(mode) {{
@@ -6551,13 +6788,13 @@ function setDevice(mode) {{
     container.style.margin = '0 auto';
     btnMob.classList.add('active');
     btnDesk.classList.remove('active');
-    sizeLabel.textContent = 'Mobile (375px)';
+    sizeLabel.textContent = 'Mobile Device Frame (375px)';
   }} else {{
     container.style.maxWidth = '100%';
     container.style.margin = '0';
     btnDesk.classList.add('active');
     btnMob.classList.remove('active');
-    sizeLabel.textContent = 'Desktop (100%)';
+    sizeLabel.textContent = 'Desktop View (100% Fluid)';
   }}
 }}
 
