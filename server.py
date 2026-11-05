@@ -1470,7 +1470,7 @@ def queue_campaign(campaign_id):
     if not campaign:
         c.close()
         raise ValueError("Campaign not found")
-    if campaign["group_name"]:
+    if campaign["group_name"] and campaign["group_name"] != "__ALL__":
         gname = campaign["group_name"]
         grow = c.execute("SELECT department FROM groups_tbl WHERE lower(name)=lower(?)", (gname,)).fetchone()
         depts = [d.strip().lower() for d in (grow["department"] or "").split(",") if d.strip()] if grow else []
@@ -3999,14 +3999,14 @@ function closeMobileNav(){{
 
             rows=c.execute("SELECT * FROM campaigns ORDER BY id DESC").fetchall()
             templates_rows=c.execute("SELECT template, name, subject, brand FROM template_library WHERE status='Active' ORDER BY CASE WHEN brand='Apex' THEN 0 WHEN brand='Trust Bank' THEN 1 WHEN brand='Zoom' THEN 2 WHEN brand='Microsoft Office 365' THEN 3 WHEN brand='Google Workspace' THEN 4 ELSE 5 END, brand, name").fetchall()
-            groups_rows=c.execute("SELECT name FROM groups_tbl ORDER BY name").fetchall()
+            groups_rows=c.execute("SELECT g.name, COUNT(r.id) members FROM groups_tbl g LEFT JOIN recipients r ON r.group_name=g.name AND r.status!='Suppressed' GROUP BY g.name ORDER BY g.name").fetchall()
             active_recipients_cnt=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
             smtp_rows=c.execute("SELECT id, name, from_email FROM smtp_profiles WHERE enabled=1 ORDER BY id").fetchall()
             landing_rows=c.execute("SELECT id, name, template FROM landing_pages WHERE status='Enabled' ORDER BY id").fetchall()
             c.close()
 
             template_options="".join(f'<option value="{esc(t["template"])}">[{esc(t["brand"] or "General")}] {esc(t["name"])}</option>' for t in templates_rows)
-            group_options="".join(f'<option value="{esc(g["name"])}">👥 Group: {esc(g["name"])}</option>' for g in groups_rows)
+            group_options="".join(f'<option value="{esc(g["name"])}">👥 Group: {esc(g["name"])} ({g["members"]} targets)</option>' for g in groups_rows)
             landing_options="".join(f'<option value="{l["id"]}" data-tpl="{esc(l["template"] or "")}">{esc(l["name"])} (Template {esc(l["template"] or "Default")})</option>' for l in landing_rows)
             smtp_options="".join(f'<option value="{s["id"]}">{esc(s["name"])} &lt;{esc(s["from_email"])}&gt;</option>' for s in smtp_rows) or '<option value="">⚠️ No enabled SMTP profile (Configure in SMTP Providers)</option>'
 
@@ -4085,9 +4085,10 @@ function closeMobileNav(){{
             <label style="font-weight:600;font-size:12.5px;color:#203a30;margin:0">Target Audience</label>
             <button type="button" onclick="toggleQuickAddRecipient()" style="background:#eef7f2;border:1px solid #a8d5be;color:#0d4d34;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:3px" title="Add recipient instantly without leaving modal">⚡ + Quick Add</button>
           </div>
-          <select name="group_name" id="qcAudience" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
-            <option value="">🎯 All Active Recipients ({active_recipients_cnt} targets)</option>
+          <select name="group_name" id="qcAudience" required style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid #cbdad2;border-radius:8px;font-size:13px">
+            <option value="" disabled selected>-- Select Target Audience (Required) --</option>
             {group_options}
+            <option value="__ALL__">🎯 All Active Recipients ({active_recipients_cnt} targets)</option>
           </select>
         </div>
       </div>
@@ -4205,7 +4206,11 @@ function submitQuickRecipient() {{
 
       const audSel = document.getElementById('qcAudience');
       if (audSel && audSel.options.length > 0) {{
-        audSel.options[0].text = '🎯 All Active Recipients (' + data.total_targets + ' targets)';
+        for (let opt of audSel.options) {{
+          if (opt.value === '__ALL__') {{
+            opt.text = '🎯 All Active Recipients (' + data.total_targets + ' targets)';
+          }}
+        }}
         if (data.group_name) {{
           let found = false;
           for (let opt of audSel.options) {{
@@ -4222,8 +4227,6 @@ function submitQuickRecipient() {{
             newOpt.selected = true;
             audSel.appendChild(newOpt);
           }}
-        }} else {{
-          audSel.options[0].selected = true;
         }}
       }}
       emailInput.value = '';
@@ -4252,8 +4255,8 @@ function openQuickModal() {{
   document.getElementById('quickCampModal').style.display = 'flex';
   onTemplateChange();
   const audSel = document.getElementById('qcAudience');
-  if (audSel && audSel.options[0] && audSel.options[0].text.includes('(0 targets)')) {{
-    document.getElementById('quickAddRecPanel').style.display = 'block';
+  if (audSel) {{
+    audSel.selectedIndex = 0;
   }}
 }}
 function closeQuickModal() {{
@@ -6857,7 +6860,14 @@ function insertTplVar(v) {{
 
         smtp_opts='<option value="">-- Select SMTP provider --</option>'+"".join('<option value="%s" %s>%s (%s · %s)</option>'%(x["id"],"selected" if str(x["id"])==smtp_id else "",esc(x["name"]),esc(x["provider"]),esc(x["from_email"])) for x in smtps)
         land_opts='<option value="">-- Select landing page --</option>'+"".join('<option value="%s" data-template="%s" %s>%s (Template %s · v%s)</option>'%(x["id"],esc(x["template"]),"selected" if str(x["id"])==landing_id else "",esc(x["name"]),esc(x["template"]),x["version"] or 1) for x in lands)
-        group_opts='<option value="" data-count="%s" %s>All Active Recipients (%s members)</option>'%(total_recipients,"selected" if not saved_group else "",total_recipients)+"".join('<option value="%s" data-count="%s" %s>%s (%s members)</option>'%(esc(x["name"]),x["members"],"selected" if x["name"]==saved_group else "",esc(x["name"]),x["members"]) for x in groups)
+        if cid and r and r["group_name"] is not None:
+            is_all_selected = "selected" if (not saved_group or saved_group == "__ALL__") else ""
+            default_placeholder = ""
+        else:
+            is_all_selected = ""
+            default_placeholder = '<option value="" disabled selected>-- Select Target Group or Audience (Required) --</option>'
+
+        group_opts = default_placeholder + "".join('<option value="%s" data-count="%s" %s>%s (%s members)</option>'%(esc(x["name"]),x["members"],"selected" if x["name"]==saved_group else "",esc(x["name"]),x["members"]) for x in groups) + '<option value="__ALL__" data-count="%s" %s>🎯 All Active Recipients (%s members)</option>'%(total_recipients, is_all_selected, total_recipients)
         tz_opts="".join('<option value="%s" %s>%s</option>'%(z,"selected" if z==timezone else "",z) for z in ("Asia/Dhaka","UTC","Asia/Kolkata","Asia/Singapore","Asia/Dubai","Europe/London","America/New_York","America/Los_Angeles","Europe/Berlin","Asia/Tokyo"))
         stats="".join('<option value="%s" %s>%s</option>'%(x,"selected" if x==status else "",x) for x in ("Draft","Scheduled","Active","Paused","Completed","Cancelled","Expired"))
 
@@ -6914,7 +6924,7 @@ function insertTplVar(v) {{
         </div>
         <div class="camp-label col-full">
           <span>Target Recipient Group</span>
-          <select name="group_name" id="groupSelect" onchange="syncAudience()">
+          <select name="group_name" id="groupSelect" required onchange="syncAudience()">
             {group_opts}
           </select>
           <div class="field-hint">Select a departmental employee group or target all active recipients.</div>
@@ -7339,24 +7349,36 @@ function syncStatusBadge() {{
 
 function syncAudience() {{
   const sel = document.getElementById('groupSelect');
-  const opt = sel.options[sel.selectedIndex];
+  const opt = (sel && sel.selectedIndex >= 0) ? sel.options[sel.selectedIndex] : null;
   const count = parseInt(opt ? opt.getAttribute('data-count') : 0) || 0;
   const targetEl = document.getElementById('sumAudience');
-  if (targetEl) targetEl.textContent = count + ' recipients';
+  if (targetEl) {{
+    if (!sel || !sel.value) {{
+      targetEl.textContent = 'None selected';
+    }} else {{
+      targetEl.textContent = count + ' recipients';
+    }}
+  }}
   syncSummary();
 }}
 
 function syncSummary() {{
   const groupSel = document.getElementById('groupSelect');
-  const opt = groupSel ? groupSel.options[groupSel.selectedIndex] : null;
+  const opt = (groupSel && groupSel.selectedIndex >= 0) ? groupSel.options[groupSel.selectedIndex] : null;
   const count = parseInt(opt ? opt.getAttribute('data-count') : 0) || 0;
 
   const rateInput = document.getElementById('rateLimit');
   const rate = Math.max(1, parseInt(rateInput ? rateInput.value : 60) || 60);
 
-  const durationMin = Math.max(1, Math.ceil(count / rate));
   const durEl = document.getElementById('sumEstTime');
-  if (durEl) durEl.textContent = '~' + durationMin + ' min' + (durationMin > 1 ? 's' : '');
+  if (durEl) {{
+    if (!groupSel || !groupSel.value || count <= 0) {{
+      durEl.textContent = '—';
+    }} else {{
+      const durationMin = Math.max(1, Math.ceil(count / rate));
+      durEl.textContent = '~' + durationMin + ' min' + (durationMin > 1 ? 's' : '');
+    }}
+  }}
 
   const paceEl = document.getElementById('sumPace');
   if (paceEl) paceEl.textContent = rate + ' emails/min';
@@ -8821,17 +8843,26 @@ syncAudience();
                     c.close(); return self.sendbody(400,"Invalid SMTP provider selected","text/plain")
                 if landing_id and not c.execute("SELECT 1 FROM landing_pages WHERE id=? AND status='Enabled'",(landing_id,)).fetchone():
                     c.close(); return self.sendbody(400,"Invalid landing page selected","text/plain")
-            if group_name:
-                targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE group_name=?",(group_name,)).fetchone()["n"]
+            if not group_name:
+                if status != "Draft" or action_mode == "launch":
+                    c.close()
+                    return self.sendbody(400, "Please select a target recipient group before launching or scheduling.", "text/plain")
+                targeted = 0
+                saved_group_name = ""
+            elif group_name == "__ALL__":
+                targeted = c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+                saved_group_name = ""
             else:
-                targeted=c.execute("SELECT COUNT(*) n FROM recipients").fetchone()["n"]
+                targeted = c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND group_name=?", (group_name,)).fetchone()["n"]
+                saved_group_name = group_name
+
             smtp_val=int(smtp_id) if smtp_id and smtp_id.isdigit() else None
             landing_val=int(landing_id) if landing_id and landing_id.isdigit() else None
             if cid:
-                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,timezone=?,business_days=?,window_start=?,window_end=?,batch_size=?,rate_per_minute=?,retry_max=?,retry_backoff_seconds=?,cancel_requested=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_val,landing_val,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),cid))
+                c.execute("UPDATE campaigns SET name=?,template=?,status=?,targeted=?,smtp_profile_id=?,landing_page_id=?,subject=?,launch_at=?,send_by=?,group_name=?,timezone=?,business_days=?,window_start=?,window_end=?,batch_size=?,rate_per_minute=?,retry_max=?,retry_backoff_seconds=?,cancel_requested=?,updated_at=? WHERE id=?",(name,template,status,targeted,smtp_val,landing_val,subject,launch_at,send_by,saved_group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),cid))
                 action="CAMPAIGN_UPDATE"
             else:
-                cur=c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_val,landing_val,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),now()))
+                cur=c.execute("INSERT INTO campaigns(name,template,status,targeted,smtp_profile_id,landing_page_id,subject,launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(name,template,status,targeted,smtp_val,landing_val,subject,launch_at,send_by,saved_group_name,timezone,business_days,window_start,window_end,batch_size,rate_per_minute,retry_max,retry_backoff,0,now(),now()))
                 cid=str(cur.lastrowid)
                 action="CAMPAIGN_CREATE"
             c.commit(); c.close()
@@ -8892,10 +8923,16 @@ syncAudience();
                 if quick_grp and not group_name:
                     group_name=quick_grp
 
-            if group_name:
-                targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND group_name=?",(group_name,)).fetchone()["n"]
+            if not group_name:
+                c.close()
+                return self.sendbody(400, "Please select a target audience before launching. Accidental global dispatch prevented.", "text/plain")
+
+            if group_name == "__ALL__":
+                targeted = c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+                saved_group_name = ""
             else:
-                targeted=c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed'").fetchone()["n"]
+                targeted = c.execute("SELECT COUNT(*) n FROM recipients WHERE status!='Suppressed' AND group_name=?", (group_name,)).fetchone()["n"]
+                saved_group_name = group_name
 
             if targeted==0:
                 c.close()
@@ -8911,7 +8948,7 @@ syncAudience();
                              launch_at,send_by,group_name,timezone,business_days,window_start,window_end,batch_size,
                              rate_per_minute,retry_max,retry_backoff_seconds,cancel_requested,created_at,updated_at)
                              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                          (name,template,status,targeted,smtp_val,landing_val,subject,"","",group_name,
+                          (name,template,status,targeted,smtp_val,landing_val,subject,"","",saved_group_name,
                            timezone,business_days,window_start,window_end,50,60,2,5,0,now(),now()))
             cid=str(cur.lastrowid)
             c.commit(); c.close()
