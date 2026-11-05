@@ -4616,7 +4616,7 @@ function applyFilters() {{
                   </td>
                   <td><span class="pill" style="background:#eef5f8;color:#0369a1;font-weight:600">Template {esc(r["template"])}</span></td>
                   <td><span class="pill" style="background:#e8f4ef;color:#087b59">v{r["version"] or 1}</span></td>
-                  <td>{status_cell}</td>
+                  <td style="width:130px;min-width:130px;white-space:nowrap">{status_cell}</td>
                   <td style="text-align:right;white-space:nowrap">
                     <div style="display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap">
                       <a class="btn" target="_blank" href="/admin/landing-pages/preview?id={r['id']}" style="padding:5px 10px;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap" title="Preview Portal">👁️ Preview</a>
@@ -4668,7 +4668,7 @@ function applyFilters() {{
           <th>Portal Name &amp; Brand</th>
           <th style="width:120px">Template Lure</th>
           <th style="width:90px">Version</th>
-          <th style="width:130px">Status</th>
+          <th style="width:130px;min-width:130px;white-space:nowrap">Status</th>
           <th style="text-align:right;min-width:260px;white-space:nowrap">Actions</th>
         </tr>
       </thead>
@@ -4680,15 +4680,24 @@ function applyFilters() {{
 .lp-toggle-badge {{
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 5px 12px;
+  width: 106px;
+  min-width: 106px;
+  max-width: 106px;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 0 12px;
   border-radius: 20px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.5px;
   cursor: pointer;
   border: 1.5px solid transparent;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   font-family: inherit;
   outline: none;
 }}
@@ -4701,10 +4710,10 @@ function applyFilters() {{
   background: #fff5f5;
   border-color: #f87171;
   color: #991b1b;
-  transform: translateY(-1px);
 }}
-.lp-toggle-badge.is-enabled:hover .toggle-text::after {{
-  content: " (DISABLE)";
+.lp-toggle-badge.is-enabled:hover .lp-toggle-dot {{
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
 }}
 .lp-toggle-badge.is-disabled {{
   background: #fdf2f2;
@@ -4715,16 +4724,18 @@ function applyFilters() {{
   background: #eaf5ef;
   border-color: #10b981;
   color: #0b4d34;
-  transform: translateY(-1px);
 }}
-.lp-toggle-badge.is-disabled:hover .toggle-text::after {{
-  content: " (ENABLE)";
+.lp-toggle-badge.is-disabled:hover .lp-toggle-dot {{
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
 }}
 .lp-toggle-dot {{
   width: 8px;
   height: 8px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }}
 .lp-toggle-badge.is-enabled .lp-toggle-dot {{
   background: #10b981;
@@ -4821,16 +4832,26 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
 .smtp-toggle-badge {{
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 5px 12px;
+  width: 106px;
+  min-width: 106px;
+  max-width: 106px;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 0 12px;
   border-radius: 20px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.5px;
   cursor: pointer;
   border: 1.5px solid transparent;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   font-family: inherit;
+  outline: none;
 }}
 .smtp-toggle-badge.is-enabled {{
   background: #eaf5ef;
@@ -4841,10 +4862,10 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
   background: #fff5f5;
   border-color: #f87171;
   color: #991b1b;
-  transform: translateY(-1px);
 }}
-.smtp-toggle-badge.is-enabled:hover .toggle-text::after {{
-  content: " (DISABLE)";
+.smtp-toggle-badge.is-enabled:hover .smtp-toggle-dot {{
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
 }}
 .smtp-toggle-badge.is-disabled {{
   background: #fdf2f2;
@@ -4855,16 +4876,18 @@ function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCa
   background: #eaf5ef;
   border-color: #10b981;
   color: #0b4d34;
-  transform: translateY(-1px);
 }}
-.smtp-toggle-badge.is-disabled:hover .toggle-text::after {{
-  content: " (ENABLE)";
+.smtp-toggle-badge.is-disabled:hover .smtp-toggle-dot {{
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
 }}
 .smtp-toggle-dot {{
   width: 8px;
   height: 8px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }}
 .is-enabled .smtp-toggle-dot {{
   background: #10b981;
