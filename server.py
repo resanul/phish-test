@@ -3067,6 +3067,7 @@ RBAC_ROUTE_PERMISSION_MAP={
         "/admin/landing-pages/preview":"landing_page.view",
         "/admin/templates/preview":"template.view",
         "/admin/landing-pages/new":"landing_page.create",
+        "/admin/landing-pages/toggle":"landing_page.edit",
         "/admin/smtp/diagnostics":"smtp.diagnostics",
         "/admin/smtp/new":"smtp.manage",
         "/admin/smtp/toggle":"smtp.manage",
@@ -3084,6 +3085,7 @@ RBAC_ROUTE_PERMISSION_MAP={
     "POST":{
         "/admin/admins/review":"admin.view",
         "/admin/landing-pages/save":{"create":"landing_page.create","edit":"landing_page.edit"},
+        "/admin/landing-pages/toggle":"landing_page.edit",
         "/admin/templates/save":{"create":"template.create","edit":"template.edit"},
         "/admin/templates/test-send":"template.edit",
         "/admin/reports/scheduled/save":"report.schedule",
@@ -4582,24 +4584,39 @@ function applyFilters() {{
         if path=="/admin/landing-pages":
             rows=c.execute("SELECT * FROM landing_pages ORDER BY id").fetchall(); c.close()
             total_lp=len(rows)
-            active_lp=sum(1 for r in rows if r["status"]=="Enabled")
+            active_lp=sum(1 for r in rows if (r["status"] or "Enabled").lower()=="enabled")
+            disabled_lp=total_lp - active_lp
+            status_hdr_badge=f'<span class="camp-status-badge status-active">{active_lp} Active</span>' if disabled_lp==0 else f'<span class="camp-status-badge status-active">{active_lp} Active</span><span class="camp-status-badge" style="background:#fee2e2;color:#991b1b;margin-left:6px">{disabled_lp} Disabled</span>'
             brand_map={"1":"Apex","2":"Trust Bank","3":"Microsoft 365","4":"Google Workspace","5":"HR Portal","6":"GlobalProtect","7":"bKash / Bank","8":"Zoom","9":"AWS","10":"Awareness Training","11":"Trust Bank × GoZayaan","trust-gozayaan-travel-oct26":"Trust Bank × GoZayaan"}
             table_rows=[]
             for r in rows:
                 tpl_str=str(r["template"] or "")
                 b_name=brand_map.get(tpl_str,"Enterprise Portal")
                 test_link=f'/{tpl_str}.html' if (tpl_str.isdigit() or tpl_str.startswith("trust-")) else f'/admin/landing-pages/preview?id={r["id"]}'
-                table_rows.append(f'''<tr>
+                is_en=(r["status"] or "Enabled").lower()=="enabled"
+                status_cls="is-enabled" if is_en else "is-disabled"
+                status_txt="ENABLED" if is_en else "DISABLED"
+                toggle_title="Click to Disable portal" if is_en else "Click to Enable portal"
+
+                status_cell=f'''<form method="post" action="/admin/landing-pages/toggle" style="display:inline-block;margin:0">
+                  <input type="hidden" name="id" value="{r['id']}">
+                  <button type="submit" class="lp-toggle-badge {status_cls}" title="{toggle_title}">
+                    <span class="lp-toggle-dot"></span>
+                    <span class="toggle-text">{status_txt}</span>
+                  </button>
+                </form>'''
+
+                table_rows.append(f'''<tr class="{'lp-row-disabled' if not is_en else ''}">
                   <td><b>#{r["id"]}</b></td>
                   <td>
                     <div style="display:flex;align-items:center;gap:8px">
-                      <span style="font-weight:700;color:#12251e">{esc(r["name"])}</span>
+                      <span style="font-weight:700;color:{'#64748b' if not is_en else '#12251e'}">{esc(r["name"])}</span>
                       <span class="pill" style="font-size:10.5px;padding:2px 7px;background:#f0f5f2;color:#355346;border:1px solid #d9e6e0">{b_name}</span>
                     </div>
                   </td>
                   <td><span class="pill" style="background:#eef5f8;color:#0369a1;font-weight:600">Template {esc(r["template"])}</span></td>
                   <td><span class="pill" style="background:#e8f4ef;color:#087b59">v{r["version"] or 1}</span></td>
-                  <td><span class="camp-status-badge {'status-active' if r['status']=='Enabled' else 'status-draft'}">{esc(r['status'])}</span></td>
+                  <td>{status_cell}</td>
                   <td style="text-align:right;white-space:nowrap">
                     <div style="display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap">
                       <a class="btn" target="_blank" href="/admin/landing-pages/preview?id={r['id']}" style="padding:5px 10px;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap" title="Preview Portal">👁️ Preview</a>
@@ -4615,7 +4632,7 @@ function applyFilters() {{
     <div class="camp-crumb"><a href="/admin">Dashboard</a> <span>/</span> <span>Landing Pages</span></div>
     <div class="camp-title-row">
       <h1>Simulation Landing Pages</h1>
-      <span class="camp-status-badge status-active">{active_lp} Active</span>
+      {status_hdr_badge}
     </div>
   </div>
   <div class="camp-actions">
@@ -4651,7 +4668,7 @@ function applyFilters() {{
           <th>Portal Name &amp; Brand</th>
           <th style="width:120px">Template Lure</th>
           <th style="width:90px">Version</th>
-          <th style="width:110px">Status</th>
+          <th style="width:130px">Status</th>
           <th style="text-align:right;min-width:260px;white-space:nowrap">Actions</th>
         </tr>
       </thead>
@@ -4659,6 +4676,68 @@ function applyFilters() {{
     </table>
   </div>
 </div>
+<style>
+.lp-toggle-badge {{
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: inherit;
+  outline: none;
+}}
+.lp-toggle-badge.is-enabled {{
+  background: #eaf5ef;
+  border-color: #10b981;
+  color: #0b4d34;
+}}
+.lp-toggle-badge.is-enabled:hover {{
+  background: #fff5f5;
+  border-color: #f87171;
+  color: #991b1b;
+  transform: translateY(-1px);
+}}
+.lp-toggle-badge.is-enabled:hover .toggle-text::after {{
+  content: " (DISABLE)";
+}}
+.lp-toggle-badge.is-disabled {{
+  background: #fdf2f2;
+  border-color: #f87171;
+  color: #991b1b;
+}}
+.lp-toggle-badge.is-disabled:hover {{
+  background: #eaf5ef;
+  border-color: #10b981;
+  color: #0b4d34;
+  transform: translateY(-1px);
+}}
+.lp-toggle-badge.is-disabled:hover .toggle-text::after {{
+  content: " (ENABLE)";
+}}
+.lp-toggle-dot {{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}}
+.lp-toggle-badge.is-enabled .lp-toggle-dot {{
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}}
+.lp-toggle-badge.is-disabled .lp-toggle-dot {{
+  background: #ef4444;
+}}
+.lp-row-disabled {{
+  opacity: 0.78;
+  background: #fafcfb;
+}}
+</style>
 <script>
 function filterLpTable(){{const q=document.getElementById('qLp').value.toLowerCase();document.querySelectorAll('#lpRows tr').forEach(r=>r.style.display=r.innerText.toLowerCase().includes(q)?'':'none')}}
 </script>'''
@@ -7657,6 +7736,20 @@ syncAudience();
         if path=="/admin/landing-pages/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.landing_page_form(None))
+        if path=="/admin/landing-pages/toggle":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            lid=parse_qs(p.query).get("id",[""])[0]
+            if lid and lid.isdigit():
+                c=db()
+                lp=c.execute("SELECT id,name,status FROM landing_pages WHERE id=?",(int(lid),)).fetchone()
+                if lp:
+                    is_en=(lp["status"] or "Enabled").lower()=="enabled"
+                    new_status="Disabled" if is_en else "Enabled"
+                    c.execute("UPDATE landing_pages SET status=?, updated_at=? WHERE id=?",(new_status,now(),int(lid)))
+                    c.commit()
+                    audit(ADMIN_USERNAME,"LANDING_PAGE_TOGGLE","portal=%s set to %s"%(lp["name"],new_status),ip)
+                c.close()
+            return self.sendbody(302,b"",extra={"Location":"/admin/landing-pages"})
         if path=="/admin/smtp/new":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             return self.sendbody(200,self.smtp_form())
@@ -8358,6 +8451,20 @@ syncAudience();
             c.commit(); c.close()
             audit(ADMIN_USERNAME,"SMTP_PROFILE_DELETE","profile=%s"%profile["name"],ip)
             return self.sendbody(302,b"",extra={"Location":"/admin/smtp"})
+        if p.path=="/admin/landing-pages/toggle":
+            if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
+            lid=form.get("id",[""])[0]
+            if lid and lid.isdigit():
+                c=db()
+                lp=c.execute("SELECT id,name,status FROM landing_pages WHERE id=?",(int(lid),)).fetchone()
+                if lp:
+                    is_en=(lp["status"] or "Enabled").lower()=="enabled"
+                    new_status="Disabled" if is_en else "Enabled"
+                    c.execute("UPDATE landing_pages SET status=?, updated_at=? WHERE id=?",(new_status,now(),int(lid)))
+                    c.commit()
+                    audit(ADMIN_USERNAME,"LANDING_PAGE_TOGGLE","portal=%s set to %s"%(lp["name"],new_status),ip)
+                c.close()
+            return self.sendbody(302,b"",extra={"Location":"/admin/landing-pages"})
         if p.path=="/admin/smtp/toggle":
             if not self.auth(): return self.sendbody(403,"Forbidden","text/plain")
             sid=form.get("id",[""])[0]
