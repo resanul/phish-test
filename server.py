@@ -4600,10 +4600,12 @@ function applyFilters() {{
                   <td><span class="pill" style="background:#eef5f8;color:#0369a1;font-weight:600">Template {esc(r["template"])}</span></td>
                   <td><span class="pill" style="background:#e8f4ef;color:#087b59">v{r["version"] or 1}</span></td>
                   <td><span class="camp-status-badge {'status-active' if r['status']=='Enabled' else 'status-draft'}">{esc(r['status'])}</span></td>
-                  <td style="text-align:right">
-                    <a class="btn" target="_blank" href="/admin/landing-pages/preview?id={r['id']}" style="display:inline-flex;align-items:center;gap:4px">👁️ Preview</a>
-                    <a class="btn primary" href="/admin/landing-pages?id={r['id']}" style="display:inline-flex;align-items:center;gap:4px">✏️ Edit</a>
-                    <a class="btn" target="_blank" href="{test_link}" title="Direct Simulation URL" style="font-size:11.5px">🔗 Test URL</a>
+                  <td style="text-align:right;white-space:nowrap">
+                    <div style="display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap">
+                      <a class="btn" target="_blank" href="/admin/landing-pages/preview?id={r['id']}" style="padding:5px 10px;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap" title="Preview Portal">👁️ Preview</a>
+                      <a class="btn primary" href="/admin/landing-pages?id={r['id']}" style="padding:5px 10px;font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:4px;white-space:nowrap" title="Edit Portal">✏️ Edit</a>
+                      <a class="btn" target="_blank" href="{test_link}" style="padding:5px 10px;font-size:11.5px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap" title="Direct Simulation URL">🔗 Test URL</a>
+                    </div>
                   </td>
                 </tr>''')
             table="".join(table_rows) or '<tr><td colspan="6">No landing pages found.</td></tr>'
@@ -4650,7 +4652,7 @@ function applyFilters() {{
           <th style="width:120px">Template Lure</th>
           <th style="width:90px">Version</th>
           <th style="width:110px">Status</th>
-          <th style="text-align:right;width:240px">Actions</th>
+          <th style="text-align:right;min-width:260px;white-space:nowrap">Actions</th>
         </tr>
       </thead>
       <tbody id="lpRows">{table}</tbody>
