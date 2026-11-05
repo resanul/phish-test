@@ -6240,7 +6240,7 @@ function escapeHtml(str) {{
         for alias, target in aliases.items():
             if target in presets_dict:
                 presets_dict[alias] = presets_dict[target]
-        presets_json = json.dumps(presets_dict)
+        presets_json = json.dumps(presets_dict).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
         name=esc(r["name"]) if r else "New Simulation Portal"
         status=esc(r["status"]) if r else "Enabled"
