@@ -2075,6 +2075,12 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .filter input:focus{border-color:#087b59;box-shadow:0 0 0 3px rgba(8,123,89,0.12)}
 .filter button{border:0;background:#e3ede8;color:#1a3328;padding:9px 13px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:650;transition:all 0.15s ease}
 .filter button:hover{background:#d5e5dd}
+.pg-btn{background:#ffffff;border:1.5px solid #d1ded7;color:#1e382d;font-size:12px;font-weight:700;padding:5px 12px;border-radius:7px;cursor:pointer;transition:all 0.15s ease;display:inline-flex;align-items:center;justify-content:center;user-select:none;line-height:1.2}
+.pg-btn:hover:not(:disabled){background:#eaf5ef;border-color:#087b59;color:#087b59}
+.pg-btn:disabled{opacity:0.4;cursor:not-allowed;background:#f5f7f6;border-color:#e0e8e4;color:#8fa39a}
+.pg-btn.active{background:#087b59;border-color:#087b59;color:#ffffff;box-shadow:0 2px 6px rgba(8,123,89,0.25)}
+.pg-num{min-width:32px;height:30px;padding:0 7px}
+.pg-dots{color:#889e94;font-size:13px;font-weight:700;padding:0 3px}
 .form{display:grid;gap:14px;max-width:850px;width:100%}
 .form label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:650;color:#1a3127}
 .form input,.form select,.form textarea{padding:10px 13px;border:1.5px solid #ccdcd5;border-radius:9px;font-size:13px;background:#fff;color:#10221a;outline:none;transition:all 0.15s ease}
@@ -2358,17 +2364,147 @@ DASHBOARD_DRILLDOWN_JS = """<style>
 .sim-connector-line.is-success { background: #10b981; }
 </style>
 <script>
-function filterActivityRows() {
-  const q = (document.getElementById('q').value || '').toLowerCase().trim();
-  document.querySelectorAll('#journeyRows tr.journey-row').forEach(r => {
-    r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
-  });
-  document.querySelectorAll('#rawRows tr.raw-row').forEach(r => {
-    r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
-  });
+let currentActivityView = 'journeys';
+let activityPageSize = 50;
+let activityCurrentPage = 1;
+
+function getActiveActivityRows() {
+  const selector = currentActivityView === 'raw' ? '#rawRows tr.raw-row' : '#journeyRows tr.journey-row';
+  return Array.from(document.querySelectorAll(selector));
+}
+
+function getFilteredActivityRows() {
+  const qInput = document.getElementById('q');
+  const q = (qInput ? qInput.value : '').toLowerCase().trim();
+  const allRows = getActiveActivityRows();
+  if (!q) return allRows;
+  return allRows.filter(r => r.innerText.toLowerCase().includes(q));
+}
+
+function updateActivityPagination() {
+  const journeysTbody = document.getElementById('journeyRows');
+  const rawTbody = document.getElementById('rawRows');
+  if (!journeysTbody && !rawTbody) return;
+
+  const qInput = document.getElementById('q');
+  const q = (qInput ? qInput.value : '').toLowerCase().trim();
+
+  if (currentActivityView === 'raw') {
+    if (journeysTbody) journeysTbody.querySelectorAll('tr').forEach(r => r.style.display = 'none');
+  } else {
+    if (rawTbody) rawTbody.querySelectorAll('tr').forEach(r => r.style.display = 'none');
+  }
+
+  const allActiveRows = getActiveActivityRows();
+  const filtered = getFilteredActivityRows();
+  const total = filtered.length;
+  
+  const sizeSelect = document.getElementById('activityPageSize');
+  const sizeVal = sizeSelect ? sizeSelect.value : activityPageSize;
+  const size = (sizeVal === 'all') ? (total || 1) : (parseInt(sizeVal, 10) || 50);
+  const totalPages = Math.max(1, Math.ceil(total / size));
+
+  if (activityCurrentPage > totalPages) activityCurrentPage = totalPages;
+  if (activityCurrentPage < 1) activityCurrentPage = 1;
+
+  const startIdx = (activityCurrentPage - 1) * size;
+  const endIdx = (sizeVal === 'all') ? total : Math.min(startIdx + size, total);
+
+  allActiveRows.forEach(r => { r.style.display = 'none'; });
+
+  for (let i = startIdx; i < endIdx; i++) {
+    if (filtered[i]) {
+      filtered[i].style.display = '';
+    }
+  }
+
   document.querySelectorAll('#rows tr').forEach(r => {
     r.style.display = (!q || r.innerText.toLowerCase().includes(q)) ? '' : 'none';
   });
+
+  const infoEl = document.getElementById('activityPageInfo');
+  if (infoEl) {
+    const viewName = (currentActivityView === 'raw') ? 'raw events' : 'user journeys';
+    if (total === 0) {
+      infoEl.innerHTML = `<span style="color:#b91c1c;font-weight:600">No matching ${viewName} found${q ? ' for "' + escHtml(q) + '"' : ''}.</span>`;
+    } else {
+      const rangeStr = (sizeVal === 'all')
+        ? `Showing all <b>${total}</b> ${viewName}`
+        : `Showing <b>${startIdx + 1}</b> to <b>${endIdx}</b> of <b>${total}</b> ${viewName}`;
+      const filterAddon = (q && total !== allActiveRows.length)
+        ? ` <span style="color:#6e8b7d;font-weight:normal">(filtered from ${allActiveRows.length})</span>`
+        : '';
+      infoEl.innerHTML = `${rangeStr}${filterAddon}`;
+    }
+  }
+
+  renderActivityPaginationNav(totalPages);
+}
+
+function renderActivityPaginationNav(totalPages) {
+  const navEl = document.getElementById('activityPageNav');
+  if (!navEl) return;
+
+  if (totalPages <= 1) {
+    navEl.innerHTML = '';
+    return;
+  }
+
+  let html = '';
+  const isFirst = activityCurrentPage === 1;
+  const isLast = activityCurrentPage === totalPages;
+
+  html += `<button type="button" class="pg-btn" ${isFirst ? 'disabled' : ''} onclick="gotoActivityPage(${activityCurrentPage - 1})" title="Previous Page">◀ Prev</button>`;
+
+  const maxButtons = 5;
+  let startPage = Math.max(1, activityCurrentPage - Math.floor(maxButtons / 2));
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage + 1 < maxButtons) {
+    startPage = Math.max(1, endPage - maxButtons + 1);
+  }
+
+  if (startPage > 1) {
+    html += `<button type="button" class="pg-btn pg-num" onclick="gotoActivityPage(1)">1</button>`;
+    if (startPage > 2) html += `<span class="pg-dots">...</span>`;
+  }
+
+  for (let p = startPage; p <= endPage; p++) {
+    const activeCls = (p === activityCurrentPage) ? 'active' : '';
+    html += `<button type="button" class="pg-btn pg-num ${activeCls}" onclick="gotoActivityPage(${p})">${p}</button>`;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) html += `<span class="pg-dots">...</span>`;
+    html += `<button type="button" class="pg-btn pg-num" onclick="gotoActivityPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  html += `<button type="button" class="pg-btn" ${isLast ? 'disabled' : ''} onclick="gotoActivityPage(${activityCurrentPage + 1})" title="Next Page">Next ▶</button>`;
+
+  navEl.innerHTML = html;
+}
+
+function gotoActivityPage(p) {
+  activityCurrentPage = p;
+  updateActivityPagination();
+  const card = document.getElementById('activityCard');
+  if (card) {
+    const rect = card.getBoundingClientRect();
+    if (rect.top < 0) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+function onActivityPageSizeChange() {
+  const sel = document.getElementById('activityPageSize');
+  if (sel) activityPageSize = sel.value;
+  activityCurrentPage = 1;
+  updateActivityPagination();
+}
+
+function filterActivityRows() {
+  activityCurrentPage = 1;
+  updateActivityPagination();
 }
 
 function filterRows() {
@@ -2376,6 +2512,9 @@ function filterRows() {
 }
 
 function switchActivityView(mode) {
+  currentActivityView = mode;
+  activityCurrentPage = 1;
+
   const journeysWrap = document.getElementById('journeysTableWrap');
   const rawWrap = document.getElementById('rawTableWrap');
   const btnJourneys = document.getElementById('btnViewJourneys');
@@ -2392,7 +2531,14 @@ function switchActivityView(mode) {
     if (btnJourneys) { btnJourneys.style.background = '#087b59'; btnJourneys.style.color = '#fff'; }
     if (btnRaw) { btnRaw.style.background = 'transparent'; btnRaw.style.color = '#204033'; }
   }
+
+  updateActivityPagination();
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  updateActivityPagination();
+});
+setTimeout(updateActivityPagination, 100);
 
 let currentStatType = 'total';
 let currentStatData = null;
@@ -3364,7 +3510,7 @@ class Handler(BaseHTTPRequestHandler):
         subs=c.execute("SELECT COUNT(*) n FROM events WHERE event IN ('submitted','form_action')").fetchone()["n"]
         ips=c.execute("SELECT COUNT(DISTINCT ip) n FROM events").fetchone()["n"]
         templates=c.execute("SELECT template, COUNT(*) n FROM events GROUP BY template ORDER BY n DESC").fetchall()
-        recent_raw=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 500").fetchall()
+        recent_raw=c.execute("SELECT * FROM events ORDER BY id DESC LIMIT 2500").fetchall()
         since=(datetime.now(timezone.utc)-timedelta(days=6)).isoformat()
         trend=c.execute("SELECT substr(ts,1,10) d, COUNT(*) n FROM events WHERE ts>=? GROUP BY d ORDER BY d", (since,)).fetchall()
         c.close()
@@ -3460,7 +3606,7 @@ class Handler(BaseHTTPRequestHandler):
         journeys_table="".join(journey_rows) or '<tr><td colspan="8" style="text-align:center;padding:28px;color:#6b867b">No user simulation activity recorded yet.</td></tr>'
 
         raw_rows=[]
-        for r in recent_raw[:100]:
+        for r in recent_raw:
             d,t=format_datetime(r["ts"])
             display_tpl = tpl_labels.get(str(r["template"]), "Template " + str(r["template"]))
             name_val = esc(r["name"]) if r["name"] else '<span style="color:#8ba59b">—</span>'
@@ -3521,7 +3667,7 @@ class Handler(BaseHTTPRequestHandler):
     </div>
   </div>
 </section>
-<section class="card activity" style="margin-top:20px">
+<section class="card activity" id="activityCard" style="margin-top:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:12px">
     <div>
       <h3 style="margin:0;display:flex;align-items:center;gap:8px">
@@ -3534,6 +3680,17 @@ class Handler(BaseHTTPRequestHandler):
       <div class="view-switch-tabs" style="display:inline-flex;background:#e5eee9;padding:3px;border-radius:9px;border:1px solid #d2e3da">
         <button id="btnViewJourneys" type="button" onclick="switchActivityView('journeys')" style="padding:6px 13px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:#087b59;color:#fff;transition:all 0.15s ease">👥 User Journeys ({len(journeys)})</button>
         <button id="btnViewRaw" type="button" onclick="switchActivityView('raw')" style="padding:6px 13px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#204033;transition:all 0.15s ease">📋 Raw Events ({len(recent_raw)})</button>
+      </div>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:#f3f7f5;padding:3px 9px;border-radius:8px;border:1px solid #d4e5dc">
+        <span style="font-size:11.5px;font-weight:700;color:#2d4c3f">Show</span>
+        <select id="activityPageSize" onchange="onActivityPageSizeChange()" style="padding:4px 7px;border:1px solid #b7d6c7;border-radius:6px;font-size:12px;font-weight:750;color:#0b3826;background:#fff;cursor:pointer;outline:none">
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+          <option value="500">500</option>
+          <option value="all">All</option>
+        </select>
+        <span style="font-size:11.5px;color:#557265;font-weight:600">logs</span>
       </div>
       <div class="filter" style="margin:0">
         <input id="q" oninput="filterActivityRows()" placeholder="Filter recipient, email, template, IP...">
@@ -3580,6 +3737,16 @@ class Handler(BaseHTTPRequestHandler):
     </table>
   </div>
   <table style="display:none"><tbody id="rows">{table}</tbody></table>
+
+  <!-- Modern Pagination Controls Footer -->
+  <div id="activityPaginationFooter" style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid #edf4f0;flex-wrap:wrap;gap:12px">
+    <div id="activityPageInfo" style="font-size:12.5px;color:#527365;font-weight:600">
+      <!-- dynamically populated by JS -->
+    </div>
+    <div id="activityPageNav" style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <!-- dynamically populated by JS -->
+    </div>
+  </div>
 </section>
 
 <div id="statDrilldownModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(10,25,20,0.65);z-index:99999;backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;box-sizing:border-box" onclick="if(event.target===this)closeStatDrilldown()">
