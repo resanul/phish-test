@@ -6250,231 +6250,6 @@ function escapeHtml(str) {{
 
         preview_header=f'<a class="btn" target="_blank" href="/admin/landing-pages/preview?id={lid}">👁️ Live Preview Tab</a>' if lid else ""
 
-        version_card = f"""<div class="camp-card">
-      <div class="camp-card-header">
-        <div class="camp-icon">📜</div>
-        <div class="camp-card-title">
-          <h3>Version Revision History</h3>
-          <p>Audit trail of all previous revisions saved for this landing page.</p>
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table class="table" style="width:100%">
-          <thead><tr><th>Version</th><th>Saved At</th><th>Author</th></tr></thead>
-          <tbody>{versions_html}</tbody>
-        </table>
-      </div>
-    </div>""" if lid else ""
-
-        script_and_style = """
-<style>
-.lp-layout-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(370px, 460px);
-  gap: 22px;
-  align-items: start;
-}
-@media (max-width: 960px) {
-  .lp-layout-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px;
-}
-.preset-card {
-  background: #ffffff;
-  border: 1.5px solid #dce8e2;
-  border-radius: 9px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-.preset-card:hover {
-  border-color: #087b59;
-  background: #f4faf7;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(8,123,89,0.08);
-}
-.preset-title {
-  font-weight: 700;
-  font-size: 12.5px;
-  color: #12251e;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.preset-desc {
-  font-size: 11px;
-  color: #556c62;
-  margin-top: 4px;
-  line-height: 1.35;
-}
-.preset-btn.active {
-  background: #087b59 !important;
-  color: #fff !important;
-}
-.token-chip {
-  padding: 4px 9px;
-  border-radius: 6px;
-  background: #edf6f2;
-  border: 1px solid #cfe0d8;
-  color: #087b59;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.token-chip:hover {
-  background: #ddf0e8;
-}
-</style>
-
-<script>
-const PRESETS_B64 = "__PRESETS_B64__";
-
-function decodePresets(b64) {
-  try {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return JSON.parse(new TextDecoder('utf-8').decode(bytes));
-  } catch (e) {
-    console.error("Failed to decode presets:", e);
-    return {};
-  }
-}
-
-const PRESETS = decodePresets(PRESETS_B64);
-
-const FIELD_SNIPPETS = {
-  name: '<div class="form-group">\n  <label>Full Name</label>\n  <input type="text" name="name" placeholder="Full Legal Name" required>\n</div>',
-  email: '<div class="form-group">\n  <label>Corporate Email</label>\n  <input type="email" name="email" placeholder="name@tblbd.com" required>\n</div>',
-  emp_id: '<div class="form-group">\n  <label>Employee ID</label>\n  <input type="text" name="employee_id" placeholder="e.g. EMP-9021" required>\n</div>',
-  mobile: '<div class="form-group">\n  <label>Mobile Number</label>\n  <input type="tel" name="mobile" placeholder="017XXXXXXXX" required>\n</div>',
-  department: '<div class="form-group">\n  <label>Department</label>\n  <input type="text" name="department" placeholder="e.g. Information Technology">\n</div>',
-  submit: '<button type="submit" class="btn-submit">Verify &amp; Continue</button>'
-};
-
-function insertField(key) {
-  const snippet = FIELD_SNIPPETS[key];
-  if (!snippet) return;
-  const ed = document.getElementById('htmlEditor');
-  if (!ed) return;
-  const start = ed.selectionStart || ed.value.length;
-  const end = ed.selectionEnd || ed.value.length;
-  ed.value = ed.value.substring(0, start) + snippet + ed.value.substring(end);
-  ed.selectionStart = ed.selectionEnd = start + snippet.length;
-  ed.focus();
-  updateLivePreview();
-}
-
-function clearToBlank() {
-  const ed = document.getElementById('htmlEditor');
-  if (ed) {
-    ed.value = '';
-    updateLivePreview();
-    ed.focus();
-  }
-}
-
-function loadPreset(key) {
-  const p = PRESETS[key];
-  if (!p) return;
-  const ed = document.getElementById('htmlEditor');
-  const nameInput = document.getElementById('lpName');
-  if (ed) {
-    ed.value = p.html || '';
-    updateLivePreview();
-  }
-  if (nameInput && (!nameInput.value.trim() || nameInput.value === 'New Simulation Portal')) {
-    nameInput.value = p.name || '';
-  }
-}
-
-function updateLivePreview() {
-  const ed = document.getElementById('htmlEditor');
-  const frame = document.getElementById('previewFrame');
-  const countEl = document.getElementById('charCount');
-  if (!ed || !frame) return;
-
-  const content = ed.value || '';
-  if (countEl) {
-    countEl.textContent = content.length.toLocaleString() + ' characters';
-  }
-
-  const doc = frame.contentDocument || frame.contentWindow.document;
-  doc.open();
-  if (content.trim()) {
-    doc.write(content);
-  } else {
-    doc.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f8fbf9; display:flex; align-items:center; justify-content:center; min-height:100vh; text-align:center; padding:30px 20px; box-sizing:border-box; color:#556c62; }
-    .empty-card { max-width:320px; }
-    .icon { width:52px; height:52px; border-radius:50%; background:#e2f2ea; color:#087b59; font-size:24px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px; }
-    h4 { margin:0 0 6px 0; font-size:16px; color:#12251e; font-weight:700; }
-    p { margin:0; font-size:12.5px; line-height:1.5; color:#647b71; }
-  </style>
-</head>
-<body>
-  <div class="empty-card">
-    <div class="icon">🎨</div>
-    <h4>Blank Simulation Canvas</h4>
-    <p>Portal is currently blank. Type HTML code in the editor, or click any Market Preset on the left to instantly load a simulation portal.</p>
-  </div>
-</body>
-</html>`);
-  }
-  doc.close();
-}
-
-function setDevice(mode) {
-  const container = document.getElementById('previewContainer');
-  const btnDesk = document.getElementById('btnDesk');
-  const btnMob = document.getElementById('btnMob');
-  const sizeLabel = document.getElementById('viewportSizeLabel');
-  if (mode === 'mobile') {
-    container.style.maxWidth = '375px';
-    container.style.margin = '0 auto';
-    btnMob.classList.add('active');
-    btnDesk.classList.remove('active');
-    sizeLabel.textContent = 'Mobile Frame (375px)';
-  } else {
-    container.style.maxWidth = '100%';
-    container.style.margin = '0';
-    btnDesk.classList.add('active');
-    btnMob.classList.remove('active');
-    sizeLabel.textContent = 'Desktop (100%)';
-  }
-}
-
-function syncStatusBadge() {
-  const sel = document.getElementById('lpStatus');
-  const badge = document.getElementById('lpStatusBadge');
-  if (badge && sel) {
-    badge.textContent = sel.value;
-    badge.className = 'camp-status-badge ' + (sel.value === 'Enabled' ? 'status-active' : 'status-draft');
-  }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  updateLivePreview();
-});
-updateLivePreview();
-</script>
-""".replace("__PRESETS_B64__", presets_b64)
-
         body=f"""<div class="camp-editor lp-editor">
 <div class="camp-header">
   <div>
@@ -6494,7 +6269,7 @@ updateLivePreview();
 <form id="lpForm" method="post" action="/admin/landing-pages/save">
 <input type="hidden" name="id" value="{lid or ''}">
 
-<div class="camp-grid lp-layout-grid">
+<div class="camp-grid" style="grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);">
   <!-- Left Side: Configuration, Presets, HTML Editor -->
   <div class="camp-main">
 
@@ -6504,7 +6279,7 @@ updateLivePreview();
         <div class="camp-icon">🌐</div>
         <div class="camp-card-title">
           <h3>Portal Settings &amp; Metadata</h3>
-          <p>Define portal name, campaign visibility, and active version.</p>
+          <p>Define portal name, visibility, and version information.</p>
         </div>
       </div>
       <div class="camp-fields">
@@ -6531,60 +6306,79 @@ updateLivePreview();
 
     <!-- Card 2: Market Presets Library -->
     <div class="camp-card">
-      <div class="camp-card-header" style="justify-content:space-between">
-        <div style="display:flex;align-items:flex-start;gap:14px">
-          <div class="camp-icon">⚡</div>
-          <div class="camp-card-title">
-            <h3>One-Click Authentic Market Presets (11 Enterprise Portals)</h3>
-            <p>Click any preset below to load realistic layout and form fields, or start with a clean blank canvas.</p>
-          </div>
+      <div class="camp-card-header">
+        <div class="camp-icon">⚡</div>
+        <div class="camp-card-title">
+          <h3>One-Click Authentic Market Presets (10 Enterprise Portals)</h3>
+          <p>Load battle-tested, high-converting corporate phishing simulation portals with authentic layouts and compliant fields.</p>
         </div>
-        <button type="button" class="btn" style="padding:5px 12px;font-size:11.5px;font-weight:600" onclick="clearToBlank()">✨ Reset to Blank</button>
       </div>
-      <div class="preset-grid">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
         <div class="preset-card" onclick="loadPreset('1')">
-          <div class="preset-title"><span>🎁</span> Apex Rewards</div>
-          <div class="preset-desc">Employee gift voucher &amp; discount claim portal.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🎁</span> Apex Rewards Voucher
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Exclusive employee gift voucher &amp; discount claim portal.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('2')">
-          <div class="preset-title"><span>🏛️</span> Trust Bank Corporate</div>
-          <div class="preset-desc">Corporate card privileges &amp; employee verification.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🏛️</span> Trust Bank Corporate
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Corporate banking privileges &amp; employee card claim.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('m365')">
-          <div class="preset-title"><span>🏢</span> Microsoft 365</div>
-          <div class="preset-desc">Entra ID / Outlook corporate sign-in simulation.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🏢</span> Microsoft 365 Sign-In
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Entra ID / Outlook corporate sign-in simulation.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('4')">
-          <div class="preset-title"><span>🌐</span> Google Workspace</div>
-          <div class="preset-desc">Google Drive &amp; Workspace account verification.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🌐</span> Google Workspace SSO
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Google Drive &amp; Workspace account verification.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('5')">
-          <div class="preset-title"><span>👥</span> HR Benefits Portal</div>
-          <div class="preset-desc">Employee compensation statement review.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>👥</span> HR Benefits &amp; Appraisal
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Employee portal compensation statement review.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('6')">
-          <div class="preset-title"><span>💻</span> GlobalProtect VPN</div>
-          <div class="preset-desc">Enterprise remote VPN &amp; identity gate verification.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>💻</span> GlobalProtect IT Gateway
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Enterprise remote VPN &amp; identity gate verification.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('7')">
-          <div class="preset-title"><span>💳</span> bKash / Banking Alert</div>
-          <div class="preset-desc">Suspicious transaction halt &amp; verify alert.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>💳</span> bKash / Financial Alert
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Suspicious transaction halt &amp; verify alert (bKash/Bank).</p>
         </div>
         <div class="preset-card" onclick="loadPreset('8')">
-          <div class="preset-title"><span>📹</span> Zoom Meeting</div>
-          <div class="preset-desc">Executive conference pre-call check &amp; verification.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>📹</span> Zoom Meeting Gateway
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Executive conference pre-call check &amp; verification.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('9')">
-          <div class="preset-title"><span>☁️</span> AWS IAM Console</div>
-          <div class="preset-desc">Cloud infrastructure identity verification.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>☁️</span> AWS Cloud Console IAM
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Cloud infrastructure identity &amp; root device verification.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('10')">
-          <div class="preset-title"><span>🎓</span> Teachable Moment</div>
-          <div class="preset-desc">Instant interactive drill with phishing red flags.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>🎓</span> Teachable Moment (Awareness)
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Instant interactive drill with phishing red flag breakdown.</p>
         </div>
         <div class="preset-card" onclick="loadPreset('11')">
-          <div class="preset-title"><span>✈️</span> Trust Bank × GoZayaan</div>
-          <div class="preset-desc">Exclusive flight &amp; hotel discount booking portal.</div>
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#12251e">
+            <span>✈️</span> Trust Bank × GoZayaan Travel
+          </div>
+          <p style="font-size:11.5px;color:#556c62;margin:5px 0 0">Exclusive cardholder 10% flight &amp; 65% hotel discounts portal.</p>
         </div>
       </div>
     </div>
@@ -6596,26 +6390,25 @@ updateLivePreview();
           <div class="camp-icon">💻</div>
           <div class="camp-card-title">
             <h3>HTML Source Code Editor</h3>
-            <p>Customize portal branding and input fields. Form action must submit to <code>/submit</code>.</p>
+            <p>Customize portal branding and input fields. Form must submit to <code>/submit</code>.</p>
           </div>
         </div>
         <div style="font-size:11.5px;color:#087b59;background:#e8f4ef;padding:5px 10px;border-radius:6px;font-weight:700;display:flex;align-items:center;gap:5px">
-          <span>🔒</span> Safety Policy Active
+          <span>🔒</span> Safety Policy Guard Active
         </div>
       </div>
 
-      <div class="token-row" style="margin-bottom:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <div class="token-row" style="margin-bottom:12px">
         <small style="color:#556c62;font-weight:600">Quick Insert:</small>
-        <button type="button" class="token-chip" onclick="insertField('name')">+ Full Name</button>
-        <button type="button" class="token-chip" onclick="insertField('email')">+ Corporate Email</button>
-        <button type="button" class="token-chip" onclick="insertField('emp_id')">+ Employee ID</button>
-        <button type="button" class="token-chip" onclick="insertField('mobile')">+ Mobile Number</button>
-        <button type="button" class="token-chip" onclick="insertField('department')">+ Department</button>
-        <button type="button" class="token-chip" onclick="insertField('submit')">+ Submit Button</button>
+        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;text&quot; name=&quot;name&quot; placeholder=&quot;Full Legal Name&quot; required&gt;')">+ Name Field</button>
+        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;email&quot; name=&quot;email&quot; placeholder=&quot;Work Email&quot; required&gt;')">+ Email Field</button>
+        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;text&quot; name=&quot;employee_id&quot; placeholder=&quot;Employee ID (e.g. EMP-9021)&quot; required&gt;')">+ Employee ID</button>
+        <button type="button" class="token-chip" onclick="insertField('&lt;input type=&quot;text&quot; name=&quot;mobile&quot; placeholder=&quot;Mobile Number&quot; required&gt;')">+ Mobile Number</button>
+        <button type="button" class="token-chip" onclick="insertField('&lt;button type=&quot;submit&quot;&gt;Continue&lt;/button&gt;')">+ Submit Button</button>
       </div>
 
       <div class="camp-label">
-        <textarea id="htmlEditor" name="html_body" rows="22" style="width:100%;font-family:'SF Mono',Consolas,Menlo,monospace;font-size:12.5px;line-height:1.55;background:#0d1814;color:#d5ede2;border:1.5px solid #1a382c;border-radius:10px;padding:16px;box-sizing:border-box" oninput="updateLivePreview()" placeholder="Write or paste your custom simulation HTML here, or click any Market Preset above..." required>{esc(html_body)}</textarea>
+        <textarea id="htmlEditor" name="html_body" rows="22" style="font-family:'SF Mono',Consolas,Menlo,monospace;font-size:12px;line-height:1.55;background:#0d1814;color:#d5ede2;border:1px solid #1a382c;border-radius:10px;padding:16px;box-sizing:border-box" oninput="updateLivePreview()" placeholder="Write or paste your custom simulation HTML here, or click a Market Preset above..." required>{esc(html_body)}</textarea>
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11.5px;color:#556c62">
         <span>Blocked by policy: <code>password</code>, <code>otp</code>, <code>pin</code>, <code>cvv</code> (prevents accidental credential theft).</span>
@@ -6633,12 +6426,26 @@ updateLivePreview();
         </div>
       </div>
       <div class="camp-label">
-        <textarea name="text_body" rows="3" style="font-size:13px;width:100%;box-sizing:border-box" placeholder="Optional plain-text notification for clients that block HTML...">{text_body}</textarea>
+        <textarea name="text_body" rows="4" style="font-size:13px" placeholder="Optional plain text message for non-HTML environments...">{text_body}</textarea>
       </div>
     </div>
 
     <!-- Card 5: Version History -->
-    {version_card}
+    {f'''<div class="camp-card">
+      <div class="camp-card-header">
+        <div class="camp-icon">📜</div>
+        <div class="camp-card-title">
+          <h3>Version Revision History</h3>
+          <p>Audit trail of all previous revisions saved for this landing page.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="table" style="width:100%">
+          <thead><tr><th>Version</th><th>Saved At</th><th>Author</th></tr></thead>
+          <tbody>{versions_html}</tbody>
+        </table>
+      </div>
+    </div>''' if lid else ''}
 
     <div class="camp-bottom-bar">
       <a class="btn" href="/admin/landing-pages">Cancel</a>
@@ -6649,7 +6456,7 @@ updateLivePreview();
 
   <!-- Right Side: Live Interactive Device Preview -->
   <div class="camp-sidebar">
-    <div class="camp-sidebar-sticky" style="position:sticky;top:20px">
+    <div class="camp-sidebar-sticky" style="top:20px">
       <div class="camp-card" style="padding:16px;margin-bottom:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -6657,8 +6464,8 @@ updateLivePreview();
             <span style="font-weight:700;font-size:13.5px;color:#12251e">Live Real-time Preview</span>
           </div>
           <div style="display:flex;gap:4px;background:#edf3f0;padding:3px;border-radius:8px">
-            <button type="button" id="btnDesk" class="preset-btn active" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;cursor:pointer" onclick="setDevice('desktop')">💻 Desktop</button>
-            <button type="button" id="btnMob" class="preset-btn" style="font-size:11px;padding:3px 8px;border:none;border-radius:6px;cursor:pointer" onclick="setDevice('mobile')">📱 Mobile</button>
+            <button type="button" id="btnDesk" class="preset-btn active" style="font-size:11px;padding:3px 8px;border:none" onclick="setDevice('desktop')">💻 Desktop</button>
+            <button type="button" id="btnMob" class="preset-btn" style="font-size:11px;padding:3px 8px;border:none" onclick="setDevice('mobile')">📱 Mobile</button>
           </div>
         </div>
 
@@ -6670,7 +6477,7 @@ updateLivePreview();
             <span style="width:8px;height:8px;border-radius:50%;background:#34d399;display:inline-block"></span>
           </div>
           <div style="flex:1;background:#fff;border-radius:6px;padding:3px 10px;font-size:11px;color:#445b51;font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            🔒 https://secure.tblbd.com/auth/login
+            🔒 https://secure-login.portal-verify.local/auth
           </div>
         </div>
 
@@ -6689,7 +6496,98 @@ updateLivePreview();
 
 </div>
 </form>
-</div>""" + script_and_style
+</div>
+
+<style>
+.preset-card {{ background:#ffffff; border:1.5px solid #dce8e2; border-radius:10px; padding:12px 14px; cursor:pointer; transition:all 0.15s ease; }}
+.preset-card:hover {{ border-color:#087b59; background:#f4faf7; transform:translateY(-1px); box-shadow:0 3px 8px rgba(8,123,89,0.08); }}
+.preset-btn.active {{ background:#087b59; color:#fff; }}
+</style>
+
+<script>
+function decodePresets(b64) {{
+  try {{
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {{
+      bytes[i] = binary.charCodeAt(i);
+    }}
+    return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+  }} catch (e) {{
+    return {{}};
+  }}
+}}
+const PRESETS = decodePresets("{presets_b64}");
+
+function loadPreset(key) {{
+  const p = PRESETS[key];
+  if (!p) return;
+  const ed = document.getElementById('htmlEditor');
+  const nameInput = document.getElementById('lpName');
+  if (confirm("Load " + p.name + " preset? This will replace the editor content.")) {{
+    ed.value = p.html;
+    if (nameInput && (!nameInput.value || nameInput.value === 'New Simulation Portal')) {{
+      nameInput.value = p.name;
+    }}
+    updateLivePreview();
+  }}
+}}
+
+function insertField(fieldHtml) {{
+  const ed = document.getElementById('htmlEditor');
+  const pos = ed.selectionStart || ed.value.length;
+  ed.value = ed.value.slice(0, pos) + fieldHtml + ed.value.slice(pos);
+  ed.focus();
+  updateLivePreview();
+}}
+
+function updateLivePreview() {{
+  const ed = document.getElementById('htmlEditor');
+  const val = ed ? ed.value : '';
+  const frame = document.getElementById('previewFrame');
+  if (frame) {{
+    frame.srcdoc = val;
+  }}
+  const countEl = document.getElementById('charCount');
+  if (countEl) {{
+    countEl.textContent = val.length.toLocaleString() + ' characters';
+  }}
+}}
+
+function setDevice(mode) {{
+  const container = document.getElementById('previewContainer');
+  const btnDesk = document.getElementById('btnDesk');
+  const btnMob = document.getElementById('btnMob');
+  const sizeLabel = document.getElementById('viewportSizeLabel');
+  if (mode === 'mobile') {{
+    container.style.maxWidth = '375px';
+    container.style.margin = '0 auto';
+    btnMob.classList.add('active');
+    btnDesk.classList.remove('active');
+    sizeLabel.textContent = 'Mobile (375px)';
+  }} else {{
+    container.style.maxWidth = '100%';
+    container.style.margin = '0';
+    btnDesk.classList.add('active');
+    btnMob.classList.remove('active');
+    sizeLabel.textContent = 'Desktop (100%)';
+  }}
+}}
+
+function syncStatusBadge() {{
+  const sel = document.getElementById('lpStatus');
+  const badge = document.getElementById('lpStatusBadge');
+  if (badge && sel) {{
+    badge.textContent = sel.value;
+    badge.className = 'camp-status-badge ' + (sel.value === 'Enabled' ? 'status-active' : 'status-draft');
+  }}
+}}
+
+document.addEventListener('DOMContentLoaded', function() {{
+  updateLivePreview();
+}});
+updateLivePreview();
+</script>"""
         return self.admin_shell("Landing Page Editor",body,"Landing Pages")
 
     def template_form(self,tid=None):
