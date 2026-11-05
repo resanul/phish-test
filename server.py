@@ -6240,7 +6240,7 @@ function escapeHtml(str) {{
         for alias, target in aliases.items():
             if target in presets_dict:
                 presets_dict[alias] = presets_dict[target]
-        presets_json = json.dumps(presets_dict).replace("<", "\u003c").replace(">", "\u003e").replace("&", "\u0026")
+        presets_b64 = base64.b64encode(json.dumps(presets_dict).encode("utf-8")).decode("ascii")
 
         name=esc(r["name"]) if r else ""
         status=esc(r["status"]) if r else "Enabled"
@@ -6336,7 +6336,23 @@ function escapeHtml(str) {{
 </style>
 
 <script>
-const PRESETS = __PRESETS_JSON__;
+const PRESETS_B64 = "__PRESETS_B64__";
+
+function decodePresets(b64) {
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return JSON.parse(new TextDecoder('utf-8').decode(bytes));
+  } catch (e) {
+    console.error("Failed to decode presets:", e);
+    return {};
+  }
+}
+
+const PRESETS = decodePresets(PRESETS_B64);
 
 const FIELD_SNIPPETS = {
   name: '<div class="form-group">\n  <label>Full Name</label>\n  <input type="text" name="name" placeholder="Full Legal Name" required>\n</div>',
@@ -6457,7 +6473,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 updateLivePreview();
 </script>
-""".replace("__PRESETS_JSON__", presets_json)
+""".replace("__PRESETS_B64__", presets_b64)
 
         body=f"""<div class="camp-editor lp-editor">
 <div class="camp-header">
