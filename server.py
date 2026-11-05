@@ -2038,8 +2038,14 @@ a{color:inherit}button,input,select,textarea{font:inherit}
 .card{background:#ffffff;border:1px solid #e1ece6;border-radius:14px;padding:22px;box-shadow:0 1px 3px rgba(0,0,0,0.02),0 4px 14px rgba(7,28,21,0.02);margin-bottom:20px;width:100%;box-sizing:border-box}
 .card h3{margin:0 0 6px;font-size:16px;font-weight:750;color:#10221a}
 .sub{color:#647d72;font-size:12px;line-height:1.5}
-.bars{margin-top:18px;display:grid;gap:13px}
-.bar-row{display:grid;grid-template-columns:110px 1fr 45px;gap:12px;align-items:center;font-size:12.5px}
+.bars-scroll{margin-top:12px;max-height:220px;overflow-y:auto;overflow-x:hidden;padding-right:6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#a3d9c3 #f1f6f3}
+.bars-scroll::-webkit-scrollbar{width:5px}
+.bars-scroll::-webkit-scrollbar-track{background:#f1f6f3;border-radius:4px}
+.bars-scroll::-webkit-scrollbar-thumb{background:#a3d9c3;border-radius:4px}
+.bars-scroll::-webkit-scrollbar-thumb:hover{background:#087b59}
+.bars{display:grid;gap:12px}
+.bar-row{display:grid;grid-template-columns:125px 1fr 40px;gap:12px;align-items:center;font-size:12.5px}
+.bar-row span{line-height:1.3;word-break:break-word}
 .bar{height:10px;background:#edf3f0;border-radius:20px;overflow:hidden}
 .bar>i{display:block;height:100%;background:linear-gradient(90deg,#087b59,#10b981);border-radius:20px}
 .trend{height:185px;display:flex;align-items:end;gap:8px;margin-top:20px;padding:0 3px}
@@ -3367,7 +3373,7 @@ class Handler(BaseHTTPRequestHandler):
 
         rate=(subs/clicks*100) if clicks else 0
         max_t=max([r["n"] for r in templates],default=1) or 1
-        bars="".join(f'<div class="bar-row"><span>{esc(tpl_labels.get(str(r["template"]), "Template " + str(r["template"])))}</span><div class="bar"><i style="width:{r["n"]/max_t*100:.0f}%"></i></div><b>{r["n"]}</b></div>' for r in templates[:8]) or '<div class="sub">No template activity yet.</div>'
+        bars="".join(f'<div class="bar-row" title="{esc(tpl_labels.get(str(r["template"]), "Template " + str(r["template"])))}: {r["n"]} events"><span>{esc(tpl_labels.get(str(r["template"]), "Template " + str(r["template"])))}</span><div class="bar"><i style="width:{r["n"]/max_t*100:.0f}%"></i></div><b>{r["n"]}</b></div>' for r in templates) or '<div class="sub">No template activity yet.</div>'
 
         byday={r["d"]:r["n"] for r in trend}
         days=[]
@@ -3503,8 +3509,17 @@ class Handler(BaseHTTPRequestHandler):
   </div>
 </section>
 <section class="grid">
-  <div class="card"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div>
-  <div class="card"><h3>Template Performance</h3><div class="sub">Total events by template</div><div class="bars">{bars}</div></div>
+  <div class="card" style="margin-bottom:0"><h3>7-Day Activity</h3><div class="sub">Recorded simulation events by UTC day</div><div class="trend">{trend_html}</div></div>
+  <div class="card" style="margin-bottom:0;display:flex;flex-direction:column;max-height:330px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <h3 style="margin:0">Template Performance</h3>
+      <span style="font-size:11px;font-weight:700;color:#087b59;background:#e8f7f0;padding:2px 8px;border-radius:10px">{len(templates)} templates</span>
+    </div>
+    <div class="sub">Total events by template</div>
+    <div class="bars-scroll">
+      <div class="bars">{bars}</div>
+    </div>
+  </div>
 </section>
 <section class="card activity" style="margin-top:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:12px">
